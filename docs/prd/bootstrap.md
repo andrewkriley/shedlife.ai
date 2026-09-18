@@ -105,6 +105,12 @@ sequence, and losing a deployment shouldn't mean starting from scratch.
   This is a UX principle worth stating explicitly: without it, each dependency's
   Build-vs-Adopt prompt risks getting implemented inconsistently, one bespoke flow per
   dependency, even though the underlying data shape already treats them uniformly.
+- **No aggregate/shortcut mode.** The wizard always steps through each dependency
+  individually — it never asks one top-level "mostly fresh or mostly existing"
+  question that pre-fills the rest. A real deployment is routinely mixed (this
+  project's own tenant, for instance: an adopted secrets backend and Fleet-repo host
+  and DNS, alongside a freshly-built k3s cluster) — a shortcut optimizing for
+  "uniformly one or the other" would misfit the common case, not just the edge case.
 - Field groups collected, beyond hosts/root-password/Fleet-repo-host/DNS/secrets-backend
   (covered elsewhere in this document):
   - **Networking**: Proxmox network bridge for new VMs; per-host address as CIDR +
