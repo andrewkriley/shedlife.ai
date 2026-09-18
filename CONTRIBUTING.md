@@ -50,10 +50,16 @@ continues.
 
 Every PR runs: the test suites (backend `pytest`, frontend Vitest), linting (`ruff`,
 `oxlint`), type-checking (`mypy`, `tsc --noEmit`), `commitlint` against the PR title,
-`gitleaks` (secret scanning), and CodeQL (static analysis for code-level
-vulnerabilities — a different concern from `gitleaks`, which only catches committed
-secrets). All of these must pass before merge — this is enforced unconditionally, for
-every contributor, with no bypass.
+`gitleaks` (secret scanning), and a Trivy filesystem scan (known-vulnerability
+scanning of dependencies, report-only for now). All of these must pass before merge —
+this is enforced unconditionally, for every contributor, with no bypass, once branch
+protection is actually turned on (see "Branch protection" in
+`docs/spec/release-pipeline.md` — not yet enabled as of this writing).
+
+CodeQL (static analysis for code-level vulnerabilities) is part of the intended design
+(see the SPEC) but isn't running yet: GitHub code scanning needs Advanced Security,
+free on public repos but paid on private ones, and this repo is currently private.
+Revisit once that changes.
 
 ## Review and merge
 
