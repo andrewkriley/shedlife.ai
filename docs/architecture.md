@@ -234,6 +234,15 @@ which case it's stored on the product's public git host instead. Visibility is a
 property of the individual application, decided when it's created — not inferred, not
 inherited from where the harness itself lives.
 
+**Every repo carries an `AGENTS.md` scoped to what that repo actually is.** The same
+convention serves two audiences at once: an AI coding tool helping build the product,
+and a Build sub-agent later doing real work in a codebase — both are agents operating
+on a repo, and neither should have to rediscover repo-specific conventions by trial
+and error. Scope its content narrowly; it points at the real docs rather than
+restating them, and it never carries content that belongs in the other tier (no
+tenant specifics in the product's `AGENTS.md`, no product-architecture restatement in
+a tenant's).
+
 ## Multi-tenancy from day one
 
 Even a single-user deployment should model users, roles, and ownership as first-class
