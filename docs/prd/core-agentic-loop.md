@@ -204,6 +204,15 @@ An operator-facing settings surface allows overriding this per sub-agent — sel
 one/some/all via checkboxes, bulk-assign a provider/model — listing live providers and
 models, not a hardcoded list.
 
+An override is its own record, distinct from the registry default it overrides — not
+a mutation of the registry row itself, so the original default is never lost and an
+override can be cleared back to it. "Live models" for cloud providers means a real
+call to that provider's own models-list API; for local models, it's the same list
+GPU/Compute Management's deployed instances are registered under in LiteLLM (its
+Model Management API is the read side of the same registration this settings surface
+displays) — one source of truth, not a separately-maintained list of what's locally
+available.
+
 ### The three real sub-agents this phase
 
 - **`run.network`** — real tools via the existing `unifi-mcp` MCP server (already a

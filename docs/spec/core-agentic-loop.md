@@ -113,6 +113,12 @@ Status: draft, technical design for
 | `default_provider` / `default_model` | Registry default; overridable via the settings surface |
 | `provenance` | `manual` \| `declared` \| `discovered` \| `provisioned` — same field as the host/service registry in `architecture.md`; a sub-agent is a registry entry like any other |
 
+### Provider/model overrides (Postgres)
+
+| Table | Key fields |
+|---|---|
+| `sub_agent_model_overrides` | `sub_agent_id`, `provider`, `model`, `set_by_user_id`, `set_at` — one row per sub-agent currently overridden; absence of a row means "use the registry default." Provider resolution checks this table first, falling back to the registry's `default_provider`/`default_model`. |
+
 ### Conversation / turn (Postgres)
 
 | Table | Key fields |
@@ -144,8 +150,12 @@ attachments are given to a sub-agent, per step 6c of the Sequence.
   `approval_required` event for that turn; resumes or ends the paused tool loop.
 - `POST /turns/{id}/verify` — manually invoke the verifier against a completed turn;
   returns its assessment (also stored in `turn_verifications`).
-- Settings surface (REST): list live providers/models; list sub-agents; bulk-assign a
-  provider/model to a selected set of sub-agents.
+- Settings surface (REST): list sub-agents; `POST /settings/model-assignments` to
+  bulk-assign a provider/model to a selected set of sub-agents (writes/clears rows in
+  `sub_agent_model_overrides`); `GET /settings/models` lists live options — a real
+  call to each cloud provider's own models-list API, plus whatever's currently
+  registered in LiteLLM for local models (the same registrations GPU/Compute
+  Management creates — this endpoint reads them, it doesn't maintain a second list).
 
 ## Security model
 
