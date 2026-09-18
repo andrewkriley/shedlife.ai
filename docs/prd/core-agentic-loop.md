@@ -93,6 +93,44 @@ sub-agent matched) → respond. Each stage is its own traced span, matching the
   dropping them) is the natural next step once conversations get long enough for
   dropped context to matter — documented roadmap, not built now.
 
+### Streaming
+
+Turns stream over Server-Sent Events, not WebSocket — a turn is one-directional after
+the initial request (the server pushes, the client doesn't need to talk back mid-turn;
+cancellation is a separate plain request, not a reason for a duplex channel), and SSE
+avoids real infrastructure cost that would otherwise apply: since The Shed deploys as a
+Kubernetes workload via Flux (potentially multiple replicas), WebSocket would need
+either sticky sessions or a pub/sub backplane for a client to keep receiving pushes
+regardless of which replica handles a given moment; SSE, being plain HTTP, needs
+neither. SSE also reconnects automatically (built into the browser's `EventSource`),
+where WebSocket reconnection has to be hand-rolled.
+
+The stream carries two kinds of events: **progress** (classify started/done, each
+sub-agent started/done, synthesis started) so the UI shows what's happening rather than
+a bare spinner through a turn that can genuinely take some seconds; and **token-level
+text** for the one call that actually produces the user-facing answer (the single
+sub-agent's response, or the synthesis call's output when more than one matched) — not
+every internal call, since most of them (classification, individual tool calls) don't
+produce user-facing text worth streaming token-by-token.
+
+### Attachments
+
+Binary data (image upload, and sub-agent-generated output like a diagram or
+screenshot) is handled **out-of-band from the turn stream**, the same way most chat
+products handle it — not a reason to reconsider SSE:
+
+- **Upload** (user attaches an image to a message): a conventional
+  `multipart/form-data` REST upload, separate from the SSE connection, returning an
+  attachment reference the client includes when it submits the turn.
+- **Output** (a sub-agent generates an image/diagram): the sub-agent stores it and the
+  turn's response references it; the SSE event carries a reference/URL, not inlined
+  bytes — the browser fetches the actual file over a normal `GET`.
+- **Storage**: MinIO (self-hosted, S3-compatible) as another platform-layer,
+  Flux-managed workload — consistent with how the database and cache are already
+  deployed, not a new deployment pattern.
+- Scope includes both **user-uploaded** and **sub-agent-generated** attachments from
+  the start, not just user uploads.
+
 ### Sub-agent registry
 
 Each entry declares: a unique id (`<macro>.<name>`), its macro category, a one-line
@@ -146,9 +184,6 @@ models, not a hardcoded list.
   succeed — not yet designed.
 - **Verifier invocation UX**: the mechanism by which a user "manually invokes" the
   verifier against a turn isn't specified.
-- **Streaming**: does the chat UI stream a response as it's generated, or wait for full
-  turn completion (including synthesis) before showing anything — not yet decided, and
-  it materially affects the UI and the API shape between frontend and backend.
 - **No-match fallback**: what happens when the classifier finds zero matching
   sub-agents for a message — not yet decided (a catch-all general sub-agent, an
   explicit "I don't know how to help with that," something else).
