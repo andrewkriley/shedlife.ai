@@ -71,8 +71,24 @@ sequence, and losing a deployment shouldn't mean starting from scratch.
 - Menu-driven, interactive by default.
 - Supports importing a YAML file instead of (or alongside) interactive prompts, for
   known values or a restore/replay scenario.
-- **Open**: the full field list (network, storage, DNS, etc.) is not yet finalized —
-  see Open Questions.
+- Field groups collected, beyond hosts/root-password/Fleet-repo-host/DNS (covered
+  elsewhere in this document):
+  - **Networking**: Proxmox network bridge for new VMs; per-host address as CIDR +
+    gateway (not a bare IP); NTP servers, defaulting to inheriting the Proxmox host's
+    own configuration rather than asking every time.
+  - **Storage**: a storage pool name for VM disks — single-host only, since shared
+    storage is already out of scope for this phase.
+  - **VM template**: which cloud image to build from (needs a sensible default
+    distro/version); default sizing (vCPU/RAM/disk) for provisioned VMs, split between
+    control-plane and worker since they carry different loads, plus separate sizing
+    for a newly-provisioned Fleet-repo host.
+  - **The Shed's own exposure**: a domain/hostname for The Shed's ingress — this is
+    what actually consumes the DNS records created earlier in the sequence.
+  - **Explicitly not collected**: Proxmox package repository/subscription settings
+    (Proxmox is already a human pre-task; its repo config is assumed already sorted
+    before bootstrap runs) or a separate Proxmox API token (the orchestrator drives
+    Proxmox through its own local CLI tools as root, over the dedicated SSH key —
+    no separate credential needed).
 
 ### Script distribution
 
@@ -97,6 +113,10 @@ sequence, and losing a deployment shouldn't mean starting from scratch.
   *before* the Kubernetes/GitOps bootstrap step — it cannot be a workload inside the
   cluster the GitOps controller will manage (that would be circular: the controller
   depends on its own source repo already existing).
+- **Sizing when provisioning**: single node, no HA, for this phase. Real HA (multiple
+  app nodes, HA database/cache, shared storage) is substantial added weight for what is
+  a *supporting* dependency here — it only needs to serve a small set of manifests Flux
+  polls. Revisit as roadmap if a tenant's scale ever demands it.
 
 ### DNS
 
@@ -172,11 +192,9 @@ DNS infrastructure already exists for this tenant:
 
 ## Open questions
 
-- **Full wizard field list**: network bridge, storage pool, NTP, package
-  repository/subscription settings, and anything else needed for VM provisioning
-  haven't been enumerated yet.
-- **Provisioning target for a newly-created Fleet-repo host**: sizing, and whether it
-  needs its own HA consideration or is acceptable as a single node.
+Everything raised during this design pass has been resolved into the sections above,
+with one exception intentionally left for later:
+
 - **DNS record migration mechanism**: how the existing-instance-to-new-instance
   migration (brownfield case) actually happens — not yet designed, just identified as
-  a separate later concern.
+  a separate later concern, out of this bootstrap's critical path by design.

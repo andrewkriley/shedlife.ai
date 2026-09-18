@@ -14,7 +14,8 @@ References [`../architecture.md`](../architecture.md) (portable pattern) and
 - **Cloud-image VM template** — built once by the orchestrator; source for every
   subsequently-provisioned VM.
 - **Fleet-repo host (GitLab CE)** — hosts the tenant's Fleet repo; adopted (existing
-  instance) or provisioned (new instance, as its own VM, before the k3s/Flux step).
+  instance) or provisioned (new instance, as its own VM, before the k3s/Flux step;
+  single node, no HA, when provisioned).
 - **k3s cluster** — three control-plane + two worker nodes (cluster mode) or a smaller
   equivalent for the single-host default; provisioned from the VM template.
 - **Flux** — installed into k3s once it's up; the living, ongoing orchestrator from
@@ -66,32 +67,53 @@ References [`../architecture.md`](../architecture.md) (portable pattern) and
 
 ### Bootstrap-time input (importable by the wizard)
 
-Illustrative shape — not final, pending the open wizard-field-list question:
+Illustrative shape:
 
 ```yaml
 version: 1
 topology: cluster        # single | cluster
+
+network:
+  bridge: vmbr0
+  gateway: <gateway ip>
+  ntp: inherit            # inherit (from Proxmox host) | [<ntp server>, ...]
+
+storage:
+  pool: local-lvm          # single-host only; shared storage out of scope this phase
+
 hosts:
   - hostname: <host-1>
-    ip: <ip>
+    address: <ip>/<prefix>
   - hostname: <host-2>
-    ip: <ip>
+    address: <ip>/<prefix>
   - hostname: <host-3>
-    ip: <ip>
+    address: <ip>/<prefix>
   - hostname: <host-4>
-    ip: <ip>
+    address: <ip>/<prefix>
   - hostname: <host-5>
-    ip: <ip>
+    address: <ip>/<prefix>
+
+vm_template:
+  image: <cloud image reference, e.g. a specific Ubuntu/Debian cloud image>
+  sizing:
+    control_plane: { vcpu: 2, ram_gb: 4, disk_gb: 20 }
+    worker:        { vcpu: 4, ram_gb: 8, disk_gb: 40 }
+
 fleet_repo_host:
-  mode: adopt             # adopt | provision
-  url: <existing GitLab CE url>          # if adopt
-  token_ref: <how the token is supplied> # if adopt
+  mode: adopt              # adopt | provision
+  url: <existing GitLab CE url>            # if adopt
+  token_ref: <how the token is supplied>   # if adopt
+  sizing: { vcpu: 2, ram_gb: 4, disk_gb: 40 }  # if provision; single node, no HA
+
 fleet_repo: theshed-<tenant>
+
 dns:
-  mode: brownfield         # brownfield | greenfield
+  mode: brownfield          # brownfield | greenfield
   existing_url: <existing PowerDNS API URL>  # if brownfield
   token_ref: <how the token is supplied>     # if brownfield
-# network, storage, NTP fields: TBD
+
+ingress:
+  shed_domain: <e.g. shed.tenant.example>
 ```
 
 ### Fleet repo (`theshed-<tenant>`) contents
@@ -155,9 +177,7 @@ discovery mechanism needed beyond what resumption already requires.
 
 ## Open items
 
-Mirrors the PRD's Open Questions:
+Mirrors the PRD's Open Questions — one remaining, by design:
 
-- Full wizard field list — not yet enumerated.
-- Fleet-repo host provisioning target (sizing, single node vs. HA) — not yet decided.
 - DNS record migration mechanism (brownfield existing-to-new cutover) — identified as a
-  separate later concern, not yet designed.
+  separate later concern, out of this bootstrap's critical path, not yet designed.
