@@ -19,3 +19,12 @@ class TestRegistry:
 
     async def test_get_sub_agent_returns_none_for_unknown_id(self, db_session: AsyncSession) -> None:
         assert await get_sub_agent(db_session, "does.not.exist") is None
+
+    async def test_assist_has_web_search_and_code_execution_tools(
+        self, db_session: AsyncSession
+    ) -> None:
+        sub_agent = await get_sub_agent(db_session, "assist")
+        assert sub_agent is not None
+        tool_names = {t["name"] for t in sub_agent.tools}
+        assert tool_names == {"web_search", "code_execution"}
+        assert all(t["has_side_effects"] is False for t in sub_agent.tools)
