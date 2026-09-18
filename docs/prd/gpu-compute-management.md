@@ -121,8 +121,16 @@ The `run.gpu` sub-agent (list hosts/GPUs, list/download models, deploy/stop an
 instance, report status) and the management UI call the same underlying operations —
 the sub-agent is not a separate, parallel implementation of host/deployment logic.
 
+### Model catalog
+
+A live query against Hugging Face Hub, not a curated list — matches `vllm_manager`'s
+own approach, and avoids maintaining a second, always-stale list of what's actually
+available upstream. The operator can supply a Hugging Face API token (fetched from the
+secrets backend, same pattern as every other credential in this design, never stored
+in plaintext): optional for public, non-gated models — downloads work without it, just
+slower/rate-limited — but required for gated repos (Llama and similar, which need both
+an accepted license and a token) and generally faster with one.
+
 ## Open questions
 
-- **Model catalog**: is "what models are available to deploy" purely a live query
-  against Hugging Face Hub (as `vllm_manager` does), a curated list the operator
-  maintains, or both? Not yet decided.
+None remaining from this design pass.

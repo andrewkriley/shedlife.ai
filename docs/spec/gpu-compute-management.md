@@ -26,9 +26,12 @@ progress-event pattern this subsystem reuses).
    the `run.gpu` sub-agent — same underlying call either way.
 2. Discovery runs against that host, populating its GPU inventory in the registry.
    Re-run on demand, not assumed to stay accurate indefinitely.
-3. Operator selects a model to download. This is submitted as a job (Redis queue);
-   progress streams the same way a turn's progress does (SSE), not a bespoke polling
-   mechanism for this one subsystem.
+3. Operator browses/selects a model via a live Hugging Face Hub query (not a curated
+   list), and selects it for download. This is submitted as a job (Redis queue); if a
+   Hugging Face token is configured, the download uses it (higher rate limit; required
+   at all for gated repos) — fetched from the secrets backend at job-run time, not
+   stored in the job itself. Progress streams the same way a turn's progress does
+   (SSE), not a bespoke polling mechanism for this one subsystem.
 4. Once downloaded, operator requests deployment onto a specific GPU on a specific
    host. Also a job: starts the subprocess-managed instance, assigns it a port.
 5. **Validation**: once the process is up, a real request against its own API confirms
@@ -71,9 +74,9 @@ progress-event pattern this subsystem reuses).
 
 ## Interfaces
 
-- REST endpoints for host registration, discovery trigger, model list/download,
-  instance deploy/stop/status — mirrored by the `run.gpu` sub-agent's tool set, not a
-  separate API surface for conversational use.
+- REST endpoints for host registration, discovery trigger, model search (proxies a
+  live Hugging Face Hub query)/download, instance deploy/stop/status — mirrored by the
+  `run.gpu` sub-agent's tool set, not a separate API surface for conversational use.
 - Long-running operations (download, deploy) return a job reference; progress streams
   over SSE, consistent with the Core Agentic Loop's transport choice — not a second
   streaming mechanism for this subsystem to maintain.
@@ -93,6 +96,8 @@ progress-event pattern this subsystem reuses).
 - Calling LiteLLM's Model Management API requires its own admin/master key, fetched
   from the secrets backend at call time — same pattern as every other credential in
   this design, not a new mechanism.
+- The Hugging Face token (when configured) follows the same pattern: fetched from the
+  secrets backend at download-job-run time, never stored in the job record or logged.
 
 ## Infrastructure implication
 
@@ -103,6 +108,4 @@ layer** workload (Bootstrap design), not assumed to just exist.
 
 ## Open items
 
-Mirrors the PRD's Open Questions:
-
-- Model catalog source (live Hub query, curated list, or both).
+None remaining from this design pass.
