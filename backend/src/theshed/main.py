@@ -1,7 +1,6 @@
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -13,11 +12,17 @@ from theshed.observability.galileo import TurnTracer
 from theshed.secrets.client import EnvVarSecretsClient
 from theshed.turns.routes import router as turns_router
 
-# Dev-only: loads theshed/.env (repo root, two levels above backend/) into
-# the process environment, so EnvVarSecretsClient can resolve secrets from
-# it. A real deployment has no .env to load — see docs/spec/secrets-management.md,
-# "Secret zero's runtime home" (a Kubernetes Secret, injected directly).
-load_dotenv(Path(__file__).resolve().parents[3] / ".env")
+# Dev-only: loads a .env file into the process environment, so
+# EnvVarSecretsClient can resolve secrets from it. Deliberately NOT a path
+# hardcoded into this repo — theshed is the product, and where any given
+# operator's real secrets live is tenant-specific (e.g. this project's own
+# Fleet repo, not theshed itself; see "Product vs. tenant" in
+# docs/architecture.md). THESHED_ENV_FILE points at it explicitly; with
+# nothing set, falls back to python-dotenv's normal search from the current
+# working directory. A real deployment has no .env to load at all — see
+# docs/spec/secrets-management.md, "Secret zero's runtime home" (a
+# Kubernetes Secret, injected directly).
+load_dotenv(os.environ.get("THESHED_ENV_FILE"))
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 CLASSIFIER_MODEL = os.environ.get("CLASSIFIER_MODEL", "claude-haiku-4-5")
