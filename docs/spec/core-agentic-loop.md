@@ -56,10 +56,12 @@ Status: draft, technical design for
    c. Seed its tool-calling loop's message list with the same loaded context from step
       2, followed by the current user message (and any attachments, for a sub-agent
       whose model supports image input).
-   d. Run its tool-calling loop: call the model with its scoped tools. Two safety nets
-      apply throughout, per `architecture.md`: a max-turn cap, and a guard that stops
-      on an exact repeated tool call (known gap: not near-duplicates — documented,
-      not solved). If a tool call is flagged `has_side_effects: true`, the loop
+   d. Run its tool-calling loop: call the model with its scoped tools. Safety nets
+      apply throughout, per `architecture.md`: a max-turn cap; a repeated-call guard
+      comparing canonicalized arguments (trimmed, key-sorted, type-normalized), not
+      raw exact match; and tracking of the last K tool results, flagging the loop as
+      stuck if they're all effectively unproductive regardless of whether the calls
+      varied. If a tool call is flagged `has_side_effects: true`, the loop
       **pauses** and an SSE `approval_required` event is emitted (tool name, arguments,
       sub-agent id); execution resumes only on an explicit approval response over a
       companion endpoint (see Interfaces), or the loop ends if the user declines. An
@@ -160,6 +162,6 @@ attachments are given to a sub-agent, per step 6c of the Sequence.
 
 ## Open items
 
-None remaining from this design pass. Carried forward, per the PRD: near-duplicate
-tool-call detection is a documented, deliberately-unsolved gap — the exact-match
-repeated-call guard doesn't catch it, and it isn't blocking this phase.
+None remaining from this design pass. Embedding-based semantic similarity and
+LLM-judged stuckness detection remain deliberately deferred roadmap, per
+`architecture.md` — not blocking, and not the same as an unresolved open item.

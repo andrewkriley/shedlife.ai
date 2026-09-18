@@ -22,9 +22,13 @@ References [`../architecture.md`](../architecture.md) (portable pattern) and
   is skipped entirely).
 - **Flux** — installed into k3s once it's up (or confirmed already present, in the
   adopted-cluster case); the living, ongoing orchestrator from that point forward.
+- **Secrets backend (Infisical)** — adopted (existing instance) or provisioned (new
+  instance); unlike the Fleet-repo host, has no circular dependency on the bootstrap
+  sequence, so it deploys as an ordinary `platform/`-layer Flux-managed workload
+  (single node, no HA, when provisioned) rather than a special pre-cluster resource.
 - **Fleet repo** (`theshed-<tenant>`) — private, self-hosted on the tenant's GitLab CE;
   source of truth Flux reconciles against. Internally split into a `platform/` layer
-  (DNS, database, cache) and an `apps/` layer (The Shed itself).
+  (DNS, database, cache, secrets backend) and an `apps/` layer (The Shed itself).
 - **The Shed application** — deployed as a Flux-managed workload in the Fleet repo's
   `apps/` layer, once the `app` stage runs.
 
@@ -73,11 +77,17 @@ already exists).
 9. The LXC installs Flux into the k3s cluster (or confirms it's already present and
    healthy, in the adopted case), pointing it at the tenant's Fleet repo.
 10. Flux reconciles the Fleet repo's **`platform/` layer**: the database, cache/queue,
-    and a new tenant-dedicated DNS instance (no serving responsibility yet — see DNS,
-    above). **`platform`-stage runs stop here.**
-11. The LXC (or, for an adopted cluster with no LXC, the operator's own bootstrap CLI
+    a new tenant-dedicated DNS instance (no serving responsibility yet — see DNS,
+    above), and — if provisioning rather than adopting — a new secrets backend
+    instance.
+11. Once the secrets backend is reachable (adopted or newly reconciled), the LXC seeds
+    into it the other credentials collected during the wizard (the Fleet-repo host
+    token, the DNS token) — without this they'd only ever exist as one-time wizard
+    inputs, with nowhere for the running Shed's RUN capabilities to fetch them again
+    later. **`platform`-stage runs stop here.**
+12. The LXC (or, for an adopted cluster with no LXC, the operator's own bootstrap CLI
     invocation) adds The Shed's manifests to the Fleet repo's **`apps/` layer**.
-12. Flux reconciles the `apps/` layer: The Shed itself comes up as a running workload.
+13. Flux reconciles the `apps/` layer: The Shed itself comes up as a running workload.
     The LXC confirms this succeeded, then is destroyed (an adopted-cluster run that
     never provisioned an LXC has nothing to destroy). Handoff complete — all further
     provisioning, including any DNS migration/cutover, goes through the running Shed's
@@ -140,6 +150,12 @@ dns:
   existing_url: <existing PowerDNS API URL>  # if brownfield
   token_ref: <how the token is supplied>     # if brownfield
 
+secrets_backend:
+  mode: adopt               # adopt | provision
+  url: <existing Infisical url>            # if adopt
+  machine_identity_ref: <how the credential is supplied>  # if adopt
+  sizing: { vcpu: 2, ram_gb: 4, disk_gb: 20 }  # if provision; single node, no HA
+
 ingress:
   shed_domain: <e.g. shed.tenant.example>
 ```
@@ -175,7 +191,8 @@ steps:
   # --- adopt-mode runs start resuming from here ---
   fleet_repo_host_ready: { done: false }   # e.g. provisioning still in progress
   flux_installed: { done: false }
-  platform_layer_reconciled: { done: false }   # infra/platform-stage runs stop here
+  platform_layer_reconciled: { done: false }   # database, cache, DNS, secrets backend
+  secrets_seeded: { done: false }   # fleet-repo-host/DNS tokens written in; platform-stage runs stop here
   apps_layer_added: { done: false }
   apps_layer_reconciled: { done: false }       # app-stage runs stop here
   handoff_confirmed: { done: false }

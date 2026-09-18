@@ -164,12 +164,15 @@ separate page or flow. Its result displays inline, expandable, under that turn.
 ### Loop prevention and side-effect approval
 
 Per `architecture.md`'s cross-cutting requirement: every sub-agent's tool-calling loop
-has a max-round cap and an exact-repeated-call guard (known gap: doesn't catch
-near-duplicate calls, documented as unsolved, not built around). Separately, any tool
-call flagged `has_side_effects: true` pauses that sub-agent's loop and requires
-explicit user approval before executing — a pre-execution gate, distinct from the
-post-hoc verifier above. `has_side_effects` is an enforcement point from this phase,
-not deferred metadata.
+has a max-round cap and a repeated-call guard, extended with two cheap checks built
+this phase — canonicalized comparison (catches cosmetically-different-but-identical
+calls) and unproductive-result tracking (catches a model that varies its query but
+still isn't making progress). Embedding-based similarity and LLM-judged stuckness
+remain deliberately deferred — real cost/complexity for a problem the two cheap
+checks may already cover. Separately, any tool call flagged `has_side_effects: true`
+pauses that sub-agent's loop and requires explicit user approval before executing — a
+pre-execution gate, distinct from the post-hoc verifier above. `has_side_effects` is
+an enforcement point from this phase, not deferred metadata.
 
 ### Error handling within a turn
 
@@ -213,6 +216,4 @@ models, not a hardcoded list.
 
 ## Open questions
 
-None remaining from this design pass. One documented, deliberately-unsolved gap
-carried forward: near-duplicate tool-call detection (see Loop prevention and
-side-effect approval, above) — real, not papered over, not blocking this phase.
+None remaining from this design pass.

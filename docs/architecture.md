@@ -95,10 +95,16 @@ implementation detail:
   cap, and a guard against repeating the exact same tool call (same tool, same
   arguments) — a common real failure mode, cheaper to catch than waiting for the round
   cap. Both apply per sub-agent, independent of which provider/model is running.
-  **Known gap, not solved**: the repeated-call guard only catches exact-identical
-  calls — a model that varies one argument slightly each time would evade it while
-  still being effectively stuck. Fuzzy/near-duplicate detection is a harder problem,
-  documented here as unsolved rather than papered over.
+  **Extended with two cheap, deterministic checks, no new infrastructure required**:
+  (1) canonicalize arguments before comparing (trim whitespace, sort keys, normalize
+  types) so cosmetically-different-but-identical calls still get caught; (2) track
+  whether the last K tool results were all effectively unproductive (an identical
+  error, repeated "not found") regardless of whether the calls themselves varied — a
+  model can change its query every time and still be making zero progress, which
+  call-comparison alone would never catch. **Still deliberately deferred**: embedding-
+  based semantic similarity between calls, or a periodic LLM-judged "is this
+  trajectory stuck" check — both add real cost/latency and false-positive risk for a
+  problem the two cheap checks may already handle well enough in practice.
 - **Side-effect approval gate**: a tool call flagged `has_side_effects: true` pauses
   that sub-agent's loop and requires explicit human approval before it executes —
   distinct from, and prior to, the independent verifier above. The verifier is a

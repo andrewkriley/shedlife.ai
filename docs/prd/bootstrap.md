@@ -61,7 +61,7 @@ sequence, and losing a deployment shouldn't mean starting from scratch.
 - The bootstrap proceeds through three stages, each a valid stopping point:
   1. **`infra`** — Proxmox provisioning through a formed k3s cluster. No Flux yet.
   2. **`platform`** — Flux installed, pointed at the Fleet repo; the Fleet repo's
-     *platform* layer (DNS, database, cache — supporting infrastructure, not The Shed
+     *platform* layer (DNS, database, cache, secrets backend — supporting infrastructure, not The Shed
      itself) is reconciled.
   3. **`app`** — the Fleet repo's *application* layer (The Shed itself) is added and
      reconciled. Default stopping point for a full run.
@@ -98,8 +98,15 @@ sequence, and losing a deployment shouldn't mean starting from scratch.
 - Menu-driven, interactive by default.
 - Supports importing a YAML file instead of (or alongside) interactive prompts, for
   known values or a restore/replay scenario.
-- Field groups collected, beyond hosts/root-password/Fleet-repo-host/DNS (covered
-  elsewhere in this document):
+- **Build-vs-Adopt is a uniform, explicit interaction, not a bespoke one per
+  dependency.** For every adoptable external (the k3s cluster, the Fleet-repo host,
+  DNS, the secrets backend), the wizard asks the identically-shaped question — build
+  new, or adopt existing — before prompting that dependency's own follow-up fields.
+  This is a UX principle worth stating explicitly: without it, each dependency's
+  Build-vs-Adopt prompt risks getting implemented inconsistently, one bespoke flow per
+  dependency, even though the underlying data shape already treats them uniformly.
+- Field groups collected, beyond hosts/root-password/Fleet-repo-host/DNS/secrets-backend
+  (covered elsewhere in this document):
   - **Networking**: Proxmox network bridge for new VMs; per-host address as CIDR +
     gateway (not a bare IP); NTP servers, defaulting to inheriting the Proxmox host's
     own configuration rather than asking every time.
@@ -172,6 +179,24 @@ DNS infrastructure already exists for this tenant:
   delegation, a certificate issued against a real domain) is a day-2 RUN concern, not a
   bootstrap dependency.
 
+### Secrets backend (Infisical)
+
+Build-or-Adopt, same as the Fleet-repo host — but sequences like DNS, not like the
+Fleet-repo host: a newly-provisioned Infisical instance has no circular dependency on
+the bootstrap sequence itself (nothing before the `app` stage needs to read from it),
+so it deploys as an ordinary platform-layer, GitOps-managed workload rather than a
+special pre-cluster resource.
+
+- **Adopt**: point at an existing instance; wizard collects its URL and a
+  machine-identity credential.
+- **Provision**: stand up a new instance for a tenant with nothing existing —
+  single node, no HA, same reasoning as the Fleet-repo host's provisioning default.
+- **Either way, once reachable**: the other credentials the wizard already collected
+  during bootstrap (the Fleet-repo host token, the DNS token) are **seeded into it** —
+  without this, those credentials would only ever exist as one-time wizard inputs,
+  with nowhere for the running Shed's RUN capabilities to fetch them again later
+  through the normal secrets pattern in `architecture.md`.
+
 ### GitOps / Fleet model
 
 - The GitOps controller is installed into the cluster and points at that tenant's
@@ -179,7 +204,7 @@ DNS infrastructure already exists for this tenant:
   (sub-agents, hosts, services) and the Kubernetes manifests, organized by directory
   rather than split across repos.
 - The Fleet repo's manifests are themselves split into a **platform layer** (DNS,
-  database, cache — supporting infrastructure) and an **application layer** (The Shed
+  database, cache, secrets backend — supporting infrastructure) and an **application layer** (The Shed
   itself) — this is what the `platform`/`app` stage boundary actually applies to, and
   it also means adding/upgrading The Shed later never has to touch the platform layer.
 - Stateful dependencies (database, cache/queue) run as GitOps-managed Kubernetes
