@@ -45,8 +45,8 @@ Status: draft, technical design for
    and the registry's current descriptions, returning zero or more `(macro,
    sub_agent_id)` matches. A `classify` span records the call and its result. An SSE
    `progress` event (`classify: done`) is emitted.
-5. **Zero matches**: PRD open question (no-match fallback) — behavior not yet decided;
-   this step is a placeholder.
+5. **Zero matches**: fall back to the `assist` sub-agent as the sole match, and
+   continue at step 6 as if it had been classified normally — no separate code path.
 6. **One or more matches**, sequentially (this phase — see PRD non-goals on
    parallelism): for each matched sub-agent — an SSE `progress` event
    (`agent:<id> started`) is emitted, then:
@@ -56,32 +56,45 @@ Status: draft, technical design for
    c. Seed its tool-calling loop's message list with the same loaded context from step
       2, followed by the current user message (and any attachments, for a sub-agent
       whose model supports image input).
-   d. Run its tool-calling loop: call the model with its scoped tools; if it requests a
-      tool call, execute it (a `tool` span per call) and feed the result back; repeat
-      up to a turn cap. Two safety nets, mirroring the reference pattern in
-      `architecture.md`'s inspiration: a max-turn cap, and a guard that stops on an
-      identical repeated tool call. If a tool call produces an attachment (a diagram, a
-      screenshot), it's stored via the attachments endpoint and referenced in the
-      sub-agent's result, not inlined.
-   e. **Error handling within this loop (a tool call failing, the LLM API erroring) is
-      a PRD open question** — not yet designed; this step assumes the happy path.
+   d. Run its tool-calling loop: call the model with its scoped tools. Two safety nets
+      apply throughout, per `architecture.md`: a max-turn cap, and a guard that stops
+      on an exact repeated tool call (known gap: not near-duplicates — documented,
+      not solved). If a tool call is flagged `has_side_effects: true`, the loop
+      **pauses** and an SSE `approval_required` event is emitted (tool name, arguments,
+      sub-agent id); execution resumes only on an explicit approval response over a
+      companion endpoint (see Interfaces), or the loop ends if the user declines. An
+      executed tool call that fails feeds its error back into the loop as an
+      error-flagged tool result — the model decides how to react, not an exception. If
+      a tool call produces an attachment (a diagram, a screenshot), it's stored via the
+      attachments endpoint and referenced in the sub-agent's result, not inlined.
+   e. If the LLM API call itself fails (not a tool failure): retry with backoff, small
+      cap; if still failing, this sub-agent's result becomes a graceful degraded
+      message with `status_code: 1` — same pattern as the turn-limit/repeated-call
+      messages, not a new mechanism.
    f. Close the sub-agent's span with its result and status code. An SSE `progress`
-      event (`agent:<id> done`) is emitted.
+      event (`agent:<id> done`, carrying the status) is emitted.
 7. **Exactly one match**: that sub-agent's result is the turn's final answer, streamed
-   token-by-token over the same SSE connection as it's produced — no synthesis call.
+   token-by-token over the same SSE connection as it's produced — no synthesis call. If
+   that one sub-agent failed (step 6e), the failure message is the final answer, and an
+   SSE `error` event accompanies it.
 8. **More than one match**: an SSE `progress` event (`synthesis started`) is emitted;
    the synthesis step combines all matched sub-agents' results (no tools, one LLM
-   call) into one answer, streamed token-by-token as it's produced. **Partial-failure
-   behavior (one sub-agent errored, others succeeded) is a PRD open question** — not
-   yet designed.
+   call) into one answer, streamed token-by-token as produced. Any sub-agent that
+   failed is passed into synthesis as an explicit "this failed, here's why" input, not
+   silently dropped, so the combined answer can honestly acknowledge the gap. If
+   *every* matched sub-agent failed, synthesis is skipped and an SSE `error` event
+   carries a turn-level failure instead.
 9. A final SSE event carries the completed answer's metadata (any attachment
-   references, the turn id) and closes the stream.
+   references, the turn id) and closes the stream. The turn is recorded regardless of
+   outcome (including a fully-failed turn), so conversation history and traces stay
+   consistent.
 10. The `supervisor` span closes; the trace concludes.
-11. *(Optional, user-invoked, any time after step 10)*: the user triggers the verifier
-    against this turn — **invocation UX is a PRD open question**. The verifier reviews
-    the final answer against the original message, with no domain-scoped tools of its
-    own, and returns an assessment as its own traced span, not folded into the
-    original trace.
+11. *(Optional, user-invoked, any time after step 10, via a "Verify" action in the chat
+    UI attached to this turn)*: `POST /turns/{id}/verify`. The verifier reviews the
+    final answer against the original message, with no domain-scoped tools of its own,
+    and returns an assessment as its own traced span, not folded into the original
+    trace; its result is stored (`turn_verifications`) and displayed inline under that
+    turn in the UI.
 
 ## Data
 
@@ -107,6 +120,7 @@ Status: draft, technical design for
 | `turn_sub_agent_results` | `turn_id`, `sub_agent_id`, `result`, `status_code` — one row per sub-agent matched in that turn, for the verifier and for debugging; **not** replayed as future context (only `turns.final_response` is) |
 | `attachments` | `id`, `owner_user_id`, `source` (`upload` \| `generated`), `content_type`, `size_bytes`, `storage_key` (MinIO object key), `created_at` |
 | `turn_attachments` | `turn_id`, `attachment_id`, `role` (`input` \| `output`) — join table linking attachments to the turn they were submitted with or produced by |
+| `turn_verifications` | `id`, `turn_id`, `result`, `galileo_trace_id`, `invoked_by_user_id`, `invoked_at` — one row per manual verifier invocation |
 
 Context for a new turn = the owning conversation's last N `turns`, each reduced to
 `(user_message, final_response)` — `turn_sub_agent_results` stays out of the replayed
@@ -120,9 +134,14 @@ attachments are given to a sub-agent, per step 6c of the Sequence.
 - `POST /attachments` — `multipart/form-data` upload; returns an attachment reference.
   Independent of any turn; a turn references it afterward.
 - `POST /turns` — submit a message (text, plus zero or more attachment references) into
-  a conversation; response is an SSE stream of `progress` events, then token-level
-  text for the final answer, then a closing event carrying the turn id and any output
-  attachment references (see Sequence).
+  a conversation; response is an SSE stream: `progress` events, an `approval_required`
+  event if a side-effect tool call is pending, token-level text for the final answer
+  (or an `error` event on failure), then a closing event carrying the turn id and any
+  output attachment references (see Sequence).
+- `POST /turns/{id}/approvals` — respond (approve/decline) to a pending
+  `approval_required` event for that turn; resumes or ends the paused tool loop.
+- `POST /turns/{id}/verify` — manually invoke the verifier against a completed turn;
+  returns its assessment (also stored in `turn_verifications`).
 - Settings surface (REST): list live providers/models; list sub-agents; bulk-assign a
   provider/model to a selected set of sub-agents.
 
@@ -131,17 +150,16 @@ attachments are given to a sub-agent, per step 6c of the Sequence.
 - **Tool scoping is strictly enforced**: a sub-agent's executor only has access to the
   tools declared in its own registry row — not the full tool catalog, not another
   sub-agent's tools.
-- `has_side_effects` is metadata only this phase — it does not currently gate or block
-  any action; it exists so the future auto-trigger hook (PRD non-goal, `architecture.md`
-  roadmap) doesn't require a schema change when it's built.
+- **`has_side_effects` is an enforcement point, not deferred metadata**: a flagged tool
+  call cannot execute without an explicit approval response over `POST
+  /turns/{id}/approvals` — this is live from this phase, not held for a future
+  auto-trigger feature (which remains a separate, not-yet-built concern: the verifier's
+  own automatic triggering, per `architecture.md`).
 - Secrets are fetched at call time via machine identity, never cached to disk, per the
   secrets pattern in `architecture.md`.
 
 ## Open items
 
-Mirrors the PRD's Open Questions — none of these are designed yet, all are real gaps,
-not just documentation debt:
-
-- Error handling within a turn (single tool/LLM failure, partial fan-out failure).
-- Verifier invocation UX.
-- No-match classifier fallback.
+None remaining from this design pass. Carried forward, per the PRD: near-duplicate
+tool-call detection is a documented, deliberately-unsolved gap — the exact-match
+repeated-call guard doesn't catch it, and it isn't blocking this phase.

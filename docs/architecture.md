@@ -85,6 +85,29 @@ Auto-triggering on every turn is rarely worth the added latency/cost; gating it 
 side-effect-bearing actions targets it at the cases where a silent synthesis error
 actually matters.
 
+## Loop prevention and side-effect approval
+
+Two safety nets are load-bearing requirements for any sub-agent implementation —
+present or future, not just the ones built in a given phase — not incidental
+implementation detail:
+
+- **Loop prevention**: every sub-agent's tool-calling loop enforces a maximum round
+  cap, and a guard against repeating the exact same tool call (same tool, same
+  arguments) — a common real failure mode, cheaper to catch than waiting for the round
+  cap. Both apply per sub-agent, independent of which provider/model is running.
+  **Known gap, not solved**: the repeated-call guard only catches exact-identical
+  calls — a model that varies one argument slightly each time would evade it while
+  still being effectively stuck. Fuzzy/near-duplicate detection is a harder problem,
+  documented here as unsolved rather than papered over.
+- **Side-effect approval gate**: a tool call flagged `has_side_effects: true` pauses
+  that sub-agent's loop and requires explicit human approval before it executes —
+  distinct from, and prior to, the independent verifier above. The verifier is a
+  post-hoc quality check on an already-completed answer; this is a pre-execution gate
+  on one specific risky action. A sub-agent must never autonomously execute a
+  side-effect action without this checkpoint, regardless of how confident the model
+  is — `has_side_effects` is not just metadata for a future feature, it's an
+  enforcement point from the start.
+
 ## GPU / compute management
 
 Where a deployment needs to run its own models locally, compute lifecycle management

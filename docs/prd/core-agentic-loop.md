@@ -156,9 +156,43 @@ own answer directly, no extra call.
 
 ### Verifier
 
-An independent, post-synthesis agent with no domain bias, invoked manually by the user
-against a completed turn. **Open**: the exact UI/interaction for "invoke the verifier"
-isn't designed yet — see Open Questions.
+An independent, post-synthesis agent with no domain bias, invoked manually by the
+user against a completed turn via a "Verify" action attached to that turn in the chat
+UI (same pattern as a regenerate/feedback control in most chat products) — not a
+separate page or flow. Its result displays inline, expandable, under that turn.
+
+### Loop prevention and side-effect approval
+
+Per `architecture.md`'s cross-cutting requirement: every sub-agent's tool-calling loop
+has a max-round cap and an exact-repeated-call guard (known gap: doesn't catch
+near-duplicate calls, documented as unsolved, not built around). Separately, any tool
+call flagged `has_side_effects: true` pauses that sub-agent's loop and requires
+explicit user approval before executing — a pre-execution gate, distinct from the
+post-hoc verifier above. `has_side_effects` is an enforcement point from this phase,
+not deferred metadata.
+
+### Error handling within a turn
+
+- A single tool call failing feeds back into that sub-agent's own loop as an
+  error-flagged tool result — the model decides how to react, not an exception that
+  aborts anything.
+- The LLM API call itself failing gets a small retry-with-backoff; if still failing,
+  the sub-agent returns a graceful degraded result (`status_code: 1`), reusing the same
+  pattern as the turn-limit/repeated-call-guard messages, not a new mechanism.
+- One sub-agent failing in a multi-match fan-out: synthesis still runs on whatever
+  succeeded, explicitly told which sub-agent(s) failed and why, so the combined answer
+  can honestly acknowledge the gap rather than omit it or crash the whole turn.
+- Total failure (the only match failed, or every sub-agent in a multi-match failed): a
+  dedicated failure signal, not a dropped connection — the turn is still recorded with
+  its failed status so conversation history and traces stay consistent.
+
+### No-match fallback
+
+A message the classifier can't route to anything specific falls back to the `assist`
+sub-agent (general web search/fetch) rather than a canned "I don't know how to help" —
+mirrors the `cl-ai-builders` reference pattern directly (`categories or ["general"]`:
+general is the explicit fallback, not a failure state), and gives a genuine attempt at
+an answer instead of a dead end.
 
 ### Provider/model resolution
 
@@ -179,11 +213,6 @@ models, not a hardcoded list.
 
 ## Open questions
 
-- **Error handling within a turn**: what happens when one sub-agent's tool call fails,
-  an LLM API call errors, or one sub-agent in a multi-match fan-out fails while others
-  succeed — not yet designed.
-- **Verifier invocation UX**: the mechanism by which a user "manually invokes" the
-  verifier against a turn isn't specified.
-- **No-match fallback**: what happens when the classifier finds zero matching
-  sub-agents for a message — not yet decided (a catch-all general sub-agent, an
-  explicit "I don't know how to help with that," something else).
+None remaining from this design pass. One documented, deliberately-unsolved gap
+carried forward: near-duplicate tool-call detection (see Loop prevention and
+side-effect approval, above) — real, not papered over, not blocking this phase.
