@@ -98,6 +98,33 @@ sequence, and losing a deployment shouldn't mean starting from scratch.
   cluster the GitOps controller will manage (that would be circular: the controller
   depends on its own source repo already existing).
 
+### DNS
+
+DNS has a wider blast radius than the Fleet-repo host: potentially everything in the
+sequence depends on names resolving (SSH between hosts, the Fleet repo's git remote,
+ingress, certificate issuance), not just one downstream step. It splits by whether
+DNS infrastructure already exists for this tenant:
+
+- **Brownfield (existing DNS)**: adopt the existing instance for actual name
+  resolution — this is what the bootstrap sequence itself relies on throughout, and
+  it's a hard requirement (must be reachable) for this case. Separately, **build a new,
+  tenant-dedicated DNS instance** — but unlike the Fleet-repo host, it has no circular
+  dependency on the bootstrap sequence, so it doesn't need special pre-cluster
+  treatment: it deploys as an ordinary GitOps-managed workload, alongside the database
+  and The Shed itself, with no serving responsibility yet. **Record migration from the
+  existing instance to the new one is an explicit, separate, later action** — not part
+  of this bootstrap's critical path, and not yet designed (likely a future RUN
+  capability or a manual cutover).
+- **Greenfield (no existing DNS)**: nothing to adopt, so no hard requirement to satisfy.
+  The orchestrator resolves its own internal, bootstrap-time needs (hosts it just
+  created talking to each other) with static host-entry files it writes itself — it
+  fully controls every host involved, so this doesn't need a real DNS server. The new,
+  tenant-dedicated DNS instance still deploys the same way (a GitOps-managed workload),
+  and since nothing preceded it, it's authoritative from the moment it exists — no
+  migration step applies. Anything needing real, externally-resolvable DNS (public
+  delegation, a certificate issued against a real domain) is a day-2 RUN concern, not a
+  bootstrap dependency.
+
 ### GitOps / Fleet model
 
 - The GitOps controller is installed into the cluster and points at that tenant's
@@ -145,11 +172,11 @@ sequence, and losing a deployment shouldn't mean starting from scratch.
 
 ## Open questions
 
-- **DNS scope**: is DNS record creation for the newly-provisioned hosts/services part
-  of this bootstrap's responsibility, or handed off to a RUN capability once the
-  platform is alive?
 - **Full wizard field list**: network bridge, storage pool, NTP, package
   repository/subscription settings, and anything else needed for VM provisioning
   haven't been enumerated yet.
 - **Provisioning target for a newly-created Fleet-repo host**: sizing, and whether it
   needs its own HA consideration or is acceptable as a single node.
+- **DNS record migration mechanism**: how the existing-instance-to-new-instance
+  migration (brownfield case) actually happens — not yet designed, just identified as
+  a separate later concern.

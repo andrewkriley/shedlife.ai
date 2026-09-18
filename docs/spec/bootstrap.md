@@ -36,21 +36,31 @@ References [`../architecture.md`](../architecture.md) (portable pattern) and
 4. The LXC generates a dedicated SSH keypair and, using the supplied root passwords,
    installs that key on every host (including host 1). Root passwords are discarded
    from memory/state after this step — never persisted or logged.
-5. The LXC forms the Proxmox cluster across all supplied hosts (corosync/quorum),
-   using the dedicated key from this point forward.
-6. The LXC builds the VM template from a cloud image.
-7. If the Fleet-repo host is being provisioned (not adopted): the LXC provisions a VM
+5. **DNS resolution for the rest of the sequence** is established now: brownfield
+   (existing DNS adopted in step 3) — the LXC confirms it's reachable, hard
+   requirement. Greenfield (nothing to adopt) — the LXC writes static host-entry files
+   to every host it controls (itself included), covering just the hosts this bootstrap
+   creates; no DNS server involved yet.
+6. The LXC forms the Proxmox cluster across all supplied hosts (corosync/quorum),
+   using the dedicated key and the name resolution from step 5.
+7. The LXC builds the VM template from a cloud image.
+8. If the Fleet-repo host is being provisioned (not adopted): the LXC provisions a VM
    for it now, outside the eventual k3s cluster, and waits for it to become reachable.
-8. The LXC provisions the k3s VMs from the template — five for cluster mode (three
+9. The LXC provisions the k3s VMs from the template — five for cluster mode (three
    control-plane, two worker), one for the single-host default.
-9. The LXC installs k3s across the provisioned VMs, forming the cluster.
-10. The LXC installs Flux into the k3s cluster, pointing it at the tenant's Fleet repo
-    (existing, or newly created on the GitLab CE instance from step 7).
-11. Flux reconciles: deploys the database, cache/queue, and The Shed itself as declared
-    in the Fleet repo.
-12. The LXC confirms Flux has successfully reconciled the core workloads, then is
-    destroyed. Handoff complete — all further provisioning goes through the running
-    Shed's own RUN capabilities, not the LXC.
+10. The LXC installs k3s across the provisioned VMs, forming the cluster.
+11. The LXC installs Flux into the k3s cluster, pointing it at the tenant's Fleet repo
+    (existing, or newly created on the GitLab CE instance from step 8).
+12. Flux reconciles: deploys the database, cache/queue, a new tenant-dedicated DNS
+    instance, and The Shed itself, all as declared in the Fleet repo. The new DNS
+    instance has no serving responsibility yet — brownfield keeps resolving through the
+    adopted existing instance; greenfield's static host entries remain in place for the
+    hosts the bootstrap created (the new instance becomes authoritative for anything
+    beyond that once RUN takes over, not automatically).
+13. The LXC confirms Flux has successfully reconciled the core workloads, then is
+    destroyed. Handoff complete — all further provisioning, including any DNS
+    migration/cutover, goes through the running Shed's own RUN capabilities, not the
+    LXC.
 
 ## Data
 
@@ -77,6 +87,10 @@ fleet_repo_host:
   url: <existing GitLab CE url>          # if adopt
   token_ref: <how the token is supplied> # if adopt
 fleet_repo: theshed-<tenant>
+dns:
+  mode: brownfield         # brownfield | greenfield
+  existing_url: <existing PowerDNS API URL>  # if brownfield
+  token_ref: <how the token is supplied>     # if brownfield
 # network, storage, NTP fields: TBD
 ```
 
@@ -143,7 +157,7 @@ discovery mechanism needed beyond what resumption already requires.
 
 Mirrors the PRD's Open Questions:
 
-- DNS scope (is DNS record creation part of this bootstrap, or a later RUN capability)
-  — not yet decided.
 - Full wizard field list — not yet enumerated.
 - Fleet-repo host provisioning target (sizing, single node vs. HA) — not yet decided.
+- DNS record migration mechanism (brownfield existing-to-new cutover) — identified as a
+  separate later concern, not yet designed.
