@@ -1,7 +1,6 @@
 .env
 .env.*
 !.env.example
-docs/decisions.md
 brand/cover.png
 __pycache__/
 *.pyc
