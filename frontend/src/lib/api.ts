@@ -12,6 +12,15 @@ export interface TurnEvent {
   data: Record<string, unknown>
 }
 
+// Double-submit CSRF: the backend sets a non-HttpOnly `shed_csrf` cookie on
+// login specifically so page JS can read it and echo it back as a header on
+// state-changing requests (see docs/spec/auth.md). Confirmed live: without
+// this, POST /turns 403s — the cookie alone was never enough on its own.
+function readCsrfCookie(): string {
+  const match = document.cookie.match(/(?:^|;\s*)shed_csrf=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : ''
+}
+
 export async function login(email: string, password: string): Promise<void> {
   const response = await fetch('/api/auth/login', {
     method: 'POST',
@@ -31,7 +40,10 @@ export async function* streamTurn(
   const response = await fetch('/api/turns', {
     method: 'POST',
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-csrf-token': readCsrfCookie(),
+    },
     body: JSON.stringify({ conversation_id: conversationId, message }),
   })
   if (!response.ok || !response.body) {
@@ -44,7 +56,13 @@ export async function* streamTurn(
   while (true) {
     const { value, done } = await reader.read()
     if (done) break
-    buffer += value
+    // The server emits \r\n line endings (valid per the SSE spec — Starlette's
+    // own choice, confirmed live by inspecting the raw stream). \r\n\r\n never
+    // contains the substring \n\n, so splitting on a bare '\n\n' silently
+    // matched nothing at all: the buffer just grew forever and no event was
+    // ever parsed out, with no error anywhere — the fetch still completed
+    // normally. Normalizing line endings first is the fix.
+    buffer += value.replace(/\r\n/g, '\n')
 
     const events = buffer.split('\n\n')
     buffer = events.pop() ?? ''
