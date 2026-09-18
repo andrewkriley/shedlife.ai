@@ -21,6 +21,12 @@ between being built and a tenant's Flux instance deploying it.
   "whatever the Fleet repo happens to reference."
 - Deploying a new version to any given tenant is that **tenant's own deliberate
   action**, not something a product release pushes onto them unasked.
+- Versioning and changelog generation are automatic, driven by commit discipline —
+  not a manual "what should the next version be" decision each time.
+- `main` is protected the same way regardless of who's merging — commit signing and a
+  passing CI gate apply unconditionally, including to the maintainer's own merges;
+  only the *peer-approval* requirement can ever be bypassed, and only because a
+  single-maintainer project has no peer to provide one yet.
 
 ## Non-goals (this phase)
 
@@ -78,6 +84,51 @@ A tenant updates by changing the image tag/digest their own Fleet repo's `apps/`
 layer references — a deliberate edit to their own repo, the same declarative-apply
 mechanism as any other Fleet change. A product release does not, by itself, change
 what any tenant is running.
+
+### Versioning and changelog
+
+Semantic Versioning (`MAJOR.MINOR.PATCH`), driven by Conventional Commits
+(`feat:`/`fix:`/etc.) rather than a manual per-release decision — commit message
+discipline is what determines the next version and populates the changelog, so a
+release is a natural consequence of what already merged, not a separate authoring
+step. PR titles (which become the squash-merge commit message, see below) are
+themselves format-checked in CI, since they're what the versioning/changelog tooling
+actually reads.
+
+### Branch protection on `main`
+
+Two separate rulesets, not one, so a bypass can be scoped narrowly rather than
+granted as a blanket exception:
+
+- **No bypass, for anyone, ever**: signed commits required; all CI status checks
+  (test gate, lint, type-check, CodeQL, image scan) must pass; linear history
+  (squash merge only, PR title as the resulting commit message).
+- **Bypassable by the Repository Admin role only**: PR required (no direct pushes),
+  1 approval required and not from the PR's author.
+
+The split matters: a maintainer merging their own solo work can skip waiting for a
+second human's approval, but cannot skip signed commits or a failing check by virtue
+of being admin — those guarantees hold unconditionally, for everyone, always. As real
+contributors join, the bypass becomes something the maintainer simply stops using,
+not a rule that needs restructuring.
+
+### Additional CI
+
+Beyond the existing `gitleaks` and the test gate above: linting (`ruff`, ESLint);
+type-checking (`mypy`, `tsc --noEmit`); `commitlint` (enforces the Conventional
+Commits format the versioning tooling depends on); **CodeQL** (GitHub's native SAST —
+genuinely distinct from `gitleaks`, which finds committed secrets, not code-level
+vulnerabilities); a container image vulnerability scan (e.g. Trivy) before publish, so
+a vulnerable base layer or baked-in dependency is caught before it ever reaches the
+registry, not after. Dependabot enabled as a repository setting (not a CI job) for
+automated dependency-vulnerability PRs.
+
+### Contribution guide
+
+`CONTRIBUTING.md` (dev setup, the TDD/testing expectation, commit-signing and
+Conventional Commits requirements, the branch/PR workflow) and a short `RELEASING.md`
+(how a release actually gets cut, for anyone who becomes a maintainer) — written to
+describe the process above once it's confirmed and built, not ahead of it.
 
 ## Open questions
 

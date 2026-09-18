@@ -171,6 +171,16 @@ ingress:
   per the tenant-Fleet model in the PRD — the `platform`/`apps` split is *within* that
   one repo, not a reason to split the repo itself.
 
+### Fleet repo GitLab configuration
+
+Set up once, as part of the Fleet-repo-host step (adopt or provision):
+
+- **`main` protected**: MR required (no direct push), signed commits required, "prevent
+  approval by author" turned **off** (self-approval allowed — see PRD reasoning).
+- **CI** (`.gitlab-ci.yml`, this repo's own, separate from the product repo's GitHub
+  Actions): YAML lint, `kubeconform` against the manifest set, `kustomize build`
+  (both `platform/` and `apps/` overlays) as a dry-run, `gitleaks`.
+
 ### Bootstrap state file
 
 Written by the orchestrator as each step completes; read on every invocation to

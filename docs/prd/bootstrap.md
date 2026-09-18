@@ -220,6 +220,27 @@ special pre-cluster resource.
   to match it. A dry-run diff should be available before a change is applied, but the
   resolution model itself favors the file over any out-of-band change.
 
+### Fleet repo branch protection and CI
+
+A different shape than the product repo's (see the Release Pipeline PRD/SPEC), for
+two reasons: a Fleet repo is manifests/config, not application code, so it needs
+different checks; and it's genuinely single-user, so a peer-approval requirement
+would demand something that structurally can't happen, not just be inconvenient.
+
+- **MR required, no direct pushes to `main`** — not for peer review (there's none),
+  but to force a CI gate and a reviewable diff before Flux ever tries to reconcile a
+  change. A bad manifest caught in an MR is free; caught after Flux applies it is a
+  live incident.
+- **Signed commits required.**
+- **Self-approval allowed** — an approval click is still a real "did I actually
+  re-read this diff" checkpoint even solo, just not a second-person gate.
+- **CI**: YAML validation, a manifest schema check (e.g. `kubeconform`), a
+  `kustomize build` dry-run (catches a broken overlay/reference before merge, not at
+  reconcile time), and `gitleaks` here too — belt-and-suspenders, even though secret
+  *values* should never appear in this repo by design.
+- Policy checks (e.g. OPA/Conftest — "every workload declares resource limits") are
+  roadmap, not built this phase — real value, not urgent for a single-tenant setup.
+
 ### Idempotency / failure recovery
 
 - If the bootstrap fails partway through, the operator re-runs the same command
