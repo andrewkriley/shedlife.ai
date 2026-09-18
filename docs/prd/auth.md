@@ -49,14 +49,22 @@ comes to exist.
 
 ### Session mechanism
 
-**Cookie-based sessions, not bearer tokens in a header.** This is a direct consequence
-of the SSE transport decision in the Core Agentic Loop: the browser's native
-`EventSource` API cannot set custom headers, so a header-based auth scheme would force
-either a workaround (a token in the URL query string — leaks into logs/referrer
-headers) or abandoning native `EventSource` for a fetch-based streaming polyfill.
-Cookies are sent automatically on same-origin requests, including `EventSource`
-connections, with none of that cost. This is a case where an earlier decision
-(streaming transport) constrains this one, not an independent choice.
+**Cookie-based sessions, not bearer tokens in a header.** The original reasoning here
+was wrong in its detail and is corrected now rather than left standing: the premise
+was that the browser's native `EventSource` API can't set custom headers, so cookies
+were "forced." But `POST /turns` carries a request body (the message), and
+`EventSource` can only issue `GET` — it was never actually usable for this endpoint,
+regardless of auth scheme. The real transport is `fetch()` with a manually-parsed
+`text/event-stream` response body (see the Core Agentic Loop SPEC's Interfaces
+section), and `fetch()` can set arbitrary headers just fine — so the header-limitation
+argument doesn't hold once the transport is stated correctly.
+
+Cookies remain the right choice anyway, on independent merits: they're attached
+automatically by the browser (no frontend code has to manage storing and re-attaching
+a token on every request), and they pair naturally with server-side session state that
+can be revoked immediately (see below) rather than a self-contained token that's only
+as revocable as its own expiry. The decision stands; the stated reason for it doesn't
+depend on an EventSource constraint that turned out not to apply.
 
 ### Identity model
 

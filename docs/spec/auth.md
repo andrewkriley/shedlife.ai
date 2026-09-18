@@ -22,7 +22,7 @@ seeding).
 | Table | Key fields |
 |---|---|
 | `users` | `id`, `display_name`, `created_at` — no credential fields here |
-| `identities` | `id`, `user_id`, `provider` (`local` \| `google` \| `github`, only `local` implemented this phase), `provider_user_id` (for `local`: not applicable; for OAuth later: the provider's own user id), `password_hash` (only populated for `provider = local`) |
+| `identities` | `id`, `user_id`, `provider` (`local` \| `google` \| `github`, only `local` implemented this phase), `provider_user_id` (unique per `provider` — the login-lookup identifier: the email for `local`, the provider's own user id for OAuth later — **correction**: an earlier draft of this table said "not applicable" for `local`, but `local` needs *something* to look an identity up by, and email is it), `password_hash` (only populated for `provider = local`) |
 
 A user has one `identities` row per way they can authenticate. Adding `google`/`github`
 later is a new `provider` value and new rows — no change to `users`, no migration of
@@ -35,10 +35,10 @@ existing `local` rows.
    password against `password_hash` (Argon2id).
 3. On success: backend creates a session record in Redis (session id → user id, with
    an expiry), and sets an HTTP-only, `Secure`, `SameSite=Lax` cookie carrying the
-   session id. Not a JWT in a header — see PRD's reasoning (the SSE/`EventSource`
-   constraint).
-4. Subsequent requests (REST and the SSE turn-stream connection alike) carry the
-   cookie automatically; the backend resolves it against the Redis session store on
+   session id. Not a JWT in a header — see the PRD's reasoning (server-side,
+   immediately-revocable state, independent of any transport constraint).
+4. Subsequent requests (REST and the `fetch()`-based turn-stream request alike) carry
+   the cookie automatically; the backend resolves it against the Redis session store on
    each request.
 5. State-changing requests (anything but a plain `GET`) also require a CSRF token
    (double-submit cookie: a non-HTTP-only cookie the frontend reads and echoes back as

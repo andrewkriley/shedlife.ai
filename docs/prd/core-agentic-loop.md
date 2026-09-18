@@ -95,15 +95,23 @@ sub-agent matched) → respond. Each stage is its own traced span, matching the
 
 ### Streaming
 
-Turns stream over Server-Sent Events, not WebSocket — a turn is one-directional after
-the initial request (the server pushes, the client doesn't need to talk back mid-turn;
-cancellation is a separate plain request, not a reason for a duplex channel), and SSE
-avoids real infrastructure cost that would otherwise apply: since The Shed deploys as a
-Kubernetes workload via Flux (potentially multiple replicas), WebSocket would need
-either sticky sessions or a pub/sub backplane for a client to keep receiving pushes
-regardless of which replica handles a given moment; SSE, being plain HTTP, needs
-neither. SSE also reconnects automatically (built into the browser's `EventSource`),
-where WebSocket reconnection has to be hand-rolled.
+Turns stream over the Server-Sent Events *format* (`text/event-stream`), not
+WebSocket — a turn is one-directional after the initial request (the server pushes,
+the client doesn't need to talk back mid-turn; cancellation is a separate plain
+request, not a reason for a duplex channel), and SSE avoids real infrastructure cost
+that would otherwise apply: since The Shed deploys as a Kubernetes workload via Flux
+(potentially multiple replicas), WebSocket would need either sticky sessions or a
+pub/sub backplane for a client to keep receiving pushes regardless of which replica
+handles a given moment; SSE, being plain HTTP, needs neither.
+
+**Correction**: the transport is `fetch()` with a manually-parsed streamed response
+body, not the browser's native `EventSource` object — `POST /turns` carries a request
+body (the message), and `EventSource` can only issue `GET`. This means the automatic
+reconnection `EventSource` normally provides for free does **not** apply here;
+reconnection (if wanted) has to be hand-rolled, the same as it would for WebSocket.
+The infrastructure argument above (no sticky sessions/pub-sub backplane) is unaffected
+by this and remains the actual reason SSE's format still beats WebSocket here — it
+just isn't reinforced by a free-reconnection advantage that doesn't materialize.
 
 The stream carries two kinds of events: **progress** (classify started/done, each
 sub-agent started/done, synthesis started) so the UI shows what's happening rather than
