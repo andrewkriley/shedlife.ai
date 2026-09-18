@@ -182,6 +182,29 @@ Both paths end at the same place: a running control plane with a populated regis
 The installer's job is exactly the gap between "nothing running" and "the harness can
 take over" — keep it that thin.
 
+## Product vs. tenant
+
+The harness itself (the bootstrap orchestrator and the ongoing Assist/Build/Run
+engine) is **one product** with one canonical, public source. A **deployment is a
+tenant** of that product, and a tenant's entire operating state — its registered
+hosts/services/sub-agents, its GitOps manifests, everything specific to that
+deployment — lives in its own private repo, separate from the product's source. Build
+and Run are **capabilities of the product**, not products in their own right: when
+exercised, they act on a specific tenant's state, not on the product's own repo. See
+the Bootstrap & Fleet Provisioning PRD/SPEC for how a tenant's infrastructure and this
+private repo actually get stood up.
+
+This separation is what makes "the same product, deployed independently by different
+tenants" coherent: the product repo has no tenant-specific content in it at all, and
+every tenant-specific detail — network addresses, credentials-by-reference, which
+sub-agents are registered — lives in that tenant's own private repo instead.
+
+**Application visibility defaults private.** Anything Build produces for a tenant is
+private (stored in that tenant's own git hosting) unless explicitly flagged public, in
+which case it's stored on the product's public git host instead. Visibility is a
+property of the individual application, decided when it's created — not inferred, not
+inherited from where the harness itself lives.
+
 ## Multi-tenancy from day one
 
 Even a single-user deployment should model users, roles, and ownership as first-class
