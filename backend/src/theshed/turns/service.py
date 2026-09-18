@@ -22,8 +22,13 @@ RECENCY_CAP = 10  # tunable default, per docs/spec/core-agentic-loop.md
 TOKEN_CHUNK_SIZE = 40
 
 
-def _sse(event_type: str, data: dict[str, Any]) -> str:
-    return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+def _sse(event_type: str, data: dict[str, Any]) -> dict[str, str]:
+    """`sse-starlette`'s `EventSourceResponse` does its own wire-formatting
+    from a dict — it must not be handed an already-formatted SSE string, or
+    the result is double-wrapped (each of our own lines gets a second
+    `data: ` prefix). Caught by the live end-to-end verification, not by any
+    mocked unit test — this class of bug is exactly why that step exists."""
+    return {"event": event_type, "data": json.dumps(data)}
 
 
 async def _load_context(db: AsyncSession, conversation_id: uuid.UUID) -> list[dict[str, Any]]:
@@ -57,7 +62,7 @@ async def stream_turn(
     llm: LLMClient,
     classifier_model: str,
     tracer: TurnTracer,
-) -> AsyncIterator[str]:
+) -> AsyncIterator[dict[str, str]]:
     is_new_conversation = conversation_id is None
     if is_new_conversation:
         conversation = Conversation(user_id=user_id)

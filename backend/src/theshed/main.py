@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     os.environ.setdefault(
         "GALILEO_API_KEY", secrets.get("infisical://the-shed/observability/galileo_api_key")
     )
-    app.state.tracer_factory = lambda: TurnTracer(
+    app.state.tracer_factory = lambda: TurnTracer.create(
         project=GALILEO_PROJECT, log_stream=GALILEO_LOG_STREAM
     )
 
