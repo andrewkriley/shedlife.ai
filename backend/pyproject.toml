@@ -18,6 +18,7 @@ dependencies = [
     "python-multipart>=0.0.12",
     "sse-starlette>=2.1",
     "galileo>=1.0",
+    "python-dotenv>=1.0",
 ]
 
 [dependency-groups]

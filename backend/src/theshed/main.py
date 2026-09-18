@@ -1,7 +1,9 @@
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from redis.asyncio import Redis
 
@@ -10,6 +12,12 @@ from theshed.auth.routes import router as auth_router
 from theshed.observability.galileo import TurnTracer
 from theshed.secrets.client import EnvVarSecretsClient
 from theshed.turns.routes import router as turns_router
+
+# Dev-only: loads theshed/.env (repo root, two levels above backend/) into
+# the process environment, so EnvVarSecretsClient can resolve secrets from
+# it. A real deployment has no .env to load — see docs/spec/secrets-management.md,
+# "Secret zero's runtime home" (a Kubernetes Secret, injected directly).
+load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 CLASSIFIER_MODEL = os.environ.get("CLASSIFIER_MODEL", "claude-haiku-4-5")
