@@ -61,7 +61,7 @@ sequence, and losing a deployment shouldn't mean starting from scratch.
 - The bootstrap proceeds through three stages, each a valid stopping point:
   1. **`infra`** — Proxmox provisioning through a formed k3s cluster. No Flux yet.
   2. **`platform`** — Flux installed, pointed at the Fleet repo; the Fleet repo's
-     *platform* layer (DNS, database, cache, secrets backend — supporting infrastructure, not The Shed
+     *platform* layer (DNS, database, cache, secrets backend, LiteLLM — supporting infrastructure, not The Shed
      itself) is reconciled.
   3. **`app`** — the Fleet repo's *application* layer (The Shed itself) is added and
      reconciled. Default stopping point for a full run.
@@ -204,7 +204,7 @@ special pre-cluster resource.
   (sub-agents, hosts, services) and the Kubernetes manifests, organized by directory
   rather than split across repos.
 - The Fleet repo's manifests are themselves split into a **platform layer** (DNS,
-  database, cache, secrets backend — supporting infrastructure) and an **application layer** (The Shed
+  database, cache, secrets backend, LiteLLM — supporting infrastructure) and an **application layer** (The Shed
   itself) — this is what the `platform`/`app` stage boundary actually applies to, and
   it also means adding/upgrading The Shed later never has to touch the platform layer.
 - Stateful dependencies (database, cache/queue) run as GitOps-managed Kubernetes

@@ -88,6 +88,24 @@ long-running operation.
 A real request against the deployed instance's own API (not just "the process is
 still running") before it's marked usable.
 
+### Becoming routable (resolves the prior open question)
+
+A validated instance registers itself with LiteLLM via LiteLLM's own dynamic Model
+Management API — not a static config file edit (which would need a reload/restart,
+risking disruption to other models already routing through the same gateway) and not
+a gateway bypass for freshly-deployed instances (which would mean two different code
+paths for reaching a local model depending on how it got deployed). Stopping an
+instance deregisters it the same way — symmetric, not a one-directional registration
+that leaves stale routes behind. The registered model alias matches the name a
+sub-agent's registry entry references, so provider resolution (Core Agentic Loop)
+finds it the same way regardless of when it was deployed.
+
+This has one real infrastructure implication: **LiteLLM needs a database configured**
+so these dynamic registrations survive its own restarts (in-memory-only registrations
+vanish on restart) — and LiteLLM itself belongs in the Fleet repo's **platform layer**
+(a Flux-managed workload, per the Bootstrap design), not something assumed to just
+exist.
+
 ### In-use tracking
 
 A reference count per loaded model, incremented when a sub-agent call starts against
@@ -105,14 +123,6 @@ the sub-agent is not a separate, parallel implementation of host/deployment logi
 
 ## Open questions
 
-- **How does a newly-deployed local instance actually become routable?** The Model
-  Providers pattern (per `architecture.md`/`stack.md`) routes local models through a
-  LiteLLM gateway — but LiteLLM needs to know an instance's endpoint to route to it.
-  Does deploying a new instance update LiteLLM's own config (and how — a reload, a
-  dynamic API), or does The Shed's provider-resolution logic talk to a freshly-deployed
-  instance directly, bypassing the gateway until it's registered some other way? This
-  is a real integration gap between this subsystem and Model Providers, not yet
-  decided either place.
 - **Model catalog**: is "what models are available to deploy" purely a live query
   against Hugging Face Hub (as `vllm_manager` does), a curated list the operator
   maintains, or both? Not yet decided.

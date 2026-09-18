@@ -34,15 +34,17 @@ progress-event pattern this subsystem reuses).
 5. **Validation**: once the process is up, a real request against its own API confirms
    it's actually serving before the instance is marked usable — not just "the process
    didn't crash."
-6. **Open question (PRD)**: how the instance becomes routable through the Model
-   Providers/LiteLLM layer is not yet decided — this step is a placeholder pending that
-   design.
+6. The now-validated instance registers itself with LiteLLM via LiteLLM's own dynamic
+   Model Management API (register a model alias against this instance's host:port) —
+   immediately routable, no LiteLLM restart, no disruption to other models already
+   routing through the same gateway.
 7. From this point, every sub-agent call that resolves to this instance increments its
    reference count on start and decrements on finish — the same code path as the Core
    Agentic Loop's provider-resolution step, not a second bookkeeping mechanism.
-8. An operator-initiated unload checks the reference count first: zero, proceeds;
-   non-zero, a visible warning in the UI rather than silently blocking or silently
-   allowing.
+8. An operator-initiated unload checks the reference count first: zero, proceeds
+   (deregistering from LiteLLM the same way it registered, then stopping the
+   subprocess); non-zero, a visible warning in the UI rather than silently blocking or
+   silently allowing.
 
 ## Data
 
@@ -65,6 +67,7 @@ progress-event pattern this subsystem reuses).
 | `port` | Assigned serving port |
 | `status` | `downloading` \| `deploying` \| `validating` \| `running` \| `stopped` \| `failed` |
 | `in_use_count` | Reference count; gates manual unload (see Sequence step 8) |
+| `litellm_model_alias` | The name it's registered under in LiteLLM once validated; null until step 6 of the Sequence completes |
 
 ## Interfaces
 
@@ -74,6 +77,10 @@ progress-event pattern this subsystem reuses).
 - Long-running operations (download, deploy) return a job reference; progress streams
   over SSE, consistent with the Core Agentic Loop's transport choice — not a second
   streaming mechanism for this subsystem to maintain.
+- LiteLLM's own Model Management API (`/model/new`, `/model/delete`) is called by the
+  deployment manager on successful validation and on stop — not exposed directly to
+  the operator or the `run.gpu` sub-agent; it's an internal step of deploy/stop, not a
+  separate capability.
 
 ## Security model
 
@@ -83,10 +90,19 @@ progress-event pattern this subsystem reuses).
 - In-use tracking is a hard gate on manual unload, not advisory — consistent with the
   `architecture.md` principle that shared-resource teardown requires usage tracking
   before any teardown decision, automated or manual.
+- Calling LiteLLM's Model Management API requires its own admin/master key, fetched
+  from the secrets backend at call time — same pattern as every other credential in
+  this design, not a new mechanism.
+
+## Infrastructure implication
+
+**LiteLLM needs a database configured** so dynamic model registrations (Sequence step
+6) survive its own restarts — in-memory-only registrations vanish on restart, silently
+un-routing every locally-deployed model. LiteLLM itself is a Fleet-repo **platform
+layer** workload (Bootstrap design), not assumed to just exist.
 
 ## Open items
 
 Mirrors the PRD's Open Questions:
 
-- How a newly-deployed instance becomes routable through Model Providers/LiteLLM.
 - Model catalog source (live Hub query, curated list, or both).

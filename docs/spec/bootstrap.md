@@ -28,7 +28,7 @@ References [`../architecture.md`](../architecture.md) (portable pattern) and
   (single node, no HA, when provisioned) rather than a special pre-cluster resource.
 - **Fleet repo** (`theshed-<tenant>`) — private, self-hosted on the tenant's GitLab CE;
   source of truth Flux reconciles against. Internally split into a `platform/` layer
-  (DNS, database, cache, secrets backend) and an `apps/` layer (The Shed itself).
+  (DNS, database, cache, secrets backend, LiteLLM) and an `apps/` layer (The Shed itself).
 - **The Shed application** — deployed as a Flux-managed workload in the Fleet repo's
   `apps/` layer, once the `app` stage runs.
 

@@ -52,7 +52,10 @@ building bespoke job infrastructure.
   Ollama) — not in front of the cloud providers above. Local runtimes typically speak
   an OpenAI-compatible wire format already, so a local model becomes "one more provider
   with a different endpoint," reusing the same code path as the cloud OpenAI-compatible
-  case rather than a separate integration.
+  case rather than a separate integration. A newly-deployed local instance registers
+  itself with the gateway via its own dynamic model-management API rather than a
+  static config file — see the GPU/Compute Management SPEC. This requires the gateway
+  to have a database configured so those registrations survive its own restarts.
 
 ## Secrets backend
 
