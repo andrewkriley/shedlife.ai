@@ -75,6 +75,22 @@ class SubAgent(Base):
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
 
 
+class SubAgentModelOverride(Base):
+    """An override is its own record, not a mutation of SubAgent's own
+    default_provider/default_model — the registry default is never lost,
+    and clearing an override just means deleting this row. See
+    docs/spec/core-agentic-loop.md, Data section. Absence of a row for a
+    given sub_agent_id means "use the registry default"."""
+
+    __tablename__ = "sub_agent_model_overrides"
+
+    sub_agent_id: Mapped[str] = mapped_column(ForeignKey("sub_agents.id"), primary_key=True)
+    provider: Mapped[str] = mapped_column(String(32))
+    model: Mapped[str] = mapped_column(String(128))
+    set_by_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    set_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
+
+
 class Conversation(Base):
     __tablename__ = "conversations"
 
@@ -114,3 +130,17 @@ class TurnSubAgentResult(Base):
     status_code: Mapped[int] = mapped_column(default=0)
 
     turn: Mapped[Turn] = relationship(back_populates="sub_agent_results")
+
+
+class TurnVerification(Base):
+    """One row per manual verifier invocation against a turn. See
+    docs/spec/core-agentic-loop.md, Data section."""
+
+    __tablename__ = "turn_verifications"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    turn_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("turns.id"))
+    result: Mapped[str] = mapped_column(Text)
+    galileo_trace_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    invoked_by_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    invoked_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)

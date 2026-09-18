@@ -6,7 +6,7 @@ import * as api from '../lib/api'
 
 describe('Chat', () => {
   it('renders the message input and send button', () => {
-    render(<Chat />)
+    render(<Chat onOpenSettings={() => {}} />)
     expect(screen.getByLabelText('Message')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument()
   })
@@ -20,7 +20,7 @@ describe('Chat', () => {
     })
 
     const user = userEvent.setup()
-    render(<Chat />)
+    render(<Chat onOpenSettings={() => {}} />)
 
     await user.type(screen.getByLabelText('Message'), 'hi')
     await user.click(screen.getByRole('button', { name: 'Send' }))
@@ -29,13 +29,33 @@ describe('Chat', () => {
     expect(await screen.findByText(/Hello there/)).toBeInTheDocument()
   })
 
+  it('lets the user verify a completed assistant turn and shows the result', async () => {
+    vi.spyOn(api, 'streamTurn').mockImplementation(async function* () {
+      yield { type: 'token', data: { text: 'Paris.' } }
+      yield { type: 'done', data: { turn_id: 't1', conversation_id: 'c1' } }
+    })
+    vi.spyOn(api, 'verifyTurn').mockResolvedValue('This holds up — it answers the question.')
+
+    const user = userEvent.setup()
+    render(<Chat onOpenSettings={() => {}} />)
+
+    await user.type(screen.getByLabelText('Message'), 'capital of France?')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    await screen.findByText(/Paris/)
+
+    await user.click(screen.getByRole('button', { name: 'Verify' }))
+
+    expect(api.verifyTurn).toHaveBeenCalledWith('t1')
+    expect(await screen.findByText(/This holds up/)).toBeInTheDocument()
+  })
+
   it('shows an error status if the stream reports one', async () => {
     vi.spyOn(api, 'streamTurn').mockImplementation(async function* () {
       yield { type: 'error', data: { message: 'something broke' } }
     })
 
     const user = userEvent.setup()
-    render(<Chat />)
+    render(<Chat onOpenSettings={() => {}} />)
 
     await user.type(screen.getByLabelText('Message'), 'hi')
     await user.click(screen.getByRole('button', { name: 'Send' }))

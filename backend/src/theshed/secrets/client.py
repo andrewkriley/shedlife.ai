@@ -63,6 +63,7 @@ class EnvVarSecretsClient(SecretsClient):
 
     DEFAULT_MAPPING: ClassVar[dict[str, str]] = {
         "infisical://the-shed/providers/anthropic/api_key": "ANTHROPIC_API_KEY",
+        "infisical://the-shed/providers/openai/api_key": "OPENAI_API_KEY",
         "infisical://the-shed/observability/galileo_api_key": "GALILEO_THESHED_API",
     }
 

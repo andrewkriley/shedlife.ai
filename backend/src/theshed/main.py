@@ -4,12 +4,14 @@ from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from openai import OpenAI
 from redis.asyncio import Redis
 
 from theshed.agents.providers.anthropic import AnthropicClient
 from theshed.auth.routes import router as auth_router
 from theshed.observability.galileo import TurnTracer
-from theshed.secrets.client import EnvVarSecretsClient
+from theshed.secrets.client import EnvVarSecretsClient, SecretNotFoundError
+from theshed.settings.routes import router as settings_router
 from theshed.turns.routes import router as turns_router
 
 # Dev-only: loads a .env file into the process environment, so
@@ -39,6 +41,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.llm_client = AnthropicClient(api_key=anthropic_key)
     app.state.classifier_model = CLASSIFIER_MODEL
 
+    # OpenAI isn't wired into any sub-agent yet (only Anthropic is), but the
+    # settings surface's live models-list (docs/spec/core-agentic-loop.md)
+    # calls it directly — so a missing/invalid key must not take down
+    # startup, only make that one provider's list come back empty.
+    try:
+        openai_key = secrets.get("infisical://the-shed/providers/openai/api_key")
+        app.state.openai_client = OpenAI(api_key=openai_key)
+    except SecretNotFoundError:
+        app.state.openai_client = None
+
     # The Galileo SDK reads GALILEO_API_KEY from the process environment
     # directly, under a name that doesn't match our own dev-mode env var
     # (GALILEO_THESHED_API) — bridge the two here rather than renaming the
@@ -57,6 +69,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="The Shed", lifespan=lifespan)
 app.include_router(auth_router)
 app.include_router(turns_router)
+app.include_router(settings_router)
 
 
 @app.get("/health")

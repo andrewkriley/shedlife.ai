@@ -38,6 +38,11 @@ class LLMClient(Protocol):
 class AnthropicClient:
     def __init__(self, api_key: str) -> None:
         self._client = anthropic.Anthropic(api_key=api_key)
+        # Exposed so callers outside the LLMClient shape (the settings
+        # surface's live models-list, per docs/spec/core-agentic-loop.md)
+        # can reach the SDK client without this class growing methods no
+        # turn/synthesis call site needs.
+        self.models = self._client.models
 
     def complete(
         self,

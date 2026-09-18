@@ -19,6 +19,7 @@ dependencies = [
     "sse-starlette>=2.1",
     "galileo>=1.0",
     "python-dotenv>=1.0",
+    "openai>=3.16.2",
 ]
 
 [dependency-groups]

@@ -15,7 +15,8 @@ from theshed.agents.providers.anthropic import LLMClient
 from theshed.agents.registry import list_sub_agents
 from theshed.agents.synthesis import synthesize
 from theshed.agents.tool_loop import ApprovalRequired
-from theshed.db.models import Conversation, Turn, TurnSubAgentResult
+from theshed.agents.verifier import verify
+from theshed.db.models import Conversation, Turn, TurnSubAgentResult, TurnVerification
 from theshed.observability.galileo import TurnTracer
 
 RECENCY_CAP = 10  # tunable default, per docs/spec/core-agentic-loop.md
@@ -137,3 +138,30 @@ async def stream_turn(
     await db.commit()
 
     yield _sse("done", {"turn_id": str(turn.id), "conversation_id": str(conversation_id)})
+
+
+async def verify_turn(
+    db: AsyncSession,
+    turn_id: uuid.UUID,
+    user_id: uuid.UUID,
+    llm: LLMClient,
+    verifier_model: str,
+    tracer: TurnTracer,
+) -> TurnVerification | None:
+    """None means "no completed turn to verify" — the route maps that to a
+    404. The verifier's assessment is its own traced span, not folded into
+    the original turn's trace (see docs/spec/core-agentic-loop.md, step 11)."""
+    turn = await db.get(Turn, turn_id)
+    if turn is None or turn.final_response is None:
+        return None
+
+    tracer.start_trace(turn.final_response, f"verify:{turn.id}")
+    tracer.start_span("verifier", "verify", turn.user_message)
+    result = verify(turn.user_message, turn.final_response, llm, verifier_model)
+    tracer.conclude_span(result)
+    tracer.conclude_trace(result)
+
+    verification = TurnVerification(turn_id=turn.id, result=result, invoked_by_user_id=user_id)
+    db.add(verification)
+    await db.commit()
+    return verification

@@ -74,6 +74,66 @@ export async function* streamTurn(
   }
 }
 
+export async function verifyTurn(turnId: string): Promise<string> {
+  const response = await fetch(`/api/turns/${turnId}/verify`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'x-csrf-token': readCsrfCookie() },
+  })
+  if (!response.ok) {
+    throw new Error('Verification failed')
+  }
+  const body: { result: string } = await response.json()
+  return body.result
+}
+
+export interface SubAgentSetting {
+  id: string
+  macro_category: string
+  description: string
+  default_provider: string
+  default_model: string
+  provider: string
+  model: string
+  overridden: boolean
+}
+
+export async function getSubAgentSettings(): Promise<SubAgentSetting[]> {
+  const response = await fetch('/api/settings/sub-agents', { credentials: 'include' })
+  if (!response.ok) {
+    throw new Error('Failed to load sub-agent settings')
+  }
+  return response.json()
+}
+
+export async function getLiveModels(): Promise<Record<string, string[]>> {
+  const response = await fetch('/api/settings/models', { credentials: 'include' })
+  if (!response.ok) {
+    throw new Error('Failed to load live models')
+  }
+  return response.json()
+}
+
+export async function setModelAssignments(
+  subAgentIds: string[],
+  provider: string | null,
+  model: string | null,
+): Promise<SubAgentSetting[]> {
+  const response = await fetch('/api/settings/model-assignments', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-csrf-token': readCsrfCookie(),
+    },
+    body: JSON.stringify({ sub_agent_ids: subAgentIds, provider, model }),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to update model assignments')
+  }
+  return response.json()
+}
+
 function parseSseEvent(raw: string): TurnEvent | null {
   const lines = raw.split('\n')
   let eventType = 'message'
