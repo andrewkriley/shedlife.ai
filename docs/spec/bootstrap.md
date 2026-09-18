@@ -88,6 +88,36 @@ fleet_repo: theshed-<tenant>
   cache/queue, and The Shed itself.
 - Both live in one repo, organized by directory, per the tenant-Fleet model in the PRD.
 
+### Bootstrap state file
+
+Written by the orchestrator as each step completes; read on every invocation to
+determine where to resume. Illustrative shape:
+
+```yaml
+version: 1
+started_at: <timestamp>
+steps:
+  ssh_key_generated: { done: true, fingerprint: <...> }
+  cluster_formed: { done: true, hosts: [<host-1>, <host-2>, ...] }
+  vm_template_built: { done: true, template_id: <proxmox vmid> }
+  fleet_repo_host_ready: { done: false }   # e.g. provisioning still in progress
+  k3s_vms_provisioned: { done: false, vmids: [] }
+  k3s_installed: { done: false }
+  flux_installed: { done: false }
+  handoff_confirmed: { done: false }
+```
+
+**Resume logic**: for each step, if the state file marks it `done`, verify against
+live infrastructure (e.g. does `template_id` still exist in Proxmox) before trusting
+it — if verification fails, the step re-runs and the state file is corrected. If a
+step is not marked `done`, it runs. This is the hybrid model from the PRD: the state
+file is the fast path, live verification is the safety net against drift (manual
+deletion, a half-finished prior attempt, etc.).
+
+**Teardown**: not built this phase (see PRD). When it exists, it should be able to read
+this same file and reverse each `done` step in roughly reverse order — no new
+discovery mechanism needed beyond what resumption already requires.
+
 ## Interfaces
 
 - Script entry point: `bootstrap/install.sh` in the public product repo, fetched and
@@ -113,7 +143,6 @@ fleet_repo: theshed-<tenant>
 
 Mirrors the PRD's Open Questions:
 
-- Idempotency / partial-failure recovery — not yet designed.
 - DNS scope (is DNS record creation part of this bootstrap, or a later RUN capability)
   — not yet decided.
 - Full wizard field list — not yet enumerated.

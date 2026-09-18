@@ -111,6 +111,26 @@ sequence, and losing a deployment shouldn't mean starting from scratch.
   to match it. A dry-run diff should be available before a change is applied, but the
   resolution model itself favors the file over any out-of-band change.
 
+### Idempotency / failure recovery
+
+- If the bootstrap fails partway through, the operator re-runs the same command
+  against the same input (wizard answers or imported YAML) — no separate "resume"
+  mode. Already-completed steps are detected and skipped; the process picks up from
+  wherever it actually stopped.
+- This relies on a **hybrid** detection model, not pure live-state inference: a
+  lightweight local state/log file records what the orchestrator believes it has
+  completed (fast path for resumption), verified against live infrastructure state at
+  each step before it's trusted (safety net against drift — e.g. a resource the state
+  file believes exists but was removed out-of-band). Neither state-file-only nor
+  live-check-only is sufficient on its own for something running as root against real
+  infrastructure.
+- **This phase**: cleanup of a fully-abandoned partial attempt is manual (the state
+  file tells the operator exactly what was created, so there's nothing to hunt for).
+  An automated teardown command is roadmap, not built now — deletion automation is
+  higher-risk than creation automation, and is worth adding once the state-file
+  mechanism has proven itself, at which point teardown is a small addition (read the
+  state file, delete what it lists) rather than a new mechanism.
+
 ### Multi-tenancy / product boundary
 
 - The product (public) is the harness itself — the bootstrap orchestrator and the
@@ -125,8 +145,6 @@ sequence, and losing a deployment shouldn't mean starting from scratch.
 
 ## Open questions
 
-- **Idempotency / failure recovery**: what happens if the bootstrap fails partway
-  through (e.g. one host of several is unreachable)? Resume, or restart from scratch?
 - **DNS scope**: is DNS record creation for the newly-provisioned hosts/services part
   of this bootstrap's responsibility, or handed off to a RUN capability once the
   platform is alive?
