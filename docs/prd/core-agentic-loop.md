@@ -73,6 +73,26 @@ its own tool-calling loop → collect results → synthesize (skipped if exactly
 sub-agent matched) → respond. Each stage is its own traced span, matching the
 `supervisor → classify → [sub-agent, ...] → synthesis?` shape in `architecture.md`.
 
+### Conversation / session state
+
+- A user has multiple **conversations** (like a chat app's thread list) — not one
+  continuous stream, and not split by macro category. A single conversation can touch
+  Assist, Build, and Run across its turns, and within one turn via fan-out — the user
+  never has to know or choose which macro category they're in, matching this
+  document's own top-line goal.
+- A conversation has many **turns**; a turn is exactly the lifecycle above. Each turn
+  links to its own Galileo trace; each conversation links to one Galileo session,
+  grouping its turns' traces together, same pattern as the `cl-ai-builders` reference.
+- **Context passed forward** to the classifier and each dispatched sub-agent is only
+  past turns' **(user message, final response) pairs** — not their internal tool-call
+  detail, which already lives in that turn's own trace for debugging, not for
+  context-replay.
+- **Context window for this phase**: a simple, **tunable recency cap** — replay the
+  last N turns verbatim, drop anything older; N is a configurable default, not a fixed
+  number baked into the design. Rolling summarization (compress old turns instead of
+  dropping them) is the natural next step once conversations get long enough for
+  dropped context to matter — documented roadmap, not built now.
+
 ### Sub-agent registry
 
 Each entry declares: a unique id (`<macro>.<name>`), its macro category, a one-line
@@ -121,9 +141,6 @@ models, not a hardcoded list.
 
 ## Open questions
 
-- **Conversation/session state**: how multi-turn context is maintained across a
-  conversation hasn't been designed at all yet — not a gap in this document alone, a
-  genuine gap in the design so far.
 - **Error handling within a turn**: what happens when one sub-agent's tool call fails,
   an LLM API call errors, or one sub-agent in a multi-match fan-out fails while others
   succeed — not yet designed.

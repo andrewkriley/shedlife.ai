@@ -26,13 +26,17 @@ Status: draft, technical design for
 
 ## Sequence (happy path)
 
-1. User sends a message via the chat UI.
-2. The API backend opens a turn. **Session/conversation state handling is an open
-   question (see PRD) — this step is a placeholder pending that design.**
-3. A Galileo trace starts; a `supervisor` span opens for the turn.
-4. The classifier runs (one cheap-model call) against the message and the registry's
-   current descriptions, returning zero or more `(macro, sub_agent_id)` matches. A
-   `classify` span records the call and its result.
+1. User sends a message into a conversation via the chat UI (an existing conversation,
+   or a new one).
+2. The API backend opens a turn within that conversation, and loads context: the last
+   N turns' `(user message, final response)` pairs, N a tunable recency-cap default
+   (older turns dropped this phase — no summarization yet).
+3. A Galileo trace starts for this turn; a `supervisor` span opens. If this is the
+   conversation's first turn, a new Galileo session starts too — otherwise the trace
+   joins the conversation's existing session.
+4. The classifier runs (one cheap-model call) against the message, the loaded context,
+   and the registry's current descriptions, returning zero or more `(macro,
+   sub_agent_id)` matches. A `classify` span records the call and its result.
 5. **Zero matches**: PRD open question (no-match fallback) — behavior not yet decided;
    this step is a placeholder.
 6. **One or more matches**, sequentially (this phase — see PRD non-goals on
@@ -40,14 +44,16 @@ Status: draft, technical design for
    a. Resolve its provider/model (registry default, or an operator override from the
       settings surface).
    b. Open an `agent` span for this sub-agent.
-   c. Run its tool-calling loop: call the model with its scoped tools; if it requests a
+   c. Seed its tool-calling loop's message list with the same loaded context from step
+      2, followed by the current user message.
+   d. Run its tool-calling loop: call the model with its scoped tools; if it requests a
       tool call, execute it (a `tool` span per call) and feed the result back; repeat
       up to a turn cap. Two safety nets, mirroring the reference pattern in
       `architecture.md`'s inspiration: a max-turn cap, and a guard that stops on an
       identical repeated tool call.
-   d. **Error handling within this loop (a tool call failing, the LLM API erroring) is
+   e. **Error handling within this loop (a tool call failing, the LLM API erroring) is
       a PRD open question** — not yet designed; this step assumes the happy path.
-   e. Close the sub-agent's span with its result and status code.
+   f. Close the sub-agent's span with its result and status code.
 7. **Exactly one match**: that sub-agent's result is the turn's final answer — no
    synthesis call.
 8. **More than one match**: the synthesis step combines all matched sub-agents'
@@ -78,12 +84,18 @@ Status: draft, technical design for
 | `default_provider` / `default_model` | Registry default; overridable via the settings surface |
 | `provenance` | `manual` \| `declared` \| `discovered` \| `provisioned` — same field as the host/service registry in `architecture.md`; a sub-agent is a registry entry like any other |
 
-### Turn / conversation state
+### Conversation / turn (Postgres)
 
-**Not designed** — placeholder pending the PRD's open question on session/conversation
-state. Whatever shape this takes, it needs to support: multiple sub-agent results per
-turn, the turn's final (possibly synthesized) answer, and a link to its Galileo trace
-for the verifier to reference later.
+| Table | Key fields |
+|---|---|
+| `conversations` | `id`, `user_id` (owner, per the multi-user-ready data model), `galileo_session_id`, `created_at` |
+| `turns` | `id`, `conversation_id`, `user_message`, `final_response`, `galileo_trace_id`, `created_at` |
+| `turn_sub_agent_results` | `turn_id`, `sub_agent_id`, `result`, `status_code` — one row per sub-agent matched in that turn, for the verifier and for debugging; **not** replayed as future context (only `turns.final_response` is) |
+
+Context for a new turn = the owning conversation's last N `turns`, each reduced to
+`(user_message, final_response)` — `turn_sub_agent_results` stays out of the replayed
+context, consistent with the PRD's reasoning (internal detail belongs to that turn's
+own trace, not to future context).
 
 ## Interfaces
 
@@ -110,7 +122,6 @@ for the verifier to reference later.
 Mirrors the PRD's Open Questions — none of these are designed yet, all are real gaps,
 not just documentation debt:
 
-- Conversation/session state model.
 - Error handling within a turn (single tool/LLM failure, partial fan-out failure).
 - Verifier invocation UX.
 - Streaming vs. synchronous response (blocks finalizing the `/turns` interface above).
