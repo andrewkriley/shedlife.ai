@@ -49,7 +49,7 @@ continues.
 ## What CI checks
 
 Every PR runs: the test suites (backend `pytest`, frontend Vitest), linting (`ruff`,
-ESLint), type-checking (`mypy`, `tsc --noEmit`), `commitlint` against the PR title,
+`oxlint`), type-checking (`mypy`, `tsc --noEmit`), `commitlint` against the PR title,
 `gitleaks` (secret scanning), and CodeQL (static analysis for code-level
 vulnerabilities — a different concern from `gitleaks`, which only catches committed
 secrets). All of these must pass before merge — this is enforced unconditionally, for

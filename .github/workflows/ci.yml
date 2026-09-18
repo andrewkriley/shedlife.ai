@@ -1,4 +1,4 @@
-name: test
+name: ci
 
 on:
   push:
@@ -55,7 +55,7 @@ jobs:
         run: uv run pytest
 
   frontend:
-    name: frontend (vitest, tsc)
+    name: frontend (vitest, oxlint, tsc)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -68,5 +68,9 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      - run: npx tsc -b
-      - run: npm run test
+      - name: oxlint
+        run: npm run lint
+      - name: tsc
+        run: npx tsc -b
+      - name: vitest
+        run: npm run test

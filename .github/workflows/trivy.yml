@@ -1,0 +1,38 @@
+name: trivy
+
+# Filesystem/dependency scan, not the container-image scan docs/spec/release-
+# pipeline.md's `release.yml` describes — there's no Dockerfile yet (no
+# deployment target has been designed; that's Bootstrap/Fleet work, out of
+# scope for this slice), so there's no image to build or scan on tag. This
+# is the useful subset available now: known-vulnerability scanning of the
+# backend's (uv.lock) and frontend's (package-lock.json) own dependencies,
+# on every push/PR. Report-only (exit-code 0) for this first landing, so it
+# surfaces a baseline without unexpectedly failing existing PRs on
+# transitive-dependency CVEs no one has triaged yet — worth revisiting once
+# that baseline is clean.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    name: trivy (filesystem)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+          format: sarif
+          output: trivy-results.sarif
+      - uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif

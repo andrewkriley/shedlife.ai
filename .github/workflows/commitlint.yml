@@ -1,0 +1,21 @@
+name: commitlint
+
+# Ruleset A (see docs/spec/release-pipeline.md) squash-merges every PR with the
+# PR title as the resulting commit message — so the PR title, not individual
+# commits, is what actually needs to be Conventional-Commits-formatted.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  commitlint:
+    name: commitlint (PR title)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
