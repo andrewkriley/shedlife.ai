@@ -17,23 +17,42 @@ References [`../architecture.md`](../architecture.md) (portable pattern) and
   instance) or provisioned (new instance, as its own VM, before the k3s/Flux step;
   single node, no HA, when provisioned).
 - **k3s cluster** — three control-plane + two worker nodes (cluster mode) or a smaller
-  equivalent for the single-host default; provisioned from the VM template.
-- **Flux** — installed into k3s once it's up; the living, ongoing orchestrator from
-  that point forward.
+  equivalent for the single-host default; **either** provisioned from the VM template
+  (`infra` stage runs) **or** adopted (an existing cluster from anywhere; `infra` stage
+  is skipped entirely).
+- **Flux** — installed into k3s once it's up (or confirmed already present, in the
+  adopted-cluster case); the living, ongoing orchestrator from that point forward.
 - **Fleet repo** (`theshed-<tenant>`) — private, self-hosted on the tenant's GitLab CE;
-  source of truth Flux reconciles against.
-- **The Shed application** — deployed as a Flux-managed workload once the Fleet repo
-  declares it.
+  source of truth Flux reconciles against. Internally split into a `platform/` layer
+  (DNS, database, cache) and an `apps/` layer (The Shed itself).
+- **The Shed application** — deployed as a Flux-managed workload in the Fleet repo's
+  `apps/` layer, once the `app` stage runs.
 
-## Sequence (happy path, cluster mode)
+## Stages
+
+Every run declares a **target stage** (`infra`, `platform`, or `app` — default `app`,
+a full run) and, independently, whether the k3s cluster is being **built** or
+**adopted**. Adoption always starts execution at the `platform` stage, regardless of
+the target stage requested (there is no `infra` work to do against a cluster that
+already exists).
+
+| Cluster mode | Target stage | Behavior |
+|---|---|---|
+| build | `infra` | Steps 1–7 below only. Ends with a formed k3s cluster, no Flux. |
+| build | `platform` | Steps 1–10. Adds Flux + the Fleet repo's `platform/` layer. |
+| build | `app` (default) | Full run, steps 1–12. |
+| adopt | `platform` | Starts at step 8, using the supplied cluster credential in place of steps 1–7's output. |
+| adopt | `app` (default) | Starts at step 8, continues through step 12. |
+
+## Sequence (happy path, cluster mode, build + full run)
 
 1. Operator runs the bootstrap command on host 1 (pinned release tag by default).
 2. The command provisions the bootstrap LXC on host 1.
 3. The LXC starts the menu-driven wizard (or loads an imported YAML file): collects
-   hostnames/IPs for all hosts, a root password per host (used once), the Fleet-repo
-   host choice (adopt: URL + token; or provision: stand up a new GitLab CE instance),
-   and the still-open field list (network bridge, storage pool, NTP, etc. — see PRD
-   Open Questions).
+   hostnames/IPs for all hosts, a root password per host (used once), the target stage
+   and cluster mode, the Fleet-repo host choice (adopt: URL + token; or provision:
+   stand up a new GitLab CE instance), and the rest of the field list (network,
+   storage, VM sizing, DNS, ingress domain — see SPEC Data section).
 4. The LXC generates a dedicated SSH keypair and, using the supplied root passwords,
    installs that key on every host (including host 1). Root passwords are discarded
    from memory/state after this step — never persisted or logged.
@@ -44,24 +63,25 @@ References [`../architecture.md`](../architecture.md) (portable pattern) and
    creates; no DNS server involved yet.
 6. The LXC forms the Proxmox cluster across all supplied hosts (corosync/quorum),
    using the dedicated key and the name resolution from step 5.
-7. The LXC builds the VM template from a cloud image.
-8. If the Fleet-repo host is being provisioned (not adopted): the LXC provisions a VM
-   for it now, outside the eventual k3s cluster, and waits for it to become reachable.
-9. The LXC provisions the k3s VMs from the template — five for cluster mode (three
-   control-plane, two worker), one for the single-host default.
-10. The LXC installs k3s across the provisioned VMs, forming the cluster.
-11. The LXC installs Flux into the k3s cluster, pointing it at the tenant's Fleet repo
-    (existing, or newly created on the GitLab CE instance from step 8).
-12. Flux reconciles: deploys the database, cache/queue, a new tenant-dedicated DNS
-    instance, and The Shed itself, all as declared in the Fleet repo. The new DNS
-    instance has no serving responsibility yet — brownfield keeps resolving through the
-    adopted existing instance; greenfield's static host entries remain in place for the
-    hosts the bootstrap created (the new instance becomes authoritative for anything
-    beyond that once RUN takes over, not automatically).
-13. The LXC confirms Flux has successfully reconciled the core workloads, then is
-    destroyed. Handoff complete — all further provisioning, including any DNS
-    migration/cutover, goes through the running Shed's own RUN capabilities, not the
-    LXC.
+7. The LXC builds the VM template, provisions the k3s VMs from it (five for cluster
+   mode, one for single-host), and installs k3s across them, forming the cluster.
+   **`infra`-stage runs stop here.**
+8. *(Adopted-cluster runs start here, using the supplied cluster credential in place
+   of a cluster this bootstrap just formed.)* If the Fleet-repo host is being
+   provisioned (not adopted): the LXC provisions a VM for it now, outside the k3s
+   cluster, and waits for it to become reachable.
+9. The LXC installs Flux into the k3s cluster (or confirms it's already present and
+   healthy, in the adopted case), pointing it at the tenant's Fleet repo.
+10. Flux reconciles the Fleet repo's **`platform/` layer**: the database, cache/queue,
+    and a new tenant-dedicated DNS instance (no serving responsibility yet — see DNS,
+    above). **`platform`-stage runs stop here.**
+11. The LXC (or, for an adopted cluster with no LXC, the operator's own bootstrap CLI
+    invocation) adds The Shed's manifests to the Fleet repo's **`apps/` layer**.
+12. Flux reconciles the `apps/` layer: The Shed itself comes up as a running workload.
+    The LXC confirms this succeeded, then is destroyed (an adopted-cluster run that
+    never provisioned an LXC has nothing to destroy). Handoff complete — all further
+    provisioning, including any DNS migration/cutover, goes through the running Shed's
+    own RUN capabilities.
 
 ## Data
 
@@ -71,7 +91,15 @@ Illustrative shape:
 
 ```yaml
 version: 1
-topology: cluster        # single | cluster
+
+stage:
+  target: app               # infra | platform | app (default)
+
+k3s_cluster:
+  mode: build                # build | adopt
+  kubeconfig_ref: <ref>       # if adopt — how the cluster credential is supplied
+
+topology: cluster        # single | cluster; ignored if k3s_cluster.mode == adopt
 
 network:
   bridge: vmbr0
@@ -120,9 +148,12 @@ ingress:
 
 - Declarative registry config (sub-agents, hosts, services) — the `instance.yaml`-style
   content described in `architecture.md`.
-- Kubernetes/Flux manifests (Kustomizations, HelmReleases) for the database,
-  cache/queue, and The Shed itself.
-- Both live in one repo, organized by directory, per the tenant-Fleet model in the PRD.
+- Kubernetes/Flux manifests, split into two directories matching the stage boundary:
+  - `platform/` — Kustomizations/HelmReleases for the database, cache/queue, and DNS.
+  - `apps/` — Kustomizations/HelmReleases for The Shed itself.
+- Both the registry config and the manifests live in one repo, organized by directory,
+  per the tenant-Fleet model in the PRD — the `platform`/`apps` split is *within* that
+  one repo, not a reason to split the repo itself.
 
 ### Bootstrap state file
 
@@ -132,14 +163,21 @@ determine where to resume. Illustrative shape:
 ```yaml
 version: 1
 started_at: <timestamp>
+target_stage: app          # infra | platform | app
+cluster_mode: build        # build | adopt
 steps:
-  ssh_key_generated: { done: true, fingerprint: <...> }
-  cluster_formed: { done: true, hosts: [<host-1>, <host-2>, ...] }
-  vm_template_built: { done: true, template_id: <proxmox vmid> }
+  ssh_key_generated: { done: true, fingerprint: <...> }        # build only
+  dns_resolution_ready: { done: true }
+  cluster_formed: { done: true, hosts: [<host-1>, <host-2>, ...] }  # build only
+  vm_template_built: { done: true, template_id: <proxmox vmid> }    # build only
+  k3s_vms_provisioned: { done: true, vmids: [] }                    # build only
+  k3s_installed: { done: true }                                     # build only
+  # --- adopt-mode runs start resuming from here ---
   fleet_repo_host_ready: { done: false }   # e.g. provisioning still in progress
-  k3s_vms_provisioned: { done: false, vmids: [] }
-  k3s_installed: { done: false }
   flux_installed: { done: false }
+  platform_layer_reconciled: { done: false }   # infra/platform-stage runs stop here
+  apps_layer_added: { done: false }
+  apps_layer_reconciled: { done: false }       # app-stage runs stop here
   handoff_confirmed: { done: false }
 ```
 

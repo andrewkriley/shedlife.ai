@@ -23,6 +23,10 @@ sequence, and losing a deployment shouldn't mean starting from scratch.
   and adoption of existing infrastructure are both first-class.
 - Establishes the multi-tenancy foundation: each deployment is a tenant with its own
   private Fleet repo; The Shed itself remains one public product.
+- **Modular by stage**: standing up the platform and deploying The Shed onto it are
+  separable operations, not one all-or-nothing run. Someone can stand up just the
+  infrastructure, or deploy The Shed onto a cluster they already have, without the
+  other half.
 
 ## Non-goals (this phase)
 
@@ -46,8 +50,31 @@ sequence, and losing a deployment shouldn't mean starting from scratch.
   deployment.
 - The bootstrap orchestrator retires itself after a successful handoff — nothing is
   left standing beyond k3s and Flux.
+- An operator can stop the run after just the infrastructure exists, or point it at a
+  k3s cluster they already have and deploy only The Shed onto it — both are supported
+  paths through the same tool, not separate tools.
 
 ## Requirements
+
+### Modularity: stages and cluster adoption
+
+- The bootstrap proceeds through three stages, each a valid stopping point:
+  1. **`infra`** — Proxmox provisioning through a formed k3s cluster. No Flux yet.
+  2. **`platform`** — Flux installed, pointed at the Fleet repo; the Fleet repo's
+     *platform* layer (DNS, database, cache — supporting infrastructure, not The Shed
+     itself) is reconciled.
+  3. **`app`** — the Fleet repo's *application* layer (The Shed itself) is added and
+     reconciled. Default stopping point for a full run.
+- **k3s cluster gets the same Build-vs-Adopt treatment as the Fleet-repo host and
+  DNS.** Adopting an existing cluster (Proxmox-provisioned by an earlier run, or from
+  anywhere else entirely) skips the `infra` stage altogether — the process starts
+  directly at `platform`, using whatever access credential the operator supplies for
+  that cluster.
+- This is what makes "just deploy the cluster" (stop after `infra`, or after
+  `platform` if DNS/database should exist but The Shed shouldn't yet) and "just deploy
+  the agent" (adopt an existing cluster, run `platform` + `app` only) both real,
+  supported operations through the same command — not different tools, just different
+  stage/adoption choices on the same input.
 
 ### Proxmox topology
 
@@ -98,12 +125,12 @@ sequence, and losing a deployment shouldn't mean starting from scratch.
 
 ### The foundation (handoff boundary)
 
-- The bootstrap orchestrator's responsibility ends at: build a VM template from a
-  cloud image; provision the required VMs; install a Kubernetes distribution across
-  them; install a GitOps controller; point it at a Fleet repo.
-- Everything after that point is the responsibility of the now-living
+- The bootstrap orchestrator's responsibility ends at whichever stage the run was
+  asked to stop at (see Modularity above) — at minimum, a formed Kubernetes cluster
+  (`infra`); at most, The Shed itself running as a reconciled workload (`app`).
+- Everything past that stopping point is the responsibility of the now-living
   Kubernetes+GitOps orchestrator, not the bootstrap process — which retires itself once
-  handoff succeeds.
+  its stage's handoff succeeds, regardless of which stage that was.
 
 ### The Fleet repo's host
 
@@ -151,6 +178,10 @@ DNS infrastructure already exists for this tenant:
   private Fleet repo, which holds both the declarative registry-style config
   (sub-agents, hosts, services) and the Kubernetes manifests, organized by directory
   rather than split across repos.
+- The Fleet repo's manifests are themselves split into a **platform layer** (DNS,
+  database, cache — supporting infrastructure) and an **application layer** (The Shed
+  itself) — this is what the `platform`/`app` stage boundary actually applies to, and
+  it also means adding/upgrading The Shed later never has to touch the platform layer.
 - Stateful dependencies (database, cache/queue) run as GitOps-managed Kubernetes
   workloads in any real deployment; a local-only shortcut (e.g. `docker-compose`)
   remains purely a development convenience, not the production pattern.
