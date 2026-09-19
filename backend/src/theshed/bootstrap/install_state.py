@@ -10,7 +10,12 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-_UBUNTU_STANDARD = re.compile(r"^ubuntu-(\d+)\.(\d+)-standard\S*$")
+# Ubuntu 26.04 LTS is the current latest Proxmox `*-standard` template.
+# Pin the series; still take the newest pveam build of that series.
+PINNED_UBUNTU_VERSION = "26.04"
+_UBUNTU_STANDARD = re.compile(
+    rf"^ubuntu-{re.escape(PINNED_UBUNTU_VERSION)}-standard\S*$"
+)
 _OSTEMPLATE_MAX = 255
 
 
@@ -47,20 +52,16 @@ def render_url(ct_ip: str, port: int = 8080) -> str:
 
 
 def select_os_template(available_text: str) -> str | None:
-    """Latest ubuntu-*-standard filename from `pveam available` text."""
+    """Pinned ubuntu-<version>-standard filename from `pveam available` text."""
     best_name: str | None = None
-    best_key: tuple[int, int, str] | None = None
     for raw in available_text.splitlines():
         fields = raw.split()
         if not fields:
             continue
         name = fields[1] if len(fields) >= 2 and fields[0] == "system" else fields[0]
-        match = _UBUNTU_STANDARD.match(name)
-        if match is None:
+        if _UBUNTU_STANDARD.match(name) is None:
             continue
-        key = (int(match.group(1)), int(match.group(2)), name)
-        if best_key is None or key > best_key:
-            best_key = key
+        if best_name is None or name > best_name:
             best_name = name
     return best_name
 

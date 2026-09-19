@@ -32,12 +32,12 @@ def test_readme_install_is_a_one_line_latest_release() -> None:
     assert "tag=$(" not in text
 
 
-def test_install_script_uses_latest_ubuntu_template() -> None:
+def test_install_script_pins_ubuntu_26_04() -> None:
     text = SCRIPT.read_text()
     assert "debian-12-standard" not in text
-    assert "ubuntu-" in text
+    assert "ubuntu-26.04-standard" in text
+    assert "ubuntu-[0-9]" not in text
     assert "sort -V" in text
-    assert "pveam download local" in text
     assert "pveam download local \"${name}\" >&2" in text
     assert 'volume="local:vztmpl/${name}"' in text
     assert "-gt 255" in text
