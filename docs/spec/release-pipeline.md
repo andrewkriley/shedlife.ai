@@ -20,7 +20,7 @@ workflow this extends rather than replaces.
 - **`release-please`** — watches `main`, maintains an accumulating Release PR with the
   changelog, tags and cuts a GitHub Release when that PR is merged.
 - **GitHub Container Registry (GHCR)** — holds versioned, published images, tied to
-  the public `andrewkriley/theshed` repo.
+  the public `andrewkriley/shedlife.ai` repo.
 - **A tenant's Fleet repo** (`apps/` layer) — the thing that actually determines what
   a given tenant runs, by referencing an image tag/digest.
 
