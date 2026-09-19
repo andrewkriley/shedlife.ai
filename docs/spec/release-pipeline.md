@@ -45,7 +45,9 @@ unconditionally, including to an admin's own merge.
 3. PR merges (squash, PR title becomes the commit message) once Ruleset A's checks
    pass and Ruleset B's approval requirement is satisfied or bypassed.
 4. `release-please` reads the new commit, updates its standing Release PR (version
-   bump + changelog entry, per Conventional Commits).
+   bump + changelog entry, per Conventional Commits). Config:
+   `bump-patch-for-minor-pre-major` and `bump-minor-pre-major` so `0.x`
+   stays patch-granular (`feat:`/`fix:` → patch; breaking → minor).
 5. When the maintainer merges *that* Release PR: `release-please` tags the release and
    cuts a GitHub Release.
 6. The tag triggers: the full test gate re-runs as a prerequisite; on success, the

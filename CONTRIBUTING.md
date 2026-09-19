@@ -43,9 +43,10 @@ continues.
 - **PR titles must follow [Conventional Commits](https://www.conventionalcommits.org/)**
   (`feat: ...`, `fix: ...`, `chore: ...`, etc.) — checked in CI. This matters beyond
   style: your PR title becomes the squash-merge commit message, and that's what
-  drives automatic versioning and the changelog (see `RELEASING.md`). A `fix:` PR
-  produces a patch release; a `feat:` PR a minor release; a breaking change (`feat!:`
-  or a `BREAKING CHANGE:` footer) a major release.
+  drives automatic versioning and the changelog (see `RELEASING.md`). While
+  the product is `0.x`, both `fix:` and `feat:` produce a **patch**; a
+  breaking change (`feat!:` or a `BREAKING CHANGE:` footer) produces a
+  minor. After `1.0.0` the usual SemVer mapping applies.
 - PRs merge via **squash merge only** — keep your branch's own commit history however
   you like while working; only the final PR title matters for the record `main` keeps.
 

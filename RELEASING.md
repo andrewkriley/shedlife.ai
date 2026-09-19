@@ -22,15 +22,21 @@ decision, made by merging one specific PR.
 
 ## Version numbers
 
-Standard [Semantic Versioning](https://semver.org/), derived automatically from
-commit types:
+[Semantic Versioning](https://semver.org/), derived from commit types. While
+the product is `0.x` we keep the **patch** number moving — lots of small
+edits should be `0.4.1`, `0.4.2`, not a new minor each time.
 
-| Commit type | Release |
-|---|---|
-| `fix:` | patch (`x.y.Z`) |
-| `feat:` | minor (`x.Y.0`) |
-| `feat!:` or a `BREAKING CHANGE:` footer | major (`X.0.0`) |
-| `chore:`, `docs:`, `ci:`, etc. | no version bump, but included in the changelog |
+| Commit type | While `0.x` | After `1.0.0` |
+|---|---|---|
+| `fix:` | patch (`0.4.Z`) | patch |
+| `feat:` | patch (`0.4.Z`) | minor |
+| `feat!:` or `BREAKING CHANGE:` | minor (`0.Y.0`) | major |
+| `chore:`, `docs:`, `ci:`, etc. | no bump | no bump |
+
+`1.0.0` is a deliberate later decision, not something a single `feat!:` can
+force while we are still in Bootstrap. Operator-visible small edits (README
+install command, UI copy, installer) should be `fix:` if they need a new
+tag; `docs:` is for internal design notes that do not need a pin.
 
 ## What a release does *not* do
 
