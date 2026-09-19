@@ -68,7 +68,10 @@ only durable artifacts are the published images in GHCR (versioned by tag), the
 ## Interfaces
 
 - GitHub Actions workflow files (`.github/workflows/`) — `ci.yml` (test, lint,
-  type-check, `commitlint`, CodeQL, on push/PR), `release-please.yml` (versioning),
+  type-check, `commitlint`, CodeQL, on push/PR), `release-please.yml`
+  (versioning; attaches `bootstrap/install.sh` in the same job that cuts the
+  GitHub Release, because `GITHUB_TOKEN` cannot start a follow-on workflow),
+  `attach-install-script.yml` (fallback for UI-published releases),
   `release.yml` (build + scan + publish, on tag), alongside the existing
   `gitleaks.yml`.
 - Two Rulesets on `main` (GitHub repository settings, not a workflow file).

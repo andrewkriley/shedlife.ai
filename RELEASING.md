@@ -15,12 +15,14 @@ decision, made by merging one specific PR.
    maintainer does this deliberately — a string of merged feature/fix PRs alone never
    triggers a release on its own.
 4. On merge, `release-please` tags the release (`vMAJOR.MINOR.PATCH`) and creates a
-   GitHub Release with the generated changelog.
+   GitHub Release with the generated changelog. The same job attaches
+   `bootstrap/install.sh` to that release. A separate `release: published`
+   workflow cannot do this — `GITHUB_TOKEN` is not allowed to start a second
+   workflow after it creates the tag.
 5. The tag triggers the build pipeline: the full test gate re-runs, the container
    image builds, gets scanned (Trivy) for known vulnerabilities, and — only if that
    passes — publishes to GitHub Container Registry under the new version tag.
-   The same release also attaches `bootstrap/install.sh` so this one-liner
-   always fetches the latest script:
+   The attached script is what this one-liner fetches:
 
    `curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash`
 
