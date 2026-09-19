@@ -5,16 +5,21 @@ For any AI agent working in this repo — a coding assistant, or one of The Shed
 
 Before touching a subsystem, read its pair: `docs/prd/<subsystem>.md` (why, what) and
 `docs/spec/<subsystem>.md` (how). Read `docs/architecture.md` before anything
-cross-cutting. These docs are the source of truth for intent — if the code disagrees
-with them, that's a bug in one of the two, not a cue to improvise a third answer.
+cross-cutting, and `docs/mvp.md` before treating a later phase as in scope. Grill
+records in `docs/grill/` explain how a shape was decided; the PRD/SPEC remain
+source of truth after a grill lands. If the code disagrees with the docs, that's
+a bug in one of the two, not a cue to improvise a third answer.
 
 Test-first, always. See "Testing discipline" in `docs/architecture.md` for what that
 does and doesn't cover.
 
 This repo holds the product only — no tenant-specific values, hosts, or credentials.
-That content belongs in a tenant's own Fleet repo (see `docs/architecture.md`,
-"Product vs. tenant"). If a change would put an environment specific here, it's in
+That content belongs on the tenant's control plane (Phase 1: the bootstrap LXC)
+and later in a tenant's own Fleet repo. See `docs/architecture.md`,
+"Product vs. tenant". If a change would put an environment specific here, it's in
 the wrong repo.
+
+`docs/parked/` is historical design. Do not implement from it.
 
 Commit/PR mechanics (signing, Conventional Commits, review) are in `CONTRIBUTING.md`
 — CI enforces them, so read it rather than guessing.

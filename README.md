@@ -1,19 +1,37 @@
 # The Shed
 
-*A place you go to spend lots of time building, tinkering, and fixing things.*
+*Your digital shed — the place you go to spend lots of time building, tinkering,
+and fixing things.*
 
 The Shed is an agentic-first AI harness with three jobs: **Assist** (the everyday
 personal-assistant work of running a life), **Build** (new projects, new features,
 fixes — for The Shed itself or anything else), and **Run** (operating the
-infrastructure underneath all of it — hosting, network, cloud, home tech stack). One
-conversational interface, a growable registry of domain-specific sub-agents, fanning
-out to whichever of them a message actually needs and fanning back in to one
-answer — the pattern is laid out in full in [`docs/architecture.md`](docs/architecture.md).
+infrastructure underneath all of it — hosting, network, cloud, home tech stack).
+One conversational interface, a growable registry of domain-specific sub-agents,
+fanning out to whichever of them a message actually needs and fanning back in to
+one answer — the pattern is laid out in
+[`docs/architecture.md`](docs/architecture.md).
 
-The Shed is a **product**, not a single deployment: this repo holds the pattern and
-the code, with no environment-specific content in it at all. Each deployment is a
-**tenant**, running its own instance with its own private configuration — see
-"Product vs. tenant" in the architecture doc for what that split actually means.
+The Shed is a **product**, not a single deployment: this repo holds the pattern
+and the code, with no environment-specific content in it at all. Each deployment
+is a **tenant**, running its own instance with its own private configuration —
+see "Product vs. tenant" in the architecture doc.
+
+A tenant is stood up in four **phases** (Bootstrap → Deploy → Build → Run).
+Those phases are not the same thing as the three jobs. Only **Phase 1,
+Bootstrap**, is current MVP: a curl-installed LXC that hosts the chat UI, collects
+foundations, validates them, and runs pre-deploy probes. See
+[`docs/mvp.md`](docs/mvp.md).
+
+[shedlife.ai](https://shedlife.ai) is the product domain (secured, not yet
+active). It is not a required tenant hostname.
+
+## Prerequisites
+
+- An Anthropic, OpenAI, or Gemini **API key**. A Claude subscription will not
+  work.
+- One Proxmox host, installed and on the internet.
+- A strong root password for that host, stored in a password manager.
 
 ## How a message becomes an answer
 
@@ -21,55 +39,59 @@ the code, with no environment-specific content in it at all. Each deployment is 
 flowchart TD
     U([User]) -->|message| API[API backend]
     API -->|message + recent context| C{Classifier}
-    C -->|routes on macro + description| ASSIST["assist<br/>web_search · code_execution"]
-    ASSIST -->|1 match| ANSWER([Answer, streamed to chat])
-    ANSWER -->|optional: Verify| VERIFY[[Independent verifier]]
+    C -->|single-agent profile: short-circuit| BOOT["bootstrap.intake<br/>foundations · probes"]
+    BOOT --> ANSWER([Answer, streamed to chat])
 
-    C -.->|planned| NET["run.network<br/>via unifi-mcp"]
-    C -.->|planned| BUILD["build<br/>secrets + dev API"]
-    NET -.->|2+ matches| SYN{{Synthesis}}
+    C -.->|living harness, post-Deploy| ASSIST["assist"]
+    C -.->|living harness, post-Deploy| BUILD["build"]
+    C -.->|living harness, post-Deploy| NET["run.network"]
+    ASSIST -.->|2+ matches| SYN{{Synthesis}}
     BUILD -.->|2+ matches| SYN
+    NET -.->|2+ matches| SYN
     SYN -.-> ANSWER
+    ANSWER -->|optional: Verify| VERIFY[[Independent verifier]]
 ```
 
-Solid lines are live today. Dashed lines are designed and speced
-([`docs/prd/core-agentic-loop.md`](docs/prd/core-agentic-loop.md)) but not yet
-live-reachable — `run.network` and `build` aren't registered yet, and synthesis only
-ever fires once a message matches two or more sub-agents, which can't happen with
-only one registered.
+Solid lines are the Phase 1 target. Dashed lines are the living harness already
+designed (and partly built) — they are not the MVP bar.
 
 ## Status
 
-Past the design phase — the Core Agentic Loop is built and running: real turns,
-streamed over SSE, through a real classifier and a real sub-agent (`assist`, with
-Anthropic's `web_search` and `code_execution` tools), plus a manual verifier and a
-settings surface for per-sub-agent provider/model overrides. `v0.2.0` is the current
-release. The other five subsystems below are fully speced but not yet built — see
-each SPEC's own status, and the diagram above for how much of the Core Agentic Loop
-itself is live versus still just designed.
+The Core Agentic Loop is built and running in development (chat, SSE turns,
+classifier, `assist`, `run.network`, verifier, settings, Galileo). That
+machinery is what Bootstrap reuses. The **product** MVP is now the Bootstrap
+phase: install script, LXC, setup gate, foundations interview, probes, local
+issues. It is designed, not yet built as a profile. Deploy / Build / Run
+phases await their own grills.
+
+Current release: see tags / `CHANGELOG.md`.
 
 ## Documentation
 
-- [`docs/architecture.md`](docs/architecture.md) — the portable pattern: macro
-  routing, the sub-agent registry, fan-out/fan-in, the verifier, loop prevention and
-  side-effect approval, secrets, multi-tenancy, testing discipline.
-- [`docs/stack.md`](docs/stack.md) — the specific technologies chosen to build it.
-
-Each subsystem has a PRD (requirements, the *why*) and a SPEC (technical design, the
-*how*):
+- [`docs/architecture.md`](docs/architecture.md) — portable pattern.
+- [`docs/mvp.md`](docs/mvp.md) — phase-gated deliverables.
+- [`docs/stack.md`](docs/stack.md) — technologies, including `therileys-team`
+  tokens.
+- [`docs/grill/2026-09-19-reframe.md`](docs/grill/2026-09-19-reframe.md) — the
+  interrogation that produced this shape.
 
 | Subsystem | PRD | SPEC |
 |---|---|---|
-| Bootstrap & Fleet Provisioning | [PRD](docs/prd/bootstrap.md) | [SPEC](docs/spec/bootstrap.md) |
+| Bootstrap (Phase 1 / MVP) | [PRD](docs/prd/bootstrap.md) | [SPEC](docs/spec/bootstrap.md) |
+| Deploy (Phase 2, awaiting grill) | [PRD stub](docs/prd/deploy.md) | — |
+| Build phase (Phase 3, awaiting grill) | [PRD stub](docs/prd/build.md) | — |
+| Run phase (Phase 4, awaiting grill) | [PRD stub](docs/prd/run.md) | — |
 | Core Agentic Loop | [PRD](docs/prd/core-agentic-loop.md) | [SPEC](docs/spec/core-agentic-loop.md) |
 | GPU / Compute Management | [PRD](docs/prd/gpu-compute-management.md) | [SPEC](docs/spec/gpu-compute-management.md) |
 | Secrets Management | [PRD](docs/prd/secrets-management.md) | [SPEC](docs/spec/secrets-management.md) |
 | Auth | [PRD](docs/prd/auth.md) | [SPEC](docs/spec/auth.md) |
 | Release Pipeline | [PRD](docs/prd/release-pipeline.md) | [SPEC](docs/spec/release-pipeline.md) |
 
+Parked former Fleet-provisioning design (not source of truth):
+[`docs/parked/`](docs/parked/).
+
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, the testing expectation, and how
-a change lands. See [`AGENTS.md`](AGENTS.md) if you're an AI agent (coding assistant
-or otherwise) working in this repo. See [`RELEASING.md`](RELEASING.md) for how
-versions get cut.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, the testing expectation, and
+how a change lands. See [`AGENTS.md`](AGENTS.md) if you're an AI agent working
+in this repo. See [`RELEASING.md`](RELEASING.md) for how versions get cut.

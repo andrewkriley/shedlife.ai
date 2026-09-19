@@ -7,16 +7,19 @@ expected of a change, and how it lands.
 
 Read [`docs/architecture.md`](docs/architecture.md) first — it's the portable pattern
 this product is built around, and it explains the reasoning behind decisions you'll
-otherwise just have to take on faith. [`docs/stack.md`](docs/stack.md) covers the
+otherwise just have to take on faith. [`docs/mvp.md`](docs/mvp.md) is what is
+actually in scope. [`docs/stack.md`](docs/stack.md) covers the
 specific technology choices. Each subsystem also has a PRD (`docs/prd/`) and SPEC
 (`docs/spec/`) pair — the PRD explains *why* and *what*, the SPEC explains *how*.
-Read the relevant pair before changing that subsystem.
+Read the relevant pair before changing that subsystem. Grill records in
+`docs/grill/` are history; `docs/parked/` is not source of truth.
 
 ## Development setup
 
 - Backend: Python + FastAPI. Frontend: React + TypeScript + Vite.
-- Local dependencies (Postgres, Redis) run via `docker-compose` for development — see
-  the Bootstrap docs for why this is a dev-only shortcut, not the production pattern.
+- Local dependencies (Postgres, Redis) run via `docker-compose` for development.
+  In Phase 1 they also run inside the bootstrap LXC — that *is* the production
+  pattern until a Deploy grill says otherwise.
 - Full setup instructions land here once the repo is scaffolded (see the project's
   current status if this section still looks sparse).
 

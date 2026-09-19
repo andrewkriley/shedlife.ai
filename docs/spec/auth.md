@@ -3,8 +3,9 @@
 Status: draft, technical design for [`../prd/auth.md`](../prd/auth.md). References
 [`../architecture.md`](../architecture.md), the
 [Core Agentic Loop SPEC](./core-agentic-loop.md) (the SSE transport constraint this
-design resolves for), and the Bootstrap/Fleet declarative-config pattern (first-user
-seeding).
+design resolves for), and the Bootstrap setup gate (first-user
+seeding). Fleet declarative seeding is a later-phase option, not how the
+first account is created.
 
 ## Actors / components
 
@@ -34,9 +35,11 @@ existing `local` rows.
 2. Backend looks up the matching `identities` row (`provider = local`), verifies the
    password against `password_hash` (Argon2id).
 3. On success: backend creates a session record in Redis (session id → user id, with
-   an expiry), and sets an HTTP-only, `Secure`, `SameSite=Lax` cookie carrying the
-   session id. Not a JWT in a header — see the PRD's reasoning (server-side,
-   immediately-revocable state, independent of any transport constraint).
+   an expiry), and sets an HTTP-only, `SameSite=Lax` cookie carrying the
+   session id. `Secure` is on when the control plane is served over HTTPS, and
+   **off** in the bootstrap profile (LAN HTTP). Not a JWT in a header — see the
+   PRD's reasoning (server-side, immediately-revocable state, independent of any
+   transport constraint).
 4. Subsequent requests (REST and the `fetch()`-based turn-stream request alike) carry
    the cookie automatically; the backend resolves it against the Redis session store on
    each request.
@@ -46,11 +49,10 @@ existing `local` rows.
 
 ## First-user seeding
 
-Part of the same declarative-config apply step already designed for a tenant's Fleet
-state — an initial admin identity (email/username + an initial password, or a
-password-set-on-first-login flow) is declared alongside the sub-agent/host/service
-registry entries in the tenant's config, and reconciled into the `users`/`identities`
-tables the same way those are. No separate first-run signup screen.
+`POST /setup` on a control plane with zero identities (Bootstrap SPEC). Creates
+the `users` / `identities` row and stores the LLM API key in the local secrets
+backend. Refused once any identity exists. No public signup. A later Fleet
+apply may declare the same admin; it must not fight the already-created row.
 
 ## Interfaces
 
@@ -66,7 +68,8 @@ tables the same way those are. No separate first-run signup screen.
   so revocation (logout, or an admin forcibly ending a session later) actually
   invalidates it immediately — not just lets a token expire on its own schedule.
 - Cookies: `HttpOnly` (unreadable to page JavaScript, mitigating XSS token theft),
-  `Secure` (HTTPS only), `SameSite=Lax`.
+  `SameSite=Lax`, and `Secure` when served over HTTPS (off in the bootstrap
+  profile).
 - CSRF: required on all state-changing requests, per the Sequence above.
 
 ## Open items

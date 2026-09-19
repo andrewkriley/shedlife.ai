@@ -1,10 +1,12 @@
 # Release Pipeline — PRD
 
-Status: draft. See [`../spec/release-pipeline.md`](../spec/release-pipeline.md) for
-the technical design this PRD drives, and [`../architecture.md`](../architecture.md)
-("Testing discipline"), the [Bootstrap PRD](./bootstrap.md) (the `apps/` Fleet layer,
-pinned-release-tag pattern already used for the bootstrap script), and the
-[Stack](../stack.md) reference for what this document builds on.
+Status: draft. Fleet-repo image pull is **Deploy-era**; the bootstrap LXC
+already needs the same GHCR image and the same pinned-tag install script.
+See [`../spec/release-pipeline.md`](../spec/release-pipeline.md) for the
+technical design this PRD drives, and [`../architecture.md`](../architecture.md)
+("Testing discipline"), the [Bootstrap PRD](./bootstrap.md) (pinned-release-tag
+install script), the [Deploy stub](./deploy.md) (later Fleet `apps/` layer),
+and the [Stack](../stack.md) reference for what this document builds on.
 
 ## Problem
 

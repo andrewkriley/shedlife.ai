@@ -1,6 +1,7 @@
 # Secrets Management — PRD
 
-Status: draft. See
+Status: draft, updated for the bootstrap local backend. Infisical and the
+Kubernetes Secret home wait for the Deploy grill. See
 [`../spec/secrets-management.md`](../spec/secrets-management.md) for the technical
 design this PRD drives, and [`../architecture.md`](../architecture.md) ("Secrets")
 for the cross-cutting pattern this document turns into a concrete build.
@@ -22,9 +23,9 @@ and where the one unavoidable plaintext credential actually lives at runtime.
   restart.
 - A clear, different failure behavior for "can't get a secret needed at startup" vs.
   "can't get a secret needed for one call" — not the same handling for both.
-- The one plaintext credential ("secret zero") has an explicit, concrete home now that
-  the deployment target (Kubernetes via Flux) is known — not a vague ".env file"
-  left over from before that was decided.
+- Secret-zero has an explicit home **per profile**: on the bootstrap LXC, a
+  local store; after Deploy, the machine-identity credential that reaches
+  Infisical (likely a Kubernetes Secret — confirmed in that grill, not here).
 
 ## Non-goals (this phase)
 
@@ -43,7 +44,8 @@ and where the one unavoidable plaintext credential actually lives at runtime.
 
 - A secret reference resolves the same way regardless of which subsystem is asking for
   it — GPU management's LiteLLM/Hugging Face credentials, a sub-agent's provider API
-  key, Bootstrap's seeded tokens, all through one client, one format.
+  key, the bootstrap LLM key — all through one client. Scheme is `local://` or
+  `infisical://` depending on profile, not a third ad-hoc format.
 - Rotating a secret in the backend is reflected in the running app within a bounded,
   short window — no restart required.
 - The app fails fast and clearly if a startup-required secret can't be fetched; a
@@ -54,10 +56,9 @@ and where the one unavoidable plaintext credential actually lives at runtime.
 
 ### Reference format
 
-A single URI scheme (see SPEC for the exact grammar) used everywhere a secret is
-named — the same format already used informally in Bootstrap's `instance.yaml`
-illustration and the Fleet repo pattern, now formalized rather than left as an
-example.
+A single client, two URI schemes (see SPEC): `local://` in the bootstrap
+profile, `infisical://` once that backend exists. Every subsystem names
+secrets through the client, never by reaching into a store.
 
 ### Caching and rotation
 
@@ -79,11 +80,18 @@ never be picked up). Expiry triggers a re-fetch, not a manual refresh action.
 
 ### Secret zero's runtime home
 
-Given the deployment target is Kubernetes via Flux (per the Bootstrap design), the one
-unavoidable plaintext credential (the machine identity used to reach the secrets
-backend) is a **Kubernetes Secret**, referenced by The Shed's own deployment manifest
-in the Fleet repo's `apps/` layer — not a literal `.env` file on a persistent disk.
-This supersedes the earlier, pre-Kubernetes-design framing in `architecture.md`.
+**Bootstrap profile (current MVP):** the LXC's local secrets store. The LLM
+API key, optional Galileo key, and the dedicated SSH private key live there.
+References use `local://<path>`. Not a file in the product repo. File
+permissions and "never log it" are the controls; encryption-at-rest on the
+CT disk is desirable but not a Phase 1 blocker.
+
+**After Deploy (not designed here):** the one unavoidable plaintext
+credential (the machine identity used to reach Infisical) is expected to be a
+Kubernetes Secret injected into The Shed's workload. That assumption came
+from the parked Fleet design and must be re-confirmed in the Deploy grill.
+Callers keep using `secrets.get(...)`; only the URI scheme and backend
+change.
 
 ### Scope
 

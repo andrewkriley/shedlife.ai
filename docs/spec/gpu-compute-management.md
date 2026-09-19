@@ -1,6 +1,6 @@
 # GPU / Compute Management — SPEC
 
-Status: draft, technical design for
+Status: draft, deferred with its PRD to the Build-phase grill. Technical design for
 [`../prd/gpu-compute-management.md`](../prd/gpu-compute-management.md). References
 [`../architecture.md`](../architecture.md), [`../stack.md`](../stack.md), and the
 [Core Agentic Loop SPEC](./core-agentic-loop.md) (provider resolution, the SSE

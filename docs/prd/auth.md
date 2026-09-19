@@ -1,9 +1,10 @@
 # Auth — PRD
 
-Status: draft. See [`../spec/auth.md`](../spec/auth.md) for the technical design this
+Status: draft, updated for the bootstrap profile. See [`../spec/auth.md`](../spec/auth.md) for the technical design this
 PRD drives, and [`../architecture.md`](../architecture.md) ("Identity/auth as
 pluggable providers", "Multi-tenancy from day one") for the cross-cutting pattern this
-document turns into a concrete build.
+document turns into a concrete build. First-user seeding is the Bootstrap
+setup gate, not a Fleet apply — Fleet does not exist in Phase 1.
 
 ## Problem
 
@@ -18,9 +19,10 @@ comes to exist.
   from the start — adding Google/GitHub OAuth later is additive, not a restructuring.
 - An auth mechanism that works cleanly with the transport already chosen for turn
   streaming (SSE via the browser's native `EventSource`), not one that fights it.
-- The first user account on a new tenant deployment exists without a bespoke
-  first-run signup flow, using the same declarative-config pattern already established
-  for everything else tenant-specific.
+- The first user account on a new tenant deployment exists without a public
+  signup: the bootstrap **setup gate** creates it (email + password + LLM
+  provider key). A later declarative apply (Fleet) may reconcile the same
+  identity once Deploy exists; it is not how the account first comes to be.
 
 ## Non-goals (this phase)
 
@@ -40,8 +42,8 @@ comes to exist.
 
 - A user logs in with a password and stays authenticated across both REST calls and
   an open SSE turn-stream connection, without a custom-header workaround.
-- A new tenant deployment has a working admin account immediately after bootstrap,
-  with no manual "create the first user" step through the UI.
+- A new tenant deployment has a working admin account at the end of the
+  bootstrap setup gate — the first screen, not a later settings page.
 - Adding an OAuth provider later requires no schema change to how a user's identity is
   modeled — confirmed by the schema itself (see SPEC), not just asserted.
 
@@ -74,10 +76,16 @@ the user, not fields on the user record itself, so OAuth providers are additive 
 
 ### First user
 
-Seeded through the same declarative-config pattern already used for a tenant's Fleet
-state (registry entries, sub-agent config) — an initial admin account is part of that
-declarative input, reconciled the same way everything else in the Fleet repo is, not
-a separate first-run UI flow.
+Created by `POST /setup` on the bootstrap LXC (see Bootstrap SPEC): email,
+password, LLM provider key. Refused once any identity exists; subsequent
+visits are login. This replaces the earlier "seed via Fleet declarative
+config" requirement, which assumed a repo that Phase 1 does not have.
+
+### Cookie flags (bootstrap exception)
+
+Cookie-based sessions stand. In the bootstrap profile (HTTP on the LAN),
+`Secure` is **off**; `HttpOnly` and `SameSite=Lax` stay. `Secure` turns on
+when TLS exists (Deploy grill). CSRF on writes is unchanged.
 
 ### Password handling
 

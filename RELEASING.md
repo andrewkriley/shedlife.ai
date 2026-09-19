@@ -35,11 +35,12 @@ commit types:
 ## What a release does *not* do
 
 **Publishing a release does not deploy it anywhere.** Every tenant's deployment is
-independent — a tenant operator decides when to adopt a new version by editing their
-own Fleet repo's `apps/` layer to reference the new image tag, the same declarative
-config-apply mechanism as any other change to their deployment (see the Bootstrap
-PRD/SPEC). A GitHub release landing is an announcement that a version exists and is
-available to pull, not an instruction that anyone must pull it.
+independent. In Phase 1 the operator adopts a new version by pointing the
+bootstrap LXC at the new image tag (re-running the pinned install script, or
+an equivalent pull). After Deploy, the same idea becomes an edit to that
+tenant's Fleet repo — see the Bootstrap PRD and the Deploy stub. A GitHub
+release landing is an announcement that a version exists and is available to
+pull, not an instruction that anyone must pull it.
 
 ## If you're not a maintainer
 

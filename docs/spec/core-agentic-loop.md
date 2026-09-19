@@ -1,6 +1,10 @@
 # Core Agentic Loop — SPEC
 
-Status: draft, technical design for
+Status: living-harness design. Phase 1 reuses these interfaces as the
+bootstrap profile (one agent, classification short-circuit, `Secure`
+cookies off). See [`bootstrap.md`](./bootstrap.md).
+
+Technical design for
 [`../prd/core-agentic-loop.md`](../prd/core-agentic-loop.md). References
 [`../architecture.md`](../architecture.md) (portable pattern) and
 [`../stack.md`](../stack.md) (reference technologies).

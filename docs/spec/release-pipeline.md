@@ -2,9 +2,10 @@
 
 Status: draft, technical design for
 [`../prd/release-pipeline.md`](../prd/release-pipeline.md). References
-[`../stack.md`](../stack.md), the [Bootstrap SPEC](./bootstrap.md) (`apps/` Fleet
-layer, pinned-tag pattern), and the existing `gitleaks` GitHub Actions workflow this
-extends rather than replaces.
+[`../stack.md`](../stack.md), the [Bootstrap SPEC](./bootstrap.md) (pinned-tag
+install script; the LXC pulls this image), the [Deploy stub](../prd/deploy.md)
+(later Fleet `apps/` layer), and the existing `gitleaks` GitHub Actions
+workflow this extends rather than replaces.
 
 ## Actors / components
 
@@ -19,7 +20,7 @@ extends rather than replaces.
 - **`release-please`** — watches `main`, maintains an accumulating Release PR with the
   changelog, tags and cuts a GitHub Release when that PR is merged.
 - **GitHub Container Registry (GHCR)** — holds versioned, published images, tied to
-  the public `andrewkriley/theshed` repo.
+  the public `andrewkriley/shedlife.ai` repo.
 - **A tenant's Fleet repo** (`apps/` layer) — the thing that actually determines what
   a given tenant runs, by referencing an image tag/digest.
 

@@ -6,7 +6,9 @@ credentials, or references to any specific deployment. Anyone building a similar
 agentic harness could apply this document as-is.
 
 For the specific technologies chosen to implement this pattern in this deployment, see
-[`stack.md`](./stack.md).
+[`stack.md`](./stack.md). For what is in the current MVP versus later phases, see
+[`mvp.md`](./mvp.md). Design decisions that produced this shape are recorded in
+[`grill/`](./grill/).
 
 ---
 
@@ -14,6 +16,34 @@ For the specific technologies chosen to implement this pattern in this deploymen
 
 A web-based, agentic-first AI harness built around fan-out/fan-in orchestration of
 agents and sub-agents, capable of using a mix of AI model providers (cloud and local).
+
+The Shed has three **jobs**: **Assist** (the everyday personal-assistant work of
+running a life), **Build** (new projects, new features, fixes — for The Shed itself
+or anything else), and **Run** (operating the infrastructure underneath all of it —
+hosting, network, cloud, home tech stack). One conversational interface, a growable
+registry of domain-specific sub-agents, fanning out to whichever of them a message
+actually needs and fanning back in to one answer.
+
+## Lifecycle phases are not jobs
+
+A tenant comes up, and is then used, in four **phases**:
+
+1. **Bootstrap** — solve the chicken-and-egg: a thin installer starts a control
+   plane that can talk to a human and remember facts. It does not provision the
+   platform.
+2. **Deploy** — stand up the foundational platforms and services from those facts.
+3. **Build** — add the tools and toys the tenant actually wants.
+4. **Run** — operate what was stood up (AI Ops, patrols).
+
+Assist / Build / Run as **jobs** are a classification dimension inside the running
+harness (see below). Bootstrap / Deploy / Build / Run as **phases** are chapters
+of a tenant's life. The names collide on purpose with how the product is spoken
+about; they are not the same thing. In writing, say "the Bootstrap phase" or
+"the Build job" whenever either reading is possible.
+
+The Bootstrap assistant is a constrained Assist-job agent. Later phases add
+assistants (and playbooks) under the job that matches the work. Phase 3 uses the
+Build job; Phase 4 uses the Run job.
 
 ## Macro categories are a routing dimension, not agents
 
@@ -27,6 +57,15 @@ The only real agents — LLM-backed, with their own system prompt, their own sco
 tools, and their own trace span — are **domain-specific sub-agents**, each registered
 under exactly one macro category (e.g. a networking sub-agent under Run, a
 bug-fixing sub-agent under Build, a calendar sub-agent under Assist).
+
+A **profile** is a permitted subset of that registry plus the secret-zero and
+persistence story that profile is allowed to assume. The bootstrap profile is
+the first one: one intake agent, local secret-zero, no platform services
+required. Adding Deploy does not invent a second harness; it grows the registry
+and swaps secret-zero for a real secrets backend.
+
+When the registry contains exactly one agent, classification is a short-circuit,
+not a model call.
 
 ## Sub-agent registry
 
@@ -114,6 +153,37 @@ implementation detail:
   is — `has_side_effects` is not just metadata for a future feature, it's an
   enforcement point from the start.
 
+## Predetermined playbooks
+
+Assistants **execute** deployment and intake patterns; they do not invent them.
+A playbook is a named, versioned, testable procedure (inputs, steps, success
+checks, side-effect flags). The model may choose *which* playbook applies and
+how to talk about it; it may not skip a required step, invent a new topology, or
+treat a failed check as optional.
+
+This is what keeps a conversational UI from becoming an unsupervised operator
+with root. New capability is a new playbook in the product, not a cleverer
+prompt.
+
+## Phases are reviewable and rerunnable
+
+Every phase is driven through the web UI (chat plus a structured review
+surface for that phase's schema). A phase can be inspected, edited, and run
+again. Steps are **idempotent** and **state-aware**: already-done work is
+detected (local state, then live verification) and skipped; drift between the
+two is corrected by re-running the step, not by a separate "resume" mode.
+
+## Errors become issues
+
+If the system hits an unexpected error — or the operator flags one — it opens
+an issue with the maintainer. Validation failures ("that IP is malformed") are
+field errors, not issues.
+
+Where the issue is filed depends on what exists: a local issue record first
+(always); the product's public tracker only when the operator opts in and the
+classification is a product bug; the tenant's own tracker once Deploy has
+created it. Issue bodies never include secret values or raw probe payloads.
+
 ## GPU / compute management
 
 Where a deployment needs to run its own models locally, compute lifecycle management
@@ -142,11 +212,18 @@ management is built yet; build the tracking first, automate teardown decisions l
 
 ## Secrets
 
-Treat secrets as fetched, not stored. The app authenticates to an external secrets
-backend via a machine identity, and fetches everything else — provider API keys, tool
-credentials, database credentials — from there. The only thing that has to exist in
-plaintext locally is the credential needed to reach the secrets backend itself (the
-unavoidable "secret zero"); everything downstream of that is fetched, not configured.
+Treat secrets as fetched, not stored. Once a secrets backend exists, the app
+authenticates to it via a machine identity, and fetches everything else —
+provider API keys, tool credentials, database credentials — from there. The only
+thing that has to exist in plaintext locally is the credential needed to reach
+the secrets backend itself (the unavoidable "secret zero"); everything
+downstream of that is fetched, not configured.
+
+**Bootstrap is the exception that makes the rule possible.** Before a secrets
+backend exists, the bootstrap profile *is* secret-zero: values live on the
+control-plane host, behind the same secrets-client interface, never in the
+product repo. Deploy's job includes standing up the real backend and migrating
+those references. Callers should not care which backend implemented `get`.
 
 ## Host/service registry and provenance
 
@@ -165,8 +242,8 @@ Registry-shaped state is best split by what kind of thing it is:
 
 - **Bootstrap/static config** — the minimum needed before the app can reach its own
   database or secrets backend at all (a DB connection string, the credential for the
-  secrets backend itself). Necessarily a local file, not registry data — this is the
-  unavoidable "secret zero."
+  secrets backend itself — or, in the bootstrap profile, the local secret-zero
+  store). Necessarily local to the control plane, not product-repo content.
 - **Declarative config** — registry entries that represent *intent* and change rarely:
   which hosts/services exist, which sub-agents are registered and what they're
   configured with. This is a good fit for a desired-state file (YAML/JSON) applied into
@@ -174,7 +251,7 @@ Registry-shaped state is best split by what kind of thing it is:
   infrastructure-as-code tooling (`terraform apply`, `ansible-playbook`, `kubectl
   apply`). The file references secrets by name/path in the secrets backend, never by
   value. Losing the database becomes "reapply the file," not "restore a backup and hope
-  it's current."
+  it's current." The bootstrap foundations bundle is the first document of this kind.
 - **Operational/runtime data** — conversation history, job execution records, usage
   logs. This has no meaningful "desired state" and only ever exists because the system
   ran. No file representation makes sense; back it up the way any database is backed
@@ -193,40 +270,42 @@ practice.
 A harness whose own operational domain (managing infrastructure) is implemented as
 in-app agents runs into a chicken-and-egg problem: those agents can't provision the
 infrastructure the harness itself needs to run, because nothing is alive yet to run
-them. The resolution is to keep the **first bootstrap outside the running app**, in a
-thin, standalone installer that does one job — get a minimal control plane alive — and
-then hands off. Everything after that flows through the harness's own normal
-capabilities; there is no special-case "installer mode" inside the running app.
+them.
 
-Two installer modes converge on the same registry, differing only in provenance:
+The resolution is a **thin installer** whose only job is to start a control
+plane, then get out of the way. That control plane *is* The Shed, running a
+bootstrap profile — not a second product, and not a special-case "installer
+mode" inside a different app. The installer does not provision Git, Kubernetes,
+DNS, or a secrets backend. It holds enough information, validated and probed,
+that the Deploy phase can start.
 
-- **Build** (net-new): given credentials for a raw compute substrate, provision what's
-  needed (a host, a runtime, a database, a secrets store) from nothing, then deploy and
-  hand off. Registry entries get created.
-- **Adopt** (import existing): given endpoints/credentials for systems that already
-  exist, discover what's there via each system's own API and register it by reference.
-  Nothing is created.
+Two intake modes converge on the same foundations schema, differing only in
+provenance of what the operator *intends* to do later:
 
-Both paths end at the same place: a running control plane with a populated registry.
-The installer's job is exactly the gap between "nothing running" and "the harness can
-take over" — keep it that thin.
+- **Build** (net-new): the operator will ask Deploy to create the thing.
+- **Adopt** (import existing): the operator already has the thing; Deploy will
+  register it by reference.
+
+Bootstrap records the choice and the connection facts. It does not create or
+adopt anything except the control plane itself.
+
+Whether that control plane later retires, becomes break-glass, or moves onto
+the platform Deploy builds is a Deploy-phase decision, not a Bootstrap one.
 
 ## Product vs. tenant
 
-The harness itself (the bootstrap orchestrator and the ongoing Assist/Build/Run
-engine) is **one product** with one canonical, public source. A **deployment is a
-tenant** of that product, and a tenant's entire operating state — its registered
-hosts/services/sub-agents, its GitOps manifests, everything specific to that
-deployment — lives in its own private repo, separate from the product's source. Build
-and Run are **capabilities of the product**, not products in their own right: when
-exercised, they act on a specific tenant's state, not on the product's own repo. See
-the Bootstrap & Fleet Provisioning PRD/SPEC for how a tenant's infrastructure and this
-private repo actually get stood up.
+The harness itself is **one product** with one canonical, public source. A
+**deployment is a tenant** of that product. Tenant-specific values — hosts,
+credentials, which sub-agents are registered, later a private Fleet repo —
+never live in the product repo.
 
-This separation is what makes "the same product, deployed independently by different
-tenants" coherent: the product repo has no tenant-specific content in it at all, and
-every tenant-specific detail — network addresses, credentials-by-reference, which
-sub-agents are registered — lives in that tenant's own private repo instead.
+Build and Run are **jobs of the product**, not products in their own right:
+when exercised, they act on a specific tenant's state.
+
+A tenant's durable operating state will eventually live in that tenant's own
+private repo (the Fleet model sketched in earlier design). That repo does not
+exist in Bootstrap. Until it does, the tenant's state is local to the bootstrap
+control plane and exportable as the foundations bundle.
 
 **Application visibility defaults private.** Anything Build produces for a tenant is
 private (stored in that tenant's own git hosting) unless explicitly flagged public, in
@@ -258,13 +337,19 @@ separate identities/providers relation keyed to the user, not credentials fields
 directly into the user record), so additional providers (OAuth, SSO, etc.) are additive
 later, not a restructuring.
 
+The first user on a new tenant is created by the bootstrap setup gate — not a
+public signup, and not a declarative apply that depends on a repo that does not
+exist yet.
+
 ## Testing discipline
 
 Split what's tested by what kind of thing it is:
 
 - **Deterministic code** — routing logic, registries, provider abstractions,
-  orchestration mechanics, resource lifecycle tracking — gets strict test-first
-  development, with any LLM calls mocked so tests stay fast and deterministic.
+  orchestration mechanics, resource lifecycle tracking, foundations schema
+  validation, playbook step machines, probe checks against mocked endpoints —
+  gets strict test-first development, with any LLM calls mocked so tests stay
+  fast and deterministic.
 - **LLM-facing behavior** — does a classifier route a given phrasing correctly, does a
   sub-agent's system prompt produce a good answer, does synthesis actually reconcile
   results well — is not pass/fail in the unit-test sense. This is what tracing/eval
