@@ -49,3 +49,12 @@ def test_install_script_detects_rootfs_storage() -> None:
     assert "pvesm status --content rootdir" in text
     assert "THESHED_STORAGE" in text
     assert "--rootfs" in text
+
+
+def test_install_script_prints_banner_first() -> None:
+    text = SCRIPT.read_text()
+    assert "Your digital shed -- the place you" in text
+    assert "print_banner" in text
+    banner_at = text.index("print_banner")
+    ref_at = text.index('echo "The Shed installer')
+    assert banner_at < ref_at
