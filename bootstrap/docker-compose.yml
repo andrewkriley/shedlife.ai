@@ -36,6 +36,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       THESHED_LOCAL_SECRETS_PATH: /var/lib/theshed/secrets.json
       THESHED_FRONTEND_DIST: /app/frontend-dist
+      THESHED_DEBUG: ${THESHED_DEBUG:-0}
+      THESHED_OPERATOR_EMAIL: ${THESHED_OPERATOR_EMAIL:-}
+      THESHED_OPERATOR_PASSWORD: ${THESHED_OPERATOR_PASSWORD:-}
     ports:
       - "8080:8080"
     volumes:

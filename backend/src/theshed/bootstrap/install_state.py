@@ -7,8 +7,11 @@ tested contract that script implements: reuse a healthy CT, otherwise create.
 from __future__ import annotations
 
 import re
+import secrets
 from dataclasses import dataclass
 from typing import Any
+
+DEFAULT_OPERATOR_EMAIL = "operator@theshed.local"
 
 # Ubuntu 26.04 LTS is the current latest Proxmox `*-standard` template.
 # Pin the series; still take the newest pveam build of that series.
@@ -66,20 +69,34 @@ def render_url(ct_ip: str, port: int = 8080) -> str:
     return f"http://{ct_ip}:{port}"
 
 
+def generate_operator_password() -> str:
+    return secrets.token_urlsafe(18)
+
+
 def completion_summary(
     ct_ip: str,
     ctid: int,
     hostname: str,
     image_ref: str,
     port: int = 8080,
+    email: str | None = None,
+    password: str | None = None,
+    debug: bool = False,
 ) -> str:
-    """Final installer block: done, and where to open the UI."""
-    return (
-        "The Shed is ready.\n"
-        f"  URL:  {render_url(ct_ip, port)}\n"
-        f"  CT:   {ctid} ({hostname})\n"
-        f"  Ref:  {image_ref}\n"
-    )
+    """Final installer block: done, where to open the UI, and how to log in."""
+    lines = [
+        "The Shed is ready.",
+        f"  URL:  {render_url(ct_ip, port)}",
+        f"  CT:   {ctid} ({hostname})",
+        f"  Ref:  {image_ref}",
+    ]
+    if email:
+        lines.append(f"  User: {email}")
+    if password:
+        lines.append(f"  Pass: {password}")
+    if debug:
+        lines.append(f"  Debug: on  ({render_url(ct_ip, port)}/api/debug/logs)")
+    return "\n".join(lines) + "\n"
 
 
 def select_os_template(available_text: str) -> str | None:

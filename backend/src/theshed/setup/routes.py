@@ -11,19 +11,29 @@ from theshed.auth.dependencies import get_redis
 from theshed.auth.service import SessionStore, hash_password
 from theshed.db.models import Identity, User
 from theshed.db.session import get_session
-from theshed.secrets.client import LocalSecretsClient
+from theshed.secrets.client import LocalSecretsClient, SecretNotFoundError
 from theshed.setup.providers import ProviderRejected, validate_api_key
 
 router = APIRouter(prefix="/setup", tags=["setup"])
 
 
 class SetupRequest(BaseModel):
-    email: str
-    password: str
+    email: str | None = None
+    password: str | None = None
     provider: str
     api_key: str
     galileo_api_key: str | None = None
     galileo_console_url: str | None = None
+
+
+def _has_api_key(secrets: object) -> bool:
+    getter = getattr(secrets, "get", None)
+    if getter is None:
+        return False
+    try:
+        return bool(getter("local://providers/llm/api_key"))
+    except SecretNotFoundError:
+        return False
 
 
 async def _identity_count(db: AsyncSession) -> int:
@@ -32,8 +42,12 @@ async def _identity_count(db: AsyncSession) -> int:
 
 
 @router.get("/status")
-async def setup_status(db: AsyncSession = Depends(get_session)) -> dict[str, bool]:
-    return {"needed": await _identity_count(db) == 0}
+async def setup_status(
+    request: Request, db: AsyncSession = Depends(get_session)
+) -> dict[str, bool]:
+    identities = await _identity_count(db)
+    has_key = _has_api_key(getattr(request.app.state, "secrets", None))
+    return {"needed": identities == 0 or not has_key, "has_operator": identities > 0}
 
 
 @router.post("")
@@ -44,7 +58,8 @@ async def post_setup(
     db: AsyncSession = Depends(get_session),
     redis_client: Redis = Depends(get_redis),
 ) -> dict[str, str]:
-    if await _identity_count(db) > 0:
+    identities = await _identity_count(db)
+    if identities > 0 and _has_api_key(getattr(request.app.state, "secrets", None)):
         raise HTTPException(status.HTTP_409_CONFLICT, "Setup already completed")
 
     live_check = getattr(request.app.state, "provider_live_check", None)
@@ -53,18 +68,25 @@ async def post_setup(
     except ProviderRejected as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
-    user = User(display_name=body.email)
-    db.add(user)
-    await db.flush()
-    db.add(
-        Identity(
-            user_id=user.id,
-            provider="local",
-            provider_user_id=body.email,
-            password_hash=hash_password(body.password),
+    if identities == 0:
+        if not body.email or not body.password:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email and password are required")
+        user = User(display_name=body.email)
+        db.add(user)
+        await db.flush()
+        db.add(
+            Identity(
+                user_id=user.id,
+                provider="local",
+                provider_user_id=body.email,
+                password_hash=hash_password(body.password),
+            )
         )
-    )
-    await db.flush()
+        await db.flush()
+        user_id = str(user.id)
+    else:
+        existing = (await db.execute(select(Identity))).scalar_one()
+        user_id = str(existing.user_id)
 
     secrets = request.app.state.secrets
     if isinstance(secrets, LocalSecretsClient):
@@ -79,7 +101,7 @@ async def post_setup(
     if configure is not None:
         configure(body.provider, body.api_key)
 
-    session_id = await SessionStore(redis_client).create(user_id=str(user.id))
+    session_id = await SessionStore(redis_client).create(user_id=user_id)
     set_session_cookies(response, session_id)
     await db.commit()
     return {"status": "ok"}

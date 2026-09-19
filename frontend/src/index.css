@@ -532,6 +532,55 @@ fieldset > legend {
   padding: var(--space-xl);
 }
 
+.debug-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+}
+
+.debug-dock__bar {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.debug-console {
+  max-height: 28svh;
+  overflow: auto;
+  padding: 0 var(--space-md) var(--space-sm);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.debug-console ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.debug-console__meta {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.debug-console li[data-level='error'] {
+  color: var(--accent-danger);
+}
+
+.app-shell,
+.gate {
+  padding-bottom: 56px;
+}
+
 ul {
   padding-left: 0;
 }

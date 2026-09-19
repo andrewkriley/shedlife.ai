@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from theshed.debug import log as debug_log
+
 SUPPORTED = ("anthropic", "openai", "gemini")
 
 Validator = Callable[[str], None]
@@ -44,6 +46,17 @@ def validate_api_key(
     key: str,
     live_check: Validator | None = None,
 ) -> None:
-    reject_if_not_api_key(vendor, key)
-    if live_check is not None:
-        live_check(key)
+    debug_log.record("provider", "connect", f"Validating {vendor} API key")
+    try:
+        reject_if_not_api_key(vendor, key)
+        if live_check is not None:
+            live_check(key)
+    except Exception as exc:
+        debug_log.record(
+            "provider",
+            "error",
+            f"{vendor} rejected the key: {exc}",
+            level="error",
+        )
+        raise
+    debug_log.record("provider", "connected", f"{vendor} accepted the API key")
