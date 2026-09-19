@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.2](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.1...theshed-v0.4.2) (2026-09-19)
+
+
+### Bug Fixes
+
+* attach install.sh from the release-please job ([760f08a](https://github.com/andrewkriley/shedlife.ai/commit/760f08ae5dbe1ad5c743951e3d4dd036f8fc4a33))
+* create the bootstrap CT from the latest Ubuntu template ([a73a469](https://github.com/andrewkriley/shedlife.ai/commit/a73a469366a27ad66b3392c1e67370cf2661e2d9))
+
 ## [0.4.1](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.0...theshed-v0.4.1) (2026-09-19)
 
 
