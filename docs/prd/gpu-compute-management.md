@@ -1,6 +1,8 @@
 # GPU / Compute Management — PRD
 
-Status: draft. See
+Status: draft, **deferred to the Build-phase grill**. Still the intended
+design for local model lifecycle; not MVP. See [`../mvp.md`](../mvp.md) and
+[`build.md`](./build.md). See
 [`../spec/gpu-compute-management.md`](../spec/gpu-compute-management.md) for the
 technical design this PRD drives, and [`../architecture.md`](../architecture.md) for
 the cross-cutting pattern (layered pipeline, provenance, in-use tracking before

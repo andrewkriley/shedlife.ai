@@ -1,283 +1,200 @@
-# Bootstrap & Fleet Provisioning — PRD
+# Bootstrap — PRD
 
-Status: draft. See [`../spec/bootstrap.md`](../spec/bootstrap.md) for the technical
-design this PRD drives, and [`../architecture.md`](../architecture.md) for the
-cross-cutting patterns (installer/chicken-and-egg resolution, Build vs. Adopt,
-provenance, secrets) this document builds on.
+Status: current (Phase 1 / MVP). See [`../spec/bootstrap.md`](../spec/bootstrap.md)
+for the technical design, [`../architecture.md`](../architecture.md) for the
+portable pattern, and [`../mvp.md`](../mvp.md) for how this phase sits next to
+Deploy / Build / Run. Produced by the
+[2026-09-19 reframe grill](../grill/2026-09-19-reframe.md).
+
+The former "Bootstrap & Fleet Provisioning" design (k3s, Flux, Fleet repo, LXC
+teardown) is parked in [`../parked/`](../parked/). It is not this document.
 
 ## Problem
 
-The Shed's own RUN capability can't provision the infrastructure The Shed itself needs
-to run — nothing is alive yet to run it. Getting from "bare Proxmox host(s)" to "a
-running Shed tenant" needs to be repeatable and documented, not a one-off manual
-sequence, and losing a deployment shouldn't mean starting from scratch.
+The Shed cannot Deploy a platform until something is alive that can talk to the
+operator, remember facts, and check that those facts are real. A human
+copy-pasting values into a shell script is not repeatable, not reviewable, and
+not something an assistant can re-run after a mistake. The first control plane
+has to exist before Git, Kubernetes, or a secrets backend do.
 
 ## Goals
 
-- A single command, run once on a fresh Proxmox host, starts the entire bootstrap.
-- Repeatable and restorable: the same inputs (interactive wizard or an imported YAML
-  file) reproduce an equivalent deployment.
-- Self-hosted ongoing operation: once bootstrapped, the platform's ongoing
-  reconciliation doesn't depend on an external cloud service being reachable.
-- Build-or-Adopt applied at every layer where it's meaningful: net-new provisioning
-  and adoption of existing infrastructure are both first-class.
-- Establishes the multi-tenancy foundation: each deployment is a tenant with its own
-  private Fleet repo; The Shed itself remains one public product.
-- **Modular by stage**: standing up the platform and deploying The Shed onto it are
-  separable operations, not one all-or-nothing run. Someone can stand up just the
-  infrastructure, or deploy The Shed onto a cluster they already have, without the
-  other half.
+- One command, run on a fresh Proxmox host, produces a LAN URL.
+- That URL is The Shed: a chat UI with a bootstrap assistant, styled with the
+  product token set.
+- The assistant collects the foundations Deploy needs in order to *start*,
+  validates them, and runs predetermined pre-deploy probes.
+- Facts live on the LXC, are visible beside the chat, and can be edited and
+  re-probed. The same inputs replay to the same state.
+- A YAML bundle can be exported for the next phase. Nothing in this phase
+  provisions the next phase's platforms.
+- Unexpected errors become local issues. The assistant never invents a
+  playbook.
 
 ## Non-goals (this phase)
 
 - Installing Proxmox VE on bare metal — a human pre-task.
-- Shared storage (Ceph, NFS, etc.) — a post-bootstrap activity.
-- Proxmox hardware failure / node replacement handling.
-- Multi-region or multi-datacenter topologies.
+- Forming a Proxmox cluster (3/5 hosts) — Build-phase grill.
+- Provisioning or adopting GitLab, Infisical, PowerDNS, k3s, Flux, Let's
+  Encrypt, Traefik, Cloudflared, Grafana, Prometheus — Deploy-phase grill.
+- Retiring or migrating the LXC after a later Deploy — Deploy-phase grill.
+- Shared storage, hardware failure handling, multi-site topologies.
+- Exposing the control plane to the public internet.
 
 ## Users
 
-- Primary: the operator standing up a new tenant deployment.
-- Future: other tenants deploying their own instance of the product independently.
+- Primary: the operator standing up a new tenant, on the same LAN as the
+  Proxmox host.
+- The data model is multi-user-ready; only one real user exists.
 
 ## Success criteria
 
-- An operator with one (or three/five) freshly-installed Proxmox host(s) runs one
-  command and ends with: a k3s cluster, Flux installed and reconciling from a Fleet
-  repo, and The Shed itself running as a Flux-managed workload — no manual steps
-  beyond the wizard (or a supplied YAML file).
-- The same YAML file, replayed against fresh hardware, reproduces an equivalent
-  deployment.
-- The bootstrap orchestrator retires itself after a successful handoff — nothing is
-  left standing beyond k3s and Flux.
-- An operator can stop the run after just the infrastructure exists, or point it at a
-  k3s cluster they already have and deploy only The Shed onto it — both are supported
-  paths through the same tool, not separate tools.
+- From one Proxmox host with an API key the operator has not yet typed
+  anywhere: they run the pinned install command, open the printed URL, complete
+  the setup gate, and finish a foundations interview that ends in a visible
+  schema of collected / valid / failing fields plus probe results.
+- Re-running the install command against the same host does not create a
+  second CT if the first one is healthy; it reprints the URL.
+- Re-running a probe or changing one field does not require starting over.
+- No platform service listed in Non-goals has been created.
+- An unexpected probe crash produces a local issue the operator can see; a
+  typo in a CIDR does not.
 
 ## Requirements
 
-### Modularity: stages and cluster adoption
+### Thin installer
 
-- The bootstrap proceeds through three stages, each a valid stopping point:
-  1. **`infra`** — Proxmox provisioning through a formed k3s cluster. No Flux yet.
-  2. **`platform`** — Flux installed, pointed at the Fleet repo; the Fleet repo's
-     *platform* layer (DNS, database, cache, secrets backend, LiteLLM — supporting infrastructure, not The Shed
-     itself) is reconciled.
-  3. **`app`** — the Fleet repo's *application* layer (The Shed itself) is added and
-     reconciled. Default stopping point for a full run.
-- **k3s cluster gets the same Build-vs-Adopt treatment as the Fleet-repo host and
-  DNS.** Adopting an existing cluster (Proxmox-provisioned by an earlier run, or from
-  anywhere else entirely) skips the `infra` stage altogether — the process starts
-  directly at `platform`, using whatever access credential the operator supplies for
-  that cluster.
-- This is what makes "just deploy the cluster" (stop after `infra`, or after
-  `platform` if DNS/database should exist but The Shed shouldn't yet) and "just deploy
-  the agent" (adopt an existing cluster, run `platform` + `app` only) both real,
-  supported operations through the same command — not different tools, just different
-  stage/adoption choices on the same input.
+- Lives in the public product repo as `bootstrap/install.sh`, fetched and
+  executed directly, pinned to a release tag by default, overridable to
+  another ref.
+- Runs on the Proxmox host as root. Creates one LXC, starts The Shed image
+  (bootstrap profile) inside it, attaches the CT to the host's LAN bridge,
+  prints `http://<ct-ip>:<port>`.
+- Does not collect the LLM API key, the Proxmox root password, or tenant
+  facts. Those belong to the web app.
+- Optional static CT IP via an environment variable; otherwise DHCP. Either
+  way the printed URL is the address the operator's browser will use — not
+  localhost on the CT.
 
-### Proxmox topology
+### Bootstrap profile
 
-- Default: one host. Cluster: three or five hosts (quorum-safe odd counts).
-- The bootstrap forms the Proxmox cluster itself — unlike the base Proxmox install,
-  this is not a human pre-task.
-- The operator runs the bootstrap command once, on the first host; that host becomes
-  the bootstrap primary and reaches the others itself.
+- The process in the LXC *is* The Shed, not a second app. Same API, same
+  chat, same turn loop, same auth cookies, same Galileo hook.
+- Registry contains one sub-agent: `bootstrap.intake` (Assist job).
+  Classification short-circuits.
+- Persistence (database, session store) runs inside the LXC. Data does not
+  leave the CT.
+- Secrets use the same client interface as the rest of the product, backed by
+  a local store. See Secrets Management.
+
+### Setup gate (before chat)
+
+- Provider: Anthropic | OpenAI | Gemini. A Claude subscription is rejected
+  with an explanation, not retried as a key.
+- API key, validated with a live, cheap provider call. Failure stays on this
+  screen.
+- Operator email + password (Argon2id). This *is* the first user — not a
+  later Fleet apply.
+- Optional Galileo key / console URL; omitted means the existing no-op
+  tracer.
+- Gate is skippable on later visits once an operator identity exists
+  (login). Changing the provider key later is a settings action, not a
+  re-install.
+
+### Foundations interview
+
+Driven by chat, stored as a schema (see SPEC). The UI shows schema state
+next to the conversation. The assistant fills records; it does not invent
+keys.
+
+Field groups:
+
+- **Tenant**: display name and slug.
+- **Proxmox**: API/URL or host address, node name if more than one node is
+  already there (intent only). Root password is collected once, used to
+  install a dedicated SSH key, then discarded — never persisted, never
+  logged, never written into the YAML bundle.
+- **Network**: bridge name, operator-facing address as CIDR + gateway, NTP
+  (`inherit` from the Proxmox host by default).
+- **Storage**: a storage pool name for later VM disks. Single-host only.
+- **Domains**: intended hostname(s) for later ingress. May not resolve yet.
+  `shedlife.ai` is not a default.
+- **Build-vs-Adopt intent** (uniform question per dependency, no aggregate
+  shortcut): GitLab, Infisical, DNS, k3s. Adopt collects URL + how the
+  token will be supplied; Build records "create later." Nothing is created
+  or contacted except as a *probe* (reachability), and only when the
+  operator has chosen adopt.
+
+Explicitly not collected: Proxmox subscription/repo settings; a separate
+Proxmox API token (first contact is root + the dedicated key, same as
+before); cluster node lists to form.
+
+### Playbooks
+
+Only these four, all predetermined:
+
+1. `collect-foundations` — interview against the schema.
+2. `validate-foundations` — types, requiredness, semantic checks (CIDR,
+   hostname, slug).
+3. `predeploy-probe` — the probe set below.
+4. `export-state` — write/download the YAML bundle (secret *references*,
+   never values).
+
+The model may not add a fifth.
+
+### Pre-deploy probes
+
+Each probe is a tool. Read-only probes are `has_side_effects: false`.
+Installing the dedicated SSH key is `true` and needs approval.
+
+| Probe | Pass means |
+|---|---|
+| `llm_key` | The configured provider accepts the key. |
+| `outbound_https` | The CT can reach the public internet (needed later for images and APIs). |
+| `proxmox_api` | API reachable; root (or the dedicated key once installed) authenticates. |
+| `proxmox_capacity` | CPU / RAM / disk against documented minimums — warn, don't hard-fail, if below. |
+| `bridge_exists` | Named bridge exists on the host. |
+| `storage_pool_exists` | Named pool exists. |
+| `ntp_ok` | Clock is sane (offset within a documented bound). |
+| `ssh_key_installed` | Dedicated key works; root password no longer required. |
+| `adopted_endpoint` | Each *adopted* URL responds at a shallow health check. |
+| `domain_resolves` | Intended name resolves — **warn only**; greenfield names will fail. |
+
+Probes are rerunnable. Results hang off the schema, not the chat transcript.
 
 ### Credential bootstrapping
 
-- The root password is operator-known, entered interactively, used only transiently to
-  establish initial trust with each host, and never persisted or documented anywhere.
-- A dedicated SSH keypair is generated by the bootstrap process itself — not reused
-  from any personal or existing identity — and installed on every node during that
-  first contact. This becomes the durable credential for all subsequent host access,
-  including later RUN host management.
+- Root password: transient, operator-known, used once per host, never
+  persisted.
+- Dedicated SSH keypair: generated in the LXC, installed on first successful
+  `proxmox_api` + approval of `ssh_key_installed`. This is the durable host
+  credential for later phases.
 
-### Wizard
+### Issues
 
-- Menu-driven, interactive by default.
-- Supports importing a YAML file instead of (or alongside) interactive prompts, for
-  known values or a restore/replay scenario.
-- **Build-vs-Adopt is a uniform, explicit interaction, not a bespoke one per
-  dependency.** For every adoptable external (the k3s cluster, the Fleet-repo host,
-  DNS, the secrets backend), the wizard asks the identically-shaped question — build
-  new, or adopt existing — before prompting that dependency's own follow-up fields.
-  This is a UX principle worth stating explicitly: without it, each dependency's
-  Build-vs-Adopt prompt risks getting implemented inconsistently, one bespoke flow per
-  dependency, even though the underlying data shape already treats them uniformly.
-- **No aggregate/shortcut mode.** The wizard always steps through each dependency
-  individually — it never asks one top-level "mostly fresh or mostly existing"
-  question that pre-fills the rest. A real deployment is routinely mixed (this
-  project's own tenant, for instance: an adopted secrets backend and Fleet-repo host
-  and DNS, alongside a freshly-built k3s cluster) — a shortcut optimizing for
-  "uniformly one or the other" would misfit the common case, not just the edge case.
-- Field groups collected, beyond hosts/root-password/Fleet-repo-host/DNS/secrets-backend
-  (covered elsewhere in this document):
-  - **Networking**: Proxmox network bridge for new VMs; per-host address as CIDR +
-    gateway (not a bare IP); NTP servers, defaulting to inheriting the Proxmox host's
-    own configuration rather than asking every time.
-  - **Storage**: a storage pool name for VM disks — single-host only, since shared
-    storage is already out of scope for this phase.
-  - **VM template**: which cloud image to build from (needs a sensible default
-    distro/version); default sizing (vCPU/RAM/disk) for provisioned VMs, split between
-    control-plane and worker since they carry different loads, plus separate sizing
-    for a newly-provisioned Fleet-repo host.
-  - **The Shed's own exposure**: a domain/hostname for The Shed's ingress — this is
-    what actually consumes the DNS records created earlier in the sequence.
-  - **Explicitly not collected**: Proxmox package repository/subscription settings
-    (Proxmox is already a human pre-task; its repo config is assumed already sorted
-    before bootstrap runs) or a separate Proxmox API token (the orchestrator drives
-    Proxmox through its own local CLI tools as root, over the dedicated SSH key —
-    no separate credential needed).
-
-### Script distribution
-
-- Lives in the public product repo, fetched over the network and executed directly.
-- Pinned to a release tag by default, not a mutable branch, with an override available
-  to target a different ref.
-
-### The foundation (handoff boundary)
-
-- The bootstrap orchestrator's responsibility ends at whichever stage the run was
-  asked to stop at (see Modularity above) — at minimum, a formed Kubernetes cluster
-  (`infra`); at most, The Shed itself running as a reconciled workload (`app`).
-- Everything past that stopping point is the responsibility of the now-living
-  Kubernetes+GitOps orchestrator, not the bootstrap process — which retires itself once
-  its stage's handoff succeeds, regardless of which stage that was.
-
-### The Fleet repo's host
-
-- Build-or-Adopt: the wizard either takes an existing instance's details, or
-  provisions a new one.
-- A newly-provisioned instance must be stood up as its own resource, sequenced
-  *before* the Kubernetes/GitOps bootstrap step — it cannot be a workload inside the
-  cluster the GitOps controller will manage (that would be circular: the controller
-  depends on its own source repo already existing).
-- **Sizing when provisioning**: single node, no HA, for this phase. Real HA (multiple
-  app nodes, HA database/cache, shared storage) is substantial added weight for what is
-  a *supporting* dependency here — it only needs to serve a small set of manifests Flux
-  polls. Revisit as roadmap if a tenant's scale ever demands it.
-
-### DNS
-
-DNS has a wider blast radius than the Fleet-repo host: potentially everything in the
-sequence depends on names resolving (SSH between hosts, the Fleet repo's git remote,
-ingress, certificate issuance), not just one downstream step. It splits by whether
-DNS infrastructure already exists for this tenant:
-
-- **Brownfield (existing DNS)**: adopt the existing instance for actual name
-  resolution — this is what the bootstrap sequence itself relies on throughout, and
-  it's a hard requirement (must be reachable) for this case. Separately, **build a new,
-  tenant-dedicated DNS instance** — but unlike the Fleet-repo host, it has no circular
-  dependency on the bootstrap sequence, so it doesn't need special pre-cluster
-  treatment: it deploys as an ordinary GitOps-managed workload, alongside the database
-  and The Shed itself, with no serving responsibility yet. **Record migration from the
-  existing instance to the new one is an explicit, separate, later action** — not part
-  of this bootstrap's critical path, and not yet designed (likely a future RUN
-  capability or a manual cutover).
-- **Greenfield (no existing DNS)**: nothing to adopt, so no hard requirement to satisfy.
-  The orchestrator resolves its own internal, bootstrap-time needs (hosts it just
-  created talking to each other) with static host-entry files it writes itself — it
-  fully controls every host involved, so this doesn't need a real DNS server. The new,
-  tenant-dedicated DNS instance still deploys the same way (a GitOps-managed workload),
-  and since nothing preceded it, it's authoritative from the moment it exists — no
-  migration step applies. Anything needing real, externally-resolvable DNS (public
-  delegation, a certificate issued against a real domain) is a day-2 RUN concern, not a
-  bootstrap dependency.
-
-### Secrets backend (Infisical)
-
-Build-or-Adopt, same as the Fleet-repo host — but sequences like DNS, not like the
-Fleet-repo host: a newly-provisioned Infisical instance has no circular dependency on
-the bootstrap sequence itself (nothing before the `app` stage needs to read from it),
-so it deploys as an ordinary platform-layer, GitOps-managed workload rather than a
-special pre-cluster resource.
-
-- **Adopt**: point at an existing instance; wizard collects its URL and a
-  machine-identity credential.
-- **Provision**: stand up a new instance for a tenant with nothing existing —
-  single node, no HA, same reasoning as the Fleet-repo host's provisioning default.
-- **Either way, once reachable**: the other credentials the wizard already collected
-  during bootstrap (the Fleet-repo host token, the DNS token) are **seeded into it** —
-  without this, those credentials would only ever exist as one-time wizard inputs,
-  with nowhere for the running Shed's RUN capabilities to fetch them again later
-  through the normal secrets pattern in `architecture.md`.
-
-### GitOps / Fleet model
-
-- The GitOps controller is installed into the cluster and points at that tenant's
-  private Fleet repo, which holds both the declarative registry-style config
-  (sub-agents, hosts, services) and the Kubernetes manifests, organized by directory
-  rather than split across repos.
-- The Fleet repo's manifests are themselves split into a **platform layer** (DNS,
-  database, cache, secrets backend, LiteLLM — supporting infrastructure) and an **application layer** (The Shed
-  itself) — this is what the `platform`/`app` stage boundary actually applies to, and
-  it also means adding/upgrading The Shed later never has to touch the platform layer.
-- Stateful dependencies (database, cache/queue) run as GitOps-managed Kubernetes
-  workloads in any real deployment; a local-only shortcut (e.g. `docker-compose`)
-  remains purely a development convenience, not the production pattern.
-- Drift-handling default: the Fleet repo wins — reconciliation brings the cluster back
-  to match it. A dry-run diff should be available before a change is applied, but the
-  resolution model itself favors the file over any out-of-band change.
-
-### Fleet repo branch protection and CI
-
-A different shape than the product repo's (see the Release Pipeline PRD/SPEC), for
-two reasons: a Fleet repo is manifests/config, not application code, so it needs
-different checks; and it's genuinely single-user, so a peer-approval requirement
-would demand something that structurally can't happen, not just be inconvenient.
-
-- **MR required, no direct pushes to `main`** — not for peer review (there's none),
-  but to force a CI gate and a reviewable diff before Flux ever tries to reconcile a
-  change. A bad manifest caught in an MR is free; caught after Flux applies it is a
-  live incident.
-- **Signed commits required.**
-- **Self-approval allowed** — an approval click is still a real "did I actually
-  re-read this diff" checkpoint even solo, just not a second-person gate.
-- **CI**: YAML validation, a manifest schema check (e.g. `kubeconform`), a
-  `kustomize build` dry-run (catches a broken overlay/reference before merge, not at
-  reconcile time), and `gitleaks` here too — belt-and-suspenders, even though secret
-  *values* should never appear in this repo by design.
-- Policy checks (e.g. OPA/Conftest — "every workload declares resource limits") are
-  roadmap, not built this phase — real value, not urgent for a single-tenant setup.
+- Unexpected errors (probe exception, unhandled 5xx, playbook step crash)
+  write a local issue: classification `operator-input` | `environment` |
+  `product-bug`, redacted body, UI-visible.
+- The operator can also file manually from an error the UI showed.
+- Opt-in file-to-product-GitHub for `product-bug` only, never with secrets
+  or raw probe payloads.
+- Schema validation failures are not issues.
 
 ### Idempotency / failure recovery
 
-- If the bootstrap fails partway through, the operator re-runs the same command
-  against the same input (wizard answers or imported YAML) — no separate "resume"
-  mode. Already-completed steps are detected and skipped; the process picks up from
-  wherever it actually stopped.
-- This relies on a **hybrid** detection model, not pure live-state inference: a
-  lightweight local state/log file records what the orchestrator believes it has
-  completed (fast path for resumption), verified against live infrastructure state at
-  each step before it's trusted (safety net against drift — e.g. a resource the state
-  file believes exists but was removed out-of-band). Neither state-file-only nor
-  live-check-only is sufficient on its own for something running as root against real
-  infrastructure.
-- **This phase**: cleanup of a fully-abandoned partial attempt is manual (the state
-  file tells the operator exactly what was created, so there's nothing to hunt for).
-  An automated teardown command is roadmap, not built now — deletion automation is
-  higher-risk than creation automation, and is worth adding once the state-file
-  mechanism has proven itself, at which point teardown is a small addition (read the
-  state file, delete what it lists) rather than a new mechanism.
+- Re-run the install script: if the CT exists and the app answers
+  `/health`, print the URL and stop.
+- Re-run a playbook or probe: completed work is skipped after live
+  verification, same hybrid model as before (local state + live check).
+- Abandoned-CT cleanup is still manual this phase. The installer's state
+  file lists what it created.
 
-### Multi-tenancy / product boundary
+### LAN posture
 
-- The product (public) is the harness itself — the bootstrap orchestrator and the
-  ongoing Assist/Build/Run engine. Feature development is contributed back here.
-- Each deployment is a tenant. A tenant's full operating state (Fleet) lives in its
-  own private, self-hosted repo.
-- Build and Run are capabilities of the product, not products themselves — when
-  exercised, they act on a specific tenant's Fleet.
-- Applications produced via Build/Run default to **private** (stored in the tenant's
-  self-hosted git), with an explicit flag required to make a given app **public**
-  (stored on the public git host instead).
+- HTTP on the LAN. Cookies: `HttpOnly`, `SameSite=Lax`, `Secure` off.
+- Not published via a tunnel. TLS is Deploy.
 
 ## Open questions
 
-Everything raised during this design pass has been resolved into the sections above,
-with one exception intentionally left for later:
-
-- **DNS record migration mechanism**: how the existing-instance-to-new-instance
-  migration (brownfield case) actually happens — not yet designed, just identified as
-  a separate later concern, out of this bootstrap's critical path by design.
+None for this phase. Let's Encrypt, Traefik, Cloudflared, LXC retirement,
+and cluster formation are explicitly later grills — see [`../mvp.md`](../mvp.md).

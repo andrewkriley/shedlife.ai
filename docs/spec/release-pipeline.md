@@ -2,9 +2,10 @@
 
 Status: draft, technical design for
 [`../prd/release-pipeline.md`](../prd/release-pipeline.md). References
-[`../stack.md`](../stack.md), the [Bootstrap SPEC](./bootstrap.md) (`apps/` Fleet
-layer, pinned-tag pattern), and the existing `gitleaks` GitHub Actions workflow this
-extends rather than replaces.
+[`../stack.md`](../stack.md), the [Bootstrap SPEC](./bootstrap.md) (pinned-tag
+install script; the LXC pulls this image), the [Deploy stub](../prd/deploy.md)
+(later Fleet `apps/` layer), and the existing `gitleaks` GitHub Actions
+workflow this extends rather than replaces.
 
 ## Actors / components
 

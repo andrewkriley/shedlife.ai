@@ -1,6 +1,12 @@
 # Core Agentic Loop — PRD
 
-Status: draft. See [`../spec/core-agentic-loop.md`](../spec/core-agentic-loop.md) for
+Status: living-harness design. The loop is built and is what Bootstrap reuses.
+Phase 1 (MVP) runs it as a **single-agent bootstrap profile** — see
+[`bootstrap.md`](./bootstrap.md) and [`../mvp.md`](../mvp.md). Cross-macro
+fan-out and the three-sub-agent success criteria below are **post-Deploy**,
+not the current MVP bar.
+
+See [`../spec/core-agentic-loop.md`](../spec/core-agentic-loop.md) for
 the technical design this PRD drives, and [`../architecture.md`](../architecture.md)
 for the cross-cutting patterns (macro routing, sub-agent registry, fan-out/fan-in,
 verifier, classification strategy, secrets, testing discipline) this document turns
@@ -52,12 +58,15 @@ real test coverage rather than being validated only by trying it.
 
 ## Success criteria
 
+These describe the **living harness** after Deploy, not Phase 1. Phase 1
+success is the Bootstrap PRD's criteria (`bootstrap.intake` only).
+
 - A message sent in the chat UI that touches more than one macro category fans out to
   the correct sub-agents and returns one synthesized answer.
 - Three real, working sub-agents exist: `run.network` (via the `unifi-mcp` MCP
   server), `assist` (general web search/fetch), and `build` (fetches a credential from
   the secrets backend, makes one live call against an external dev-tooling API) — not
-  stubs.
+  stubs. In the bootstrap profile, none of these three are registered.
 - Every turn produces a complete trace: classification, each matched sub-agent's own
   span, and synthesis when more than one sub-agent matched.
 - The orchestration engine (classifier dispatch, registry lookup, fan-out/fan-in,
@@ -221,7 +230,7 @@ Model Management API is the read side of the same registration this settings sur
 displays) — one source of truth, not a separately-maintained list of what's locally
 available.
 
-### The three real sub-agents this phase
+### The three real sub-agents (living harness, post-Deploy)
 
 - **`run.network`** — real tools via the existing `unifi-mcp` MCP server (already a
   standing network service). Its `preview_*`/`confirm_*` tool pairing maps directly to
@@ -230,6 +239,8 @@ available.
 - **`build`** — fetches a credential from the secrets backend via machine identity,
   then makes one real authenticated call against an external dev-tooling API (the
   concrete smoke test for the whole secrets pipeline, not just this sub-agent).
+
+Phase 1 registers **`bootstrap.intake`** instead. See the Bootstrap SPEC.
 
 ## Open questions
 
