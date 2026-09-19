@@ -29,7 +29,8 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    file, starts The Shed image, waits until `GET /health` succeeds from the
    host, prints `http://<ct-ip>:<port>`.
 3. Operator opens the URL. No operator identity yet → setup gate.
-4. Setup gate: provider + API key (live validate) + email + password.
+4. Setup gate: provider + API key (live validate) + email + password
+   (typed twice; both fields must match).
    Writes `local://providers/llm/api_key` (and optional Galileo refs).
    Creates `users` / `identities` rows. Sets the session cookie
    (`Secure` off).

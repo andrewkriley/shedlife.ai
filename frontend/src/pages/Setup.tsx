@@ -10,6 +10,7 @@ const PROVIDERS = [
 export function Setup({ onComplete }: { onComplete: () => void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [passwordConfirm, setPasswordConfirm] = useState('')
   const [provider, setProvider] = useState('anthropic')
   const [apiKey, setApiKey] = useState('')
   const [galileoKey, setGalileoKey] = useState('')
@@ -20,6 +21,10 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    if (password !== passwordConfirm) {
+      setError('Passwords do not match.')
+      return
+    }
     setSubmitting(true)
     try {
       await completeSetup({
@@ -78,6 +83,17 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         required
+        autoComplete="new-password"
+      />
+
+      <label htmlFor="setup-password-confirm">Confirm password</label>
+      <input
+        id="setup-password-confirm"
+        type="password"
+        value={passwordConfirm}
+        onChange={(e) => setPasswordConfirm(e.target.value)}
+        required
+        autoComplete="new-password"
       />
 
       <label htmlFor="galileo-key">Galileo API key (optional)</label>
