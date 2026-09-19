@@ -59,4 +59,23 @@ describe('Setup', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Passwords do not match')
     expect(completeSetup).not.toHaveBeenCalled()
   })
+
+  it('asks only for the API key when the installer already created the operator', async () => {
+    const completeSetup = vi.spyOn(api, 'completeSetup').mockResolvedValue()
+    const user = userEvent.setup()
+    render(<Setup onComplete={() => {}} hasOperator />)
+
+    expect(screen.queryByLabelText('Email')).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText('API key'), 'sk-ant-api03-test')
+    await user.click(screen.getByRole('button', { name: 'Save API key' }))
+
+    expect(completeSetup).toHaveBeenCalledWith({
+      email: undefined,
+      password: undefined,
+      provider: 'anthropic',
+      api_key: 'sk-ant-api03-test',
+      galileo_api_key: undefined,
+      galileo_console_url: undefined,
+    })
+  })
 })

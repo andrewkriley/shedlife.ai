@@ -29,7 +29,7 @@ async def client(db_session: AsyncSession, redis_client: Redis) -> AsyncClient:
 async def test_setup_status_needed_when_no_identities(client: AsyncClient) -> None:
     response = await client.get("/setup/status")
     assert response.status_code == 200
-    assert response.json() == {"needed": True}
+    assert response.json() == {"needed": True, "has_operator": False}
 
 
 @pytest.mark.asyncio
@@ -66,7 +66,7 @@ async def test_setup_rejects_subscription(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_setup_refused_once_an_identity_exists(
+async def test_setup_stores_api_key_when_operator_already_exists(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
     user = User(display_name="Existing")
@@ -91,4 +91,5 @@ async def test_setup_refused_once_an_identity_exists(
             "api_key": "sk-ant-api03-testkey",
         },
     )
-    assert response.status_code == 409
+    assert response.status_code == 200
+    assert app.state.secrets.get("local://providers/llm/api_key") == "sk-ant-api03-testkey"

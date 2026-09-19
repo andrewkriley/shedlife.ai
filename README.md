@@ -52,10 +52,17 @@ To destroy an existing bootstrap CT and install again (testing):
 curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash -s -- --delete
 ```
 
+Live debug console (errors, clicks, provider attempts; also `GET /debug/logs`):
+
+```bash
+curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash -s -- --debug
+```
+
 `THESHED_REF` overrides the ref the script clones (a branch or another
-release). The script does not ask for an API key. It prints a LAN URL when
-the CT has an address, then a completion summary when `/health` succeeds.
-Setup happens in the browser.
+release). The script does not ask for an API key. It prints a LAN URL plus
+the generated operator user and password when `/health` succeeds. Log in
+with those, then add an API key if the setup gate asks. Toggle debug from
+the header once the UI is up.
 
 ## How a message becomes an answer
 

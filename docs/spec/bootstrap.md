@@ -26,11 +26,15 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    a release tag (overrideable). Example shape:
    `curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash`
 2. The script creates the LXC if no healthy CT is recorded in its state
-   file, starts The Shed image, waits until `GET /health` succeeds from the
-   host, prints `http://<ct-ip>:<port>`.
-3. Operator opens the URL. No operator identity yet → setup gate.
-4. Setup gate: provider + API key (live validate) + email + password
-   (typed twice; both fields must match).
+   file, generates an operator email + password, writes them into the CT
+   `.env`, starts The Shed image, waits until `GET /health` succeeds from
+   the host, prints `http://<ct-ip>:<port>` plus those credentials.
+   `--debug` also writes `THESHED_DEBUG=1`.
+3. Operator opens the URL. Seeded identity exists → login with the
+   printed credentials, then setup if no LLM key yet. No identity →
+   setup gate.
+4. Setup gate: provider + API key (live validate). Email + password
+   (typed twice) only when no operator identity exists yet.
    Writes `local://providers/llm/api_key` (and optional Galileo refs).
    Creates `users` / `identities` rows. Sets the session cookie
    (`Secure` off).
@@ -165,6 +169,21 @@ Settings (`GET /settings/models`, model overrides) stay; they are how the
 operator changes provider after the gate. The page groups connection
 status, the assistant list (a lone agent is pre-selected), and a
 "Change the model" assignment block.
+
+### Debug log
+
+In-memory ring (last 500 events). Enabled by `THESHED_DEBUG=1` or
+`local://debug/enabled`. Toggle wins over the env var. Events: HTTP
+(except `/health` and `/debug/logs`), UI clicks, provider connect
+attempts, unhandled errors. Secrets are redacted. Interfaces:
+
+- `GET /debug/status` — `{enabled}`
+- `POST /debug/enabled` — `{enabled}` persists the toggle
+- `GET /debug/logs` — `{enabled, events[]}`
+- `POST /debug/events` — UI clicks / client errors
+
+The UI shows a debug console when enabled and a header control to
+turn it on or off.
 
 ## Security model
 

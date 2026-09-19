@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from theshed.agents.registry import list_sub_agents
 from theshed.db.models import SubAgentModelOverride
+from theshed.debug import log as debug_log
 
 logger = logging.getLogger(__name__)
 
@@ -70,10 +71,22 @@ def list_live_models(clients: dict[str, ModelListingClient]) -> dict[str, list[s
     that only needs to list two other providers' models."""
     result: dict[str, list[str]] = {}
     for provider, client in clients.items():
+        debug_log.record("provider", "connect", f"Listing live models on {provider}")
         try:
             result[provider] = [m.id for m in client.models.list()]
-        except Exception:
+            debug_log.record(
+                "provider",
+                "connected",
+                f"{provider} returned {len(result[provider])} models",
+            )
+        except Exception as exc:
             logger.exception("Listing models for provider %r failed", provider)
+            debug_log.record(
+                "provider",
+                "error",
+                f"{provider} models list failed: {exc}",
+                level="error",
+            )
             result[provider] = []
     return result
 

@@ -68,6 +68,22 @@ def test_completion_summary_includes_ready_and_url() -> None:
     assert "Ref:  theshed-v0.4.4" in text
 
 
+def test_completion_summary_includes_login_and_debug() -> None:
+    text = completion_summary(
+        ct_ip="192.0.2.50",
+        ctid=9100,
+        hostname="theshed-deploy",
+        image_ref="theshed-v0.4.6",
+        email="operator@theshed.local",
+        password="once-only",
+        debug=True,
+    )
+    assert "User: operator@theshed.local" in text
+    assert "Pass: once-only" in text
+    assert "Debug: on" in text
+    assert "/api/debug/logs" in text
+
+
 PVEAM_AVAILABLE = """
 system          alpine-3.21-default_20241217_amd64.tar.xz
 system          debian-13-standard_13.6-1_amd64.tar.zst

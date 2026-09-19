@@ -93,8 +93,20 @@ def test_install_script_prints_completion_summary() -> None:
     assert "print_summary" in text
     assert "The Shed is ready." in text
     assert "URL:" in text
+    assert "User:" in text
+    assert "Pass:" in text
+    assert "THESHED_OPERATOR_EMAIL" in text
+    assert "THESHED_OPERATOR_PASSWORD" in text
     main = text.split("main() {", 1)[1]
     assert main.index("wait_health") < main.index("print_summary")
+
+
+def test_install_script_accepts_debug_flag() -> None:
+    text = SCRIPT.read_text()
+    assert "--debug" in text
+    assert "THESHED_DEBUG" in text
+    assert "/debug/logs" in text
+    assert "bash -s -- --debug" in text
 
 
 def test_install_script_prints_banner_first() -> None:

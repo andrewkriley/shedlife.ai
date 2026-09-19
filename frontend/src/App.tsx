@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AssistantStatus } from './components/AssistantStatus'
+import { DebugDock } from './components/DebugDock'
 import { getSetupStatus } from './lib/api'
 import { Chat } from './pages/Chat'
 import { FoundationsPanel } from './pages/FoundationsPanel'
@@ -13,31 +14,62 @@ type ReviewTab = 'foundations' | 'issues'
 
 function App() {
   const [setupNeeded, setSetupNeeded] = useState<boolean | null>(null)
+  const [hasOperator, setHasOperator] = useState(false)
   const [loggedIn, setLoggedIn] = useState(false)
   const [view, setView] = useState<View>('chat')
   const [reviewTab, setReviewTab] = useState<ReviewTab>('foundations')
 
   useEffect(() => {
     getSetupStatus()
-      .then((status) => setSetupNeeded(status.needed))
+      .then((status) => {
+        setSetupNeeded(status.needed)
+        setHasOperator(Boolean(status.has_operator))
+      })
       .catch(() => setSetupNeeded(false))
   }, [])
 
   if (setupNeeded === null) {
-    return <p role="status">Loading…</p>
-  }
-  if (setupNeeded) {
     return (
-      <Setup
-        onComplete={() => {
-          setSetupNeeded(false)
-          setLoggedIn(true)
-        }}
-      />
+      <>
+        <p role="status">Loading…</p>
+        <DebugDock />
+      </>
+    )
+  }
+  if (setupNeeded && !hasOperator) {
+    return (
+      <>
+        <Setup
+          onComplete={() => {
+            setSetupNeeded(false)
+            setHasOperator(true)
+            setLoggedIn(true)
+          }}
+        />
+        <DebugDock />
+      </>
     )
   }
   if (!loggedIn) {
-    return <Login onLoggedIn={() => setLoggedIn(true)} />
+    return (
+      <>
+        <Login onLoggedIn={() => setLoggedIn(true)} />
+        <DebugDock />
+      </>
+    )
+  }
+  if (setupNeeded) {
+    return (
+      <>
+        <Setup
+          hasOperator
+          onComplete={() => {
+            setSetupNeeded(false)
+          }}
+        />
+        <DebugDock />
+      </>
+    )
   }
 
   return (
@@ -87,6 +119,7 @@ function App() {
           </aside>
         </>
       )}
+      <DebugDock />
     </div>
   )
 }

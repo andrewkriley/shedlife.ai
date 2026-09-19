@@ -146,7 +146,7 @@ export async function getHealth(): Promise<{ status: string }> {
   return response.json()
 }
 
-export async function getSetupStatus(): Promise<{ needed: boolean }> {
+export async function getSetupStatus(): Promise<{ needed: boolean; has_operator?: boolean }> {
   const response = await fetch('/api/setup/status', { credentials: 'include' })
   if (!response.ok) {
     throw new Error('Failed to load setup status')
@@ -154,9 +154,61 @@ export async function getSetupStatus(): Promise<{ needed: boolean }> {
   return response.json()
 }
 
+export interface DebugEvent {
+  at: string
+  level: string
+  source: string
+  event: string
+  message: string
+  detail?: unknown
+}
+
+export async function getDebugStatus(): Promise<{ enabled: boolean }> {
+  const response = await fetch('/api/debug/status', { credentials: 'include' })
+  if (!response.ok) {
+    throw new Error('Failed to load debug status')
+  }
+  return response.json()
+}
+
+export async function setDebugEnabled(enabled: boolean): Promise<{ enabled: boolean }> {
+  const response = await fetch('/api/debug/enabled', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to update debug mode')
+  }
+  return response.json()
+}
+
+export async function getDebugLogs(): Promise<{ enabled: boolean; events: DebugEvent[] }> {
+  const response = await fetch('/api/debug/logs', { credentials: 'include' })
+  if (!response.ok) {
+    throw new Error('Failed to load debug logs')
+  }
+  return response.json()
+}
+
+export async function postDebugEvent(body: {
+  event: string
+  message: string
+  level?: string
+  detail?: Record<string, unknown>
+}): Promise<void> {
+  await fetch('/api/debug/events', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source: 'ui', ...body }),
+  })
+}
+
 export async function completeSetup(body: {
-  email: string
-  password: string
+  email?: string
+  password?: string
   provider: string
   api_key: string
   galileo_api_key?: string

@@ -56,6 +56,7 @@ describe('App', () => {
     vi.spyOn(api, 'getFoundations').mockResolvedValue(foundations)
     vi.spyOn(api, 'getIssues').mockResolvedValue([])
     vi.spyOn(api, 'getLiveModels').mockResolvedValue({ anthropic: ['claude-haiku-4-5'] })
+    vi.spyOn(api, 'getDebugStatus').mockResolvedValue({ enabled: false })
 
     const user = userEvent.setup()
     render(<App />)

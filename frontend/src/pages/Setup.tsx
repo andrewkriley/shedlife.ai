@@ -7,7 +7,13 @@ const PROVIDERS = [
   { id: 'gemini', label: 'Gemini' },
 ]
 
-export function Setup({ onComplete }: { onComplete: () => void }) {
+export function Setup({
+  onComplete,
+  hasOperator = false,
+}: {
+  onComplete: () => void
+  hasOperator?: boolean
+}) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
@@ -21,15 +27,15 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    if (password !== passwordConfirm) {
+    if (!hasOperator && password !== passwordConfirm) {
       setError('Passwords do not match.')
       return
     }
     setSubmitting(true)
     try {
       await completeSetup({
-        email,
-        password,
+        email: hasOperator ? undefined : email,
+        password: hasOperator ? undefined : password,
         provider,
         api_key: apiKey,
         galileo_api_key: galileoKey || undefined,
@@ -67,34 +73,38 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         autoComplete="off"
       />
 
-      <label htmlFor="setup-email">Email</label>
-      <input
-        id="setup-email"
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-      />
+      {!hasOperator && (
+        <>
+          <label htmlFor="setup-email">Email</label>
+          <input
+            id="setup-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
 
-      <label htmlFor="setup-password">Password</label>
-      <input
-        id="setup-password"
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        required
-        autoComplete="new-password"
-      />
+          <label htmlFor="setup-password">Password</label>
+          <input
+            id="setup-password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="new-password"
+          />
 
-      <label htmlFor="setup-password-confirm">Confirm password</label>
-      <input
-        id="setup-password-confirm"
-        type="password"
-        value={passwordConfirm}
-        onChange={(e) => setPasswordConfirm(e.target.value)}
-        required
-        autoComplete="new-password"
-      />
+          <label htmlFor="setup-password-confirm">Confirm password</label>
+          <input
+            id="setup-password-confirm"
+            type="password"
+            value={passwordConfirm}
+            onChange={(e) => setPasswordConfirm(e.target.value)}
+            required
+            autoComplete="new-password"
+          />
+        </>
+      )}
 
       <label htmlFor="galileo-key">Galileo API key (optional)</label>
       <input
@@ -109,7 +119,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
       <input id="galileo-url" value={galileoUrl} onChange={(e) => setGalileoUrl(e.target.value)} />
 
       <button type="submit" disabled={submitting}>
-        {submitting ? 'Working…' : 'Create operator'}
+        {submitting ? 'Working…' : hasOperator ? 'Save API key' : 'Create operator'}
       </button>
       {error && <p role="alert">{error}</p>}
     </form>

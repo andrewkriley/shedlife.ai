@@ -23,8 +23,10 @@
 #   THESHED_STATE_FILE   host-side state (default: /var/lib/theshed/install-state.yaml)
 #   THESHED_PORT         published app port (default: 8080)
 #   THESHED_DELETE=1     same as --delete: destroy the bootstrap CT, then install
+#   THESHED_DEBUG=1      same as --debug: live debug console + GET /debug/logs
 #
 #   curl -fsSL .../install.sh | bash -s -- --delete
+#   curl -fsSL .../install.sh | bash -s -- --debug
 set -euo pipefail
 
 REPO="https://github.com/andrewkriley/shedlife.ai.git"
@@ -37,6 +39,8 @@ MEMORY="${THESHED_MEMORY:-4096}"
 CORES="${THESHED_CORES:-2}"
 DISK="${THESHED_DISK:-16}"
 PORT="${THESHED_PORT:-8080}"
+OPERATOR_EMAIL="${THESHED_OPERATOR_EMAIL:-operator@theshed.local}"
+OPERATOR_PASSWORD=""
 APP_DIR="/opt/theshed"
 
 print_banner() {
@@ -78,14 +82,16 @@ parse_args() {
   for arg in "$@"; do
     case "${arg}" in
       --delete) THESHED_DELETE=1 ;;
+      --debug) THESHED_DEBUG=1 ;;
       --help|-h)
-        echo "Usage: install.sh [--delete]"
+        echo "Usage: install.sh [--delete] [--debug]"
         echo "  --delete   destroy the bootstrap CT, then install"
+        echo "  --debug    enable the live debug console and GET /debug/logs"
         exit 0
         ;;
       *)
         echo "Unknown option: ${arg}" >&2
-        echo "Usage: install.sh [--delete]" >&2
+        echo "Usage: install.sh [--delete] [--debug]" >&2
         exit 1
         ;;
     esac
@@ -94,6 +100,28 @@ parse_args() {
 
 wants_delete() {
   [[ "${THESHED_DELETE:-}" == "1" || "${THESHED_DELETE:-}" == "true" ]]
+}
+
+wants_debug() {
+  [[ "${THESHED_DEBUG:-}" == "1" || "${THESHED_DEBUG:-}" == "true" ]]
+}
+
+ensure_operator_password() {
+  if [[ -z "${OPERATOR_PASSWORD}" ]]; then
+    OPERATOR_PASSWORD="$(openssl rand -base64 18 | tr -d '/+=' | head -c 24)"
+  fi
+}
+
+load_operator_from_ct() {
+  local line
+  line="$(pct exec "${CTID}" -- bash -c "grep -E '^THESHED_OPERATOR_EMAIL=|^THESHED_OPERATOR_PASSWORD=|^THESHED_DEBUG=' ${APP_DIR}/.env" 2>/dev/null || true)"
+  if [[ -n "${line}" ]]; then
+    OPERATOR_EMAIL="$(printf '%s\n' "${line}" | awk -F= '/^THESHED_OPERATOR_EMAIL=/{print $2}')"
+    OPERATOR_PASSWORD="$(printf '%s\n' "${line}" | awk -F= '/^THESHED_OPERATOR_PASSWORD=/{print $2}')"
+    if printf '%s\n' "${line}" | grep -q '^THESHED_DEBUG=1'; then
+      THESHED_DEBUG=1
+    fi
+  fi
 }
 
 delete_existing_ct() {
@@ -173,11 +201,16 @@ print_summary() {
   echo "The Shed is ready."
   echo
   echo "  URL:  http://${ip}:${PORT}"
+  echo "  User: ${OPERATOR_EMAIL}"
+  echo "  Pass: ${OPERATOR_PASSWORD}"
   echo "  CT:   ${CTID} (${CT_HOSTNAME})"
   echo "  Ref:  ${THESHED_REF}"
+  if wants_debug; then
+    echo "  Debug: on  (http://${ip}:${PORT}/api/debug/logs)"
+  fi
   echo
   echo "Open that URL from a browser on this LAN."
-  echo "Setup happens there."
+  echo "Log in with the user and pass above, then add an API key if asked."
   echo "========================================"
 }
 
@@ -192,6 +225,7 @@ maybe_reuse() {
     CTID="${ctid_recorded}"
   fi
   if ct_health_ok "${ip}"; then
+    load_operator_from_ct
     write_state "${ip}" "${THESHED_REF}"
     print_summary "${ip}"
     return 0
@@ -326,11 +360,19 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 INNER
   pct exec "${CTID}" -- bash -c "rm -rf ${APP_DIR} && git clone --depth 1 --branch ${ref} ${REPO} ${APP_DIR}"
-  local db_pass
+  local db_pass debug_flag
   db_pass="$(openssl rand -hex 24)"
+  ensure_operator_password
+  debug_flag="0"
+  if wants_debug; then
+    debug_flag="1"
+  fi
   pct exec "${CTID}" -- bash -c "cat > ${APP_DIR}/.env <<EOF
 POSTGRES_PASSWORD=${db_pass}
 THESHED_IMAGE=${THESHED_IMAGE:-}
+THESHED_DEBUG=${debug_flag}
+THESHED_OPERATOR_EMAIL=${OPERATOR_EMAIL}
+THESHED_OPERATOR_PASSWORD=${OPERATOR_PASSWORD}
 EOF"
   if [[ -n "${THESHED_IMAGE:-}" ]]; then
     pct exec "${CTID}" -- bash -c "cd ${APP_DIR} && docker compose --env-file .env -f bootstrap/docker-compose.yml up -d"

@@ -12,7 +12,12 @@ from theshed.agents.mcp_tools import call_mcp_tool
 from theshed.agents.providers.anthropic import AnthropicClient
 from theshed.agents.tool_loop import ToolCall
 from theshed.auth.routes import router as auth_router
+from theshed.bootstrap.operator import seed_operator_from_env
 from theshed.bootstrap.tools import make_bootstrap_tool_executor
+from theshed.db.session import async_session_factory
+from theshed.debug import log as debug_log
+from theshed.debug.middleware import DebugHttpMiddleware
+from theshed.debug.routes import router as debug_router
 from theshed.foundations.routes import router as foundations_router
 from theshed.issues.routes import router as issues_router
 from theshed.observability.galileo import TurnTracer
@@ -80,6 +85,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.tool_executor_factory = lambda db: make_bootstrap_tool_executor(
             db, app.state.probe_host
         )
+        debug_log.bind_secrets(secrets)
+        if (
+            isinstance(secrets, LocalSecretsClient)
+            and os.environ.get("THESHED_DEBUG", "").strip().lower() in {"1", "true", "yes"}
+        ):
+            try:
+                secrets.get("local://debug/enabled")
+            except SecretNotFoundError:
+                secrets.set("local://debug/enabled", "1")
+        async with async_session_factory() as db:
+            await seed_operator_from_env(db)
         yield
         await app.state.redis.aclose()
         return
@@ -166,9 +182,11 @@ class StripApiPrefix:
 
 
 app = FastAPI(title="The Shed", lifespan=lifespan)
+app.add_middleware(DebugHttpMiddleware)
 app.add_middleware(StripApiPrefix)
 app.include_router(auth_router)
 app.include_router(setup_router)
+app.include_router(debug_router)
 app.include_router(turns_router)
 app.include_router(settings_router)
 app.include_router(foundations_router)
