@@ -162,7 +162,7 @@ EOF
 
 print_url() {
   echo
-  echo "The Shed is up: http://${1}:${PORT}"
+  echo "The Shed is at: http://${1}:${PORT}"
   echo "Open that URL from a browser on this LAN. Setup happens there."
 }
 
@@ -359,6 +359,8 @@ main() {
     echo "Could not determine the CT address. Set THESHED_CT_IP." >&2
     exit 1
   fi
+  print_url "${ip}"
+  echo "Waiting for GET /health ..."
   wait_health "${ip}"
   write_state "${ip}" "${THESHED_REF}"
   print_url "${ip}"
