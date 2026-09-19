@@ -24,7 +24,7 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
 
 1. Operator, as root on the Proxmox host, runs the install command pinned to
    a release tag (overrideable). Example shape:
-   `curl -fsSL https://<product-host>/bootstrap/install.sh | bash`
+   `curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash`
 2. The script creates the LXC if no healthy CT is recorded in its state
    file, starts The Shed image, waits until `GET /health` succeeds from the
    host, prints `http://<ct-ip>:<port>`.
