@@ -91,9 +91,51 @@ def parse_pvesm_status(status_text: str) -> list[str]:
     return names
 
 
-def select_rootfs_storage(status_text: str, requested: str | None = None) -> str:
+_SECTION = re.compile(r"^([A-Za-z0-9._-]+):\s+(\S+)\s*$")
+
+
+def parse_storage_cfg(cfg_text: str) -> list[str]:
+    """Enabled storage ids whose content includes rootdir, from storage.cfg."""
+    names: list[str] = []
+    current: str | None = None
+    content = ""
+    disabled = False
+
+    def _flush() -> None:
+        nonlocal current, content, disabled
+        if current and (not disabled) and "rootdir" in content.split(","):
+            names.append(current)
+        current = None
+        content = ""
+        disabled = False
+
+    for raw in cfg_text.splitlines():
+        header = _SECTION.match(raw)
+        if header is not None:
+            _flush()
+            current = header.group(2)
+            continue
+        fields = raw.split()
+        if not fields:
+            continue
+        if fields[0] == "content":
+            content = fields[1] if len(fields) > 1 else ""
+        elif fields[0] == "disable":
+            disabled = True
+    _flush()
+    return names
+
+
+def select_rootfs_storage(
+    status_text: str,
+    requested: str | None = None,
+    usable: list[str] | None = None,
+) -> str:
     """Pick a storage that can hold a CT rootfs. Names are host-specific."""
     names = parse_pvesm_status(status_text)
+    if usable is not None:
+        allowed = set(usable)
+        names = [name for name in names if name in allowed] or list(usable)
     available = ", ".join(names) or "(none)"
     if requested:
         if requested in names:
