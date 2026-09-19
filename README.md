@@ -41,6 +41,12 @@ On the Proxmox host, as root. This always follows GitHub's latest release:
 curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash
 ```
 
+To destroy an existing bootstrap CT and install again (testing):
+
+```bash
+curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash -s -- --delete
+```
+
 `THESHED_REF` overrides the ref the script clones (a branch or another
 release). The script does not ask for an API key. It prints a LAN URL; the
 setup gate in the browser is the first place that key is typed.

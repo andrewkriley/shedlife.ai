@@ -29,10 +29,23 @@ class InstallState:
     health_ok: bool
 
 
-def should_reuse(state: InstallState | None, live_health_ok: bool) -> bool:
+def should_reuse(
+    state: InstallState | None,
+    live_health_ok: bool,
+    delete_requested: bool = False,
+) -> bool:
+    if delete_requested:
+        return False
     if state is None:
         return False
     return state.health_ok and live_health_ok and bool(state.ct_ip)
+
+
+def delete_target_ctid(state: InstallState | None, default_ctid: int) -> int:
+    """CT id --delete will destroy. Prefer the id recorded on the host."""
+    if state is not None:
+        return state.ctid
+    return default_ctid
 
 
 def parse_state(data: dict[str, Any] | None) -> InstallState | None:

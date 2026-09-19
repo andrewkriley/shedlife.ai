@@ -22,6 +22,9 @@
 #   THESHED_IMAGE        prebuilt image (skips compose build when set)
 #   THESHED_STATE_FILE   host-side state (default: /var/lib/theshed/install-state.yaml)
 #   THESHED_PORT         published app port (default: 8080)
+#   THESHED_DELETE=1     same as --delete: destroy the bootstrap CT, then install
+#
+#   curl -fsSL .../install.sh | bash -s -- --delete
 set -euo pipefail
 
 REPO="https://github.com/andrewkriley/shedlife.ai.git"
@@ -68,6 +71,51 @@ need_root() {
     echo "install.sh must run as root on the Proxmox host" >&2
     exit 1
   fi
+}
+
+parse_args() {
+  local arg
+  for arg in "$@"; do
+    case "${arg}" in
+      --delete) THESHED_DELETE=1 ;;
+      --help|-h)
+        echo "Usage: install.sh [--delete]"
+        echo "  --delete   destroy the bootstrap CT, then install"
+        exit 0
+        ;;
+      *)
+        echo "Unknown option: ${arg}" >&2
+        echo "Usage: install.sh [--delete]" >&2
+        exit 1
+        ;;
+    esac
+  done
+}
+
+wants_delete() {
+  [[ "${THESHED_DELETE:-}" == "1" || "${THESHED_DELETE:-}" == "true" ]]
+}
+
+delete_existing_ct() {
+  local recorded name
+  recorded="$(read_state_ctid || true)"
+  if [[ -n "${recorded}" ]]; then
+    CTID="${recorded}"
+  fi
+  if ! pct status "${CTID}" >/dev/null 2>&1; then
+    echo "No CT ${CTID} to delete."
+    rm -f "${STATE_FILE}"
+    return
+  fi
+  name="$(pct config "${CTID}" 2>/dev/null | awk '/^hostname:/{print $2}')"
+  if [[ -n "${name}" && "${name}" != "${CT_HOSTNAME}" && "${name}" != "theshed" ]]; then
+    echo "CT ${CTID} is hostname '${name}', not ${CT_HOSTNAME}. Refusing --delete." >&2
+    exit 1
+  fi
+  echo "Deleting CT ${CTID} (${name:-unknown})"
+  pct stop "${CTID}" >/dev/null 2>&1 || true
+  pct destroy "${CTID}"
+  rm -f "${STATE_FILE}"
 }
 
 resolve_ref() {
@@ -289,11 +337,14 @@ wait_health() {
 }
 
 main() {
+  parse_args "$@"
   print_banner
   need_root
   THESHED_REF="$(resolve_ref)"
   echo "The Shed installer — ref ${THESHED_REF}"
-  if maybe_reuse; then
+  if wants_delete; then
+    delete_existing_ct
+  elif maybe_reuse; then
     exit 0
   fi
   STORAGE="$(resolve_storage)"

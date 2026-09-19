@@ -59,6 +59,15 @@ def test_install_script_names_the_ct_theshed_deploy() -> None:
     assert '--hostname "${CT_HOSTNAME}"' in text
 
 
+def test_install_script_accepts_delete_flag() -> None:
+    text = SCRIPT.read_text()
+    assert "--delete" in text
+    assert "THESHED_DELETE" in text
+    assert "pct destroy" in text
+    assert "pct stop" in text
+    assert "bash -s -- --delete" in README.read_text()
+
+
 def test_install_script_prints_banner_first() -> None:
     text = SCRIPT.read_text()
     assert "Your digital shed -- the place you" in text

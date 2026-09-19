@@ -4,6 +4,7 @@ from theshed.bootstrap.install_state import (
     DEFAULT_CT_HOSTNAME,
     PINNED_UBUNTU_VERSION,
     InstallState,
+    delete_target_ctid,
     ostemplate_volume,
     parse_state,
     parse_storage_cfg,
@@ -21,6 +22,17 @@ def test_no_state_means_create() -> None:
 def test_healthy_recorded_and_live_ct_is_reused() -> None:
     state = InstallState(ctid=200, ct_ip="192.0.2.50", image_ref="v0.3.0", health_ok=True)
     assert should_reuse(state, live_health_ok=True) is True
+
+
+def test_delete_flag_skips_reuse() -> None:
+    state = InstallState(ctid=200, ct_ip="192.0.2.50", image_ref="v0.3.0", health_ok=True)
+    assert should_reuse(state, live_health_ok=True, delete_requested=True) is False
+
+
+def test_delete_target_prefers_recorded_ctid() -> None:
+    state = InstallState(ctid=200, ct_ip="192.0.2.50", image_ref="v0.3.0", health_ok=True)
+    assert delete_target_ctid(state, default_ctid=9100) == 200
+    assert delete_target_ctid(None, default_ctid=9100) == 9100
 
 
 def test_stale_state_without_live_health_creates_again() -> None:
