@@ -4,6 +4,7 @@ from theshed.bootstrap.install_state import (
     DEFAULT_CT_HOSTNAME,
     PINNED_UBUNTU_VERSION,
     InstallState,
+    completion_summary,
     delete_target_ctid,
     ostemplate_volume,
     parse_state,
@@ -52,6 +53,19 @@ def test_parse_state_reads_the_spec_shape() -> None:
     assert parsed is not None
     assert parsed.ctid == 200
     assert render_url(parsed.ct_ip) == "http://192.0.2.50:8080"
+
+
+def test_completion_summary_includes_ready_and_url() -> None:
+    text = completion_summary(
+        ct_ip="192.0.2.50",
+        ctid=9100,
+        hostname="theshed-deploy",
+        image_ref="theshed-v0.4.4",
+    )
+    assert "The Shed is ready." in text
+    assert "URL:  http://192.0.2.50:8080" in text
+    assert "CT:   9100 (theshed-deploy)" in text
+    assert "Ref:  theshed-v0.4.4" in text
 
 
 PVEAM_AVAILABLE = """

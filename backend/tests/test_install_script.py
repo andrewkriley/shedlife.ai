@@ -75,6 +75,15 @@ def test_install_script_prints_connect_url_before_health_wait() -> None:
     assert main.index("print_url") < main.index("wait_health")
 
 
+def test_install_script_prints_completion_summary() -> None:
+    text = SCRIPT.read_text()
+    assert "print_summary" in text
+    assert "The Shed is ready." in text
+    assert "URL:" in text
+    main = text.split("main() {", 1)[1]
+    assert main.index("wait_health") < main.index("print_summary")
+
+
 def test_install_script_prints_banner_first() -> None:
     text = SCRIPT.read_text()
     assert "Your digital shed -- the place you" in text

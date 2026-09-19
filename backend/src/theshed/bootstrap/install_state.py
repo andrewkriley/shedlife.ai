@@ -66,6 +66,22 @@ def render_url(ct_ip: str, port: int = 8080) -> str:
     return f"http://{ct_ip}:{port}"
 
 
+def completion_summary(
+    ct_ip: str,
+    ctid: int,
+    hostname: str,
+    image_ref: str,
+    port: int = 8080,
+) -> str:
+    """Final installer block: done, and where to open the UI."""
+    return (
+        "The Shed is ready.\n"
+        f"  URL:  {render_url(ct_ip, port)}\n"
+        f"  CT:   {ctid} ({hostname})\n"
+        f"  Ref:  {image_ref}\n"
+    )
+
+
 def select_os_template(available_text: str) -> str | None:
     """Pinned ubuntu-<version>-standard filename from `pveam available` text."""
     best_name: str | None = None

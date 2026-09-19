@@ -166,6 +166,21 @@ print_url() {
   echo "Open that URL from a browser on this LAN. Setup happens there."
 }
 
+print_summary() {
+  local ip="$1"
+  echo
+  echo "========================================"
+  echo "The Shed is ready."
+  echo
+  echo "  URL:  http://${ip}:${PORT}"
+  echo "  CT:   ${CTID} (${CT_HOSTNAME})"
+  echo "  Ref:  ${THESHED_REF}"
+  echo
+  echo "Open that URL from a browser on this LAN."
+  echo "Setup happens there."
+  echo "========================================"
+}
+
 maybe_reuse() {
   local ip ctid_recorded
   ip="$(read_state_ip || true)"
@@ -178,7 +193,7 @@ maybe_reuse() {
   fi
   if ct_health_ok "${ip}"; then
     write_state "${ip}" "${THESHED_REF}"
-    print_url "${ip}"
+    print_summary "${ip}"
     return 0
   fi
   return 1
@@ -363,7 +378,7 @@ main() {
   echo "Waiting for GET /health ..."
   wait_health "${ip}"
   write_state "${ip}" "${THESHED_REF}"
-  print_url "${ip}"
+  print_summary "${ip}"
 }
 
 main "$@"
