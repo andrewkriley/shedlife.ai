@@ -3,7 +3,8 @@
 # Does not collect an LLM API key, the Proxmox root password, or tenant facts.
 # Those belong to the web app after this script prints a LAN URL.
 #
-#   curl -fsSL https://raw.githubusercontent.com/andrewkriley/shedlife.ai/${THESHED_REF:-<tag>}/bootstrap/install.sh | bash
+# Fetched from the latest GitHub release by default (see README). Override:
+#   THESHED_REF=main curl -fsSL https://raw.githubusercontent.com/andrewkriley/shedlife.ai/main/bootstrap/install.sh | bash
 #
 # Overrides (all optional):
 #   THESHED_REF          git ref to fetch (default: latest GitHub release, else main)

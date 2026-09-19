@@ -1,6 +1,8 @@
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[2] / "bootstrap" / "install.sh"
+ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = ROOT / "bootstrap" / "install.sh"
+README = ROOT / "README.md"
 
 
 def test_install_script_exists_and_is_thin() -> None:
@@ -19,3 +21,10 @@ def test_install_script_does_not_collect_operator_secrets() -> None:
     assert "read -p" not in text
     assert "ANTHROPIC_API_KEY" not in text
     assert "sk-ant" not in text
+
+
+def test_readme_install_follows_the_latest_release() -> None:
+    text = README.read_text()
+    assert "releases/latest" in text
+    assert "shedlife.ai/<tag>/bootstrap/install.sh" not in text
+    assert "${tag}/bootstrap/install.sh" in text
