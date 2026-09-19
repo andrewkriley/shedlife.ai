@@ -44,6 +44,7 @@ async def submit_turn(
         llm=request.app.state.llm_client,
         classifier_model=request.app.state.classifier_model,
         tracer=request.app.state.tracer_factory(),
+        tool_executor=request.app.state.tool_executor,
     )
     return EventSourceResponse(generator)
 
@@ -86,5 +87,6 @@ async def respond_to_approval(
         llm=request.app.state.llm_client,
         classifier_model=request.app.state.classifier_model,
         tracer=request.app.state.tracer_factory(),
+        tool_executor=request.app.state.tool_executor,
     )
     return EventSourceResponse(generator)

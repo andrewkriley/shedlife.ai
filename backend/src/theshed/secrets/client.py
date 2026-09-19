@@ -66,6 +66,8 @@ class EnvVarSecretsClient(SecretsClient):
         "infisical://the-shed/providers/openai/api_key": "OPENAI_API_KEY",
         "infisical://the-shed/observability/galileo_api_key": "GALILEO_API_KEY",
         "infisical://the-shed/observability/galileo_console_url": "GALILEO_URL",
+        "infisical://the-shed/mcp/unifi_bearer_token": "UNFI_MCP_BEARER_TOKEN",
+        "infisical://the-shed/mcp/unifi_url": "UNFI_MCP_URL",
     }
 
     def __init__(

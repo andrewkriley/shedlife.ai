@@ -20,6 +20,7 @@ dependencies = [
     "galileo>=1.0",
     "python-dotenv>=1.0",
     "openai>=3.16.2",
+    "mcp>=2.2.0",
 ]
 
 [dependency-groups]
@@ -53,6 +54,15 @@ strict = true
 [[tool.mypy.overrides]]
 module = "galileo.*"
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# httpx2 is mcp's own vendored HTTP client, needed to attach an auth header
+# to streamable_http_client — not part of the package's declared public
+# exports, so strict mode's implicit-reexport check flags importing it
+# directly even though it's the documented way to configure auth.
+module = "mcp.*"
+ignore_missing_imports = true
+implicit_reexport = true
 
 [build-system]
 requires = ["hatchling"]

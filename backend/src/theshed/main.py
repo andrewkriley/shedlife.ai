@@ -7,7 +7,9 @@ from fastapi import FastAPI
 from openai import OpenAI
 from redis.asyncio import Redis
 
+from theshed.agents.mcp_tools import call_mcp_tool
 from theshed.agents.providers.anthropic import AnthropicClient
+from theshed.agents.tool_loop import ToolCall
 from theshed.auth.routes import router as auth_router
 from theshed.observability.galileo import TurnTracer
 from theshed.secrets.client import EnvVarSecretsClient, SecretNotFoundError
@@ -81,6 +83,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.tracer_factory = lambda: TurnTracer.create(
         project=GALILEO_PROJECT, log_stream=GALILEO_LOG_STREAM
     )
+
+    # run.network's tools are all unifi-mcp's — the only client-executed
+    # tool source that exists yet, so this is a universal dispatcher for
+    # now (see agents/orchestrator.py's _execute_tool docstring). A
+    # missing/invalid credential degrades to no dispatcher at all, same
+    # posture as the OpenAI client above — run.network stays registered
+    # and its tools still pause for approval correctly, they just can't
+    # execute once approved.
+    try:
+        unifi_url = secrets.get("infisical://the-shed/mcp/unifi_url")
+        unifi_token = secrets.get("infisical://the-shed/mcp/unifi_bearer_token")
+
+        async def tool_executor(call: ToolCall) -> str:
+            return await call_mcp_tool(unifi_url, unifi_token, call.tool_name, call.arguments)
+
+        app.state.tool_executor = tool_executor
+    except SecretNotFoundError:
+        app.state.tool_executor = None
 
     yield
     await app.state.redis.aclose()
