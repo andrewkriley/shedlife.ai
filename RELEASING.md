@@ -19,6 +19,10 @@ decision, made by merging one specific PR.
 5. The tag triggers the build pipeline: the full test gate re-runs, the container
    image builds, gets scanned (Trivy) for known vulnerabilities, and — only if that
    passes — publishes to GitHub Container Registry under the new version tag.
+   The same release also attaches `bootstrap/install.sh` so this one-liner
+   always fetches the latest script:
+
+   `curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash`
 
 ## Version numbers
 
