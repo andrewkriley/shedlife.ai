@@ -75,6 +75,9 @@ async def resolve_matches(
     """Classify, then resolve to actual SubAgent rows. Falls back to
     `assist` on zero matches (docs/prd: no-match fallback), rather than a
     dead end."""
+    if len(sub_agents) == 1:
+        return list(sub_agents)
+
     matches = classify(message, sub_agents, classifier_llm, classifier_model, context)
     if not matches:
         fallback = next((sa for sa in sub_agents if sa.id == FALLBACK_SUB_AGENT_ID), None)

@@ -8,11 +8,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from theshed.db.models import SubAgent
+from theshed.profile import BOOTSTRAP_SUB_AGENT_ID, is_bootstrap_profile
 
 
 async def list_sub_agents(db: AsyncSession) -> list[SubAgent]:
     result = await db.execute(select(SubAgent))
-    return list(result.scalars().all())
+    agents = list(result.scalars().all())
+    if is_bootstrap_profile():
+        return [sa for sa in agents if sa.id == BOOTSTRAP_SUB_AGENT_ID]
+    return agents
 
 
 async def get_sub_agent(db: AsyncSession, sub_agent_id: str) -> SubAgent | None:

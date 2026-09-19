@@ -63,11 +63,24 @@ class TestResolveMatches:
 
     async def test_falls_back_to_assist_on_zero_matches(self) -> None:
         assist = make_sub_agent()
+        extra = make_sub_agent(id="run.network", macro_category="run")
         llm = ScriptedLLM([LLMResponse(text="[]", tool_calls=[], stop_reason="end_turn")])
 
-        matches = await resolve_matches("gibberish nonsense", [assist], llm, "claude-haiku-4-5")
+        matches = await resolve_matches("gibberish nonsense", [assist, extra], llm, "claude-haiku-4-5")
 
         assert [sa.id for sa in matches] == ["assist"]
+
+    async def test_single_agent_short_circuits_without_a_model_call(self) -> None:
+        intake = make_sub_agent(id="bootstrap.intake")
+
+        def boom(**_kwargs: Any) -> LLMResponse:
+            raise AssertionError("classifier must not be called")
+
+        class RaisingLLM:
+            complete = staticmethod(boom)
+
+        matches = await resolve_matches("anything", [intake], RaisingLLM(), "unused")
+        assert [sa.id for sa in matches] == ["bootstrap.intake"]
 
 
 @pytest.mark.asyncio

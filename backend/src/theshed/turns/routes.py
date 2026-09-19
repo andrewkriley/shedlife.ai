@@ -44,7 +44,7 @@ async def submit_turn(
         llm=request.app.state.llm_client,
         classifier_model=request.app.state.classifier_model,
         tracer=request.app.state.tracer_factory(),
-        tool_executor=request.app.state.tool_executor,
+        tool_executor=_tool_executor(request, db),
     )
     return EventSourceResponse(generator)
 
@@ -87,6 +87,13 @@ async def respond_to_approval(
         llm=request.app.state.llm_client,
         classifier_model=request.app.state.classifier_model,
         tracer=request.app.state.tracer_factory(),
-        tool_executor=request.app.state.tool_executor,
+        tool_executor=_tool_executor(request, db),
     )
     return EventSourceResponse(generator)
+
+
+def _tool_executor(request: Request, db: AsyncSession) -> object:
+    factory = getattr(request.app.state, "tool_executor_factory", None)
+    if factory is not None:
+        return factory(db)
+    return getattr(request.app.state, "tool_executor", None)

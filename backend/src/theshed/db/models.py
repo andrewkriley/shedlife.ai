@@ -154,6 +154,30 @@ class PendingTurnApproval(Base):
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
 
 
+class FoundationDocument(Base):
+    """Singleton foundations schema for the bootstrap profile."""
+
+    __tablename__ = "foundations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document: Mapped[dict[str, Any]] = mapped_column(JSON)
+    updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
+
+
+class LocalIssue(Base):
+    """Unexpected errors and operator-filed issues. See docs/spec/bootstrap.md."""
+
+    __tablename__ = "local_issues"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    classification: Mapped[str] = mapped_column(String(32))
+    summary: Mapped[str] = mapped_column(String(255))
+    detail: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(16))
+    filed_externally: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
+
+
 class TurnVerification(Base):
     """One row per manual verifier invocation against a turn. See
     docs/spec/core-agentic-loop.md, Data section."""

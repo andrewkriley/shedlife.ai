@@ -17,7 +17,8 @@ from typing import Any, Protocol
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from theshed.db.models import SubAgent, SubAgentModelOverride
+from theshed.agents.registry import list_sub_agents
+from theshed.db.models import SubAgentModelOverride
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class SubAgentSetting:
 
 
 async def list_sub_agent_settings(db: AsyncSession) -> list[SubAgentSetting]:
-    sub_agents = (await db.execute(select(SubAgent))).scalars().all()
+    sub_agents = await list_sub_agents(db)
     overrides = {
         o.sub_agent_id: o for o in (await db.execute(select(SubAgentModelOverride))).scalars().all()
     }

@@ -116,7 +116,7 @@ export function Chat({ onOpenSettings }: { onOpenSettings: () => void }) {
   }
 
   return (
-    <div>
+    <div className="chat-pane">
       <h1>The Shed</h1>
       <button type="button" onClick={onOpenSettings}>
         Settings

@@ -1,0 +1,21 @@
+from pathlib import Path
+
+SCRIPT = Path(__file__).resolve().parents[2] / "bootstrap" / "install.sh"
+
+
+def test_install_script_exists_and_is_thin() -> None:
+    text = SCRIPT.read_text()
+    assert SCRIPT.is_file()
+    assert text.startswith("#!/usr/bin/env bash")
+    assert "THESHED_REF" in text
+    assert "/health" in text
+    assert "install-state.yaml" in text
+    assert "pct create" in text
+
+
+def test_install_script_does_not_collect_operator_secrets() -> None:
+    text = SCRIPT.read_text()
+    assert "Does not collect an LLM API key" in text
+    assert "read -p" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+    assert "sk-ant" not in text

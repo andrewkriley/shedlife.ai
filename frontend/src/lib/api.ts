@@ -138,6 +138,147 @@ export async function getLiveModels(): Promise<Record<string, string[]>> {
   return response.json()
 }
 
+export async function getSetupStatus(): Promise<{ needed: boolean }> {
+  const response = await fetch('/api/setup/status', { credentials: 'include' })
+  if (!response.ok) {
+    throw new Error('Failed to load setup status')
+  }
+  return response.json()
+}
+
+export async function completeSetup(body: {
+  email: string
+  password: string
+  provider: string
+  api_key: string
+  galileo_api_key?: string
+  galileo_console_url?: string
+}): Promise<void> {
+  const response = await fetch('/api/setup', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    let detail = 'Setup failed'
+    try {
+      const payload: { detail?: string } = await response.json()
+      if (payload.detail) detail = payload.detail
+    } catch {
+      // keep default
+    }
+    throw new Error(detail)
+  }
+}
+
+export interface FoundationsDocument {
+  version: number
+  tenant: { name: string; slug: string }
+  operator: { email: string }
+  proxmox: { host: string; node: string; ssh_key_fingerprint: string | null }
+  network: { bridge: string; address: string; gateway: string; ntp: string }
+  storage: { pool: string }
+  domains: { intended: string[] }
+  intent: Record<string, { mode: string; url?: string }>
+  probes: Record<string, { status: string; at?: string; detail?: string }>
+}
+
+export async function getFoundations(): Promise<FoundationsDocument> {
+  const response = await fetch('/api/foundations', { credentials: 'include' })
+  if (!response.ok) {
+    throw new Error('Failed to load foundations')
+  }
+  return response.json()
+}
+
+export async function putFoundations(document: FoundationsDocument): Promise<FoundationsDocument> {
+  const response = await fetch('/api/foundations', {
+    method: 'PUT',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-csrf-token': readCsrfCookie(),
+    },
+    body: JSON.stringify({ document }),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to save foundations')
+  }
+  return response.json()
+}
+
+export async function validateFoundations(): Promise<{ ok: boolean; errors: Record<string, string> }> {
+  const response = await fetch('/api/foundations/validate', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'x-csrf-token': readCsrfCookie() },
+  })
+  if (!response.ok) {
+    throw new Error('Failed to validate foundations')
+  }
+  return response.json()
+}
+
+export async function exportFoundations(): Promise<string> {
+  const response = await fetch('/api/foundations/export', { credentials: 'include' })
+  if (!response.ok) {
+    throw new Error('Failed to export foundations')
+  }
+  const body: { yaml: string } = await response.json()
+  return body.yaml
+}
+
+export async function runProbe(probeId: string): Promise<{ status: string; detail: string }> {
+  const response = await fetch(`/api/probes/${probeId}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'x-csrf-token': readCsrfCookie() },
+  })
+  if (!response.ok) {
+    throw new Error('Failed to run probe')
+  }
+  return response.json()
+}
+
+export interface LocalIssue {
+  id: string
+  classification: string
+  summary: string
+  detail: string
+  source: string
+  filed_externally: string | null
+  created_at: string
+}
+
+export async function getIssues(): Promise<LocalIssue[]> {
+  const response = await fetch('/api/issues', { credentials: 'include' })
+  if (!response.ok) {
+    throw new Error('Failed to load issues')
+  }
+  return response.json()
+}
+
+export async function fileIssue(body: {
+  summary: string
+  detail: string
+  classification?: string
+}): Promise<LocalIssue> {
+  const response = await fetch('/api/issues', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-csrf-token': readCsrfCookie(),
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    throw new Error('Failed to file issue')
+  }
+  return response.json()
+}
+
 export async function setModelAssignments(
   subAgentIds: string[],
   provider: string | null,
