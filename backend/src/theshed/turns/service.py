@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
+from galileo_core.schemas.logging.agent import AgentType
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -105,7 +106,7 @@ async def _run_matches(
     executor_kwargs = {} if tool_executor is None else {"tool_executor": tool_executor}
     for i, sub_agent in enumerate(matches):
         yield _sse("progress", {"stage": f"agent:{sub_agent.id} started"})
-        tracer.start_span("agent", sub_agent.id, message)
+        tracer.start_span(AgentType.default, sub_agent.id, message)
         outcome = await run_sub_agent(sub_agent, message, context, llm, **executor_kwargs)
 
         if isinstance(outcome, SubAgentPaused):
@@ -218,7 +219,7 @@ async def stream_turn(
 
     sub_agents = await list_sub_agents(db)
 
-    tracer.start_span("classify", "classify", message)
+    tracer.start_span(AgentType.classifier, "classify", message)
     matches = await resolve_matches(message, sub_agents, llm, classifier_model)
     tracer.conclude_span(json.dumps([m.id for m in matches]))
     yield _sse("progress", {"stage": "classify:done"})
@@ -265,7 +266,7 @@ async def resume_turn(
     await db.delete(pending)
 
     executor_kwargs = {} if tool_executor is None else {"tool_executor": tool_executor}
-    tracer.start_span("agent", sub_agent.id, turn.user_message)
+    tracer.start_span(AgentType.default, sub_agent.id, turn.user_message)
     outcome = await resume_sub_agent(
         sub_agent,
         pending.tool_name,
@@ -360,7 +361,7 @@ async def verify_turn(
         return None
 
     tracer.start_trace(turn.final_response, f"verify:{turn.id}")
-    tracer.start_span("verifier", "verify", turn.user_message)
+    tracer.start_span(AgentType.judge, "verify", turn.user_message)
     result = verify(turn.user_message, turn.final_response, llm, verifier_model)
     tracer.conclude_span(result)
     tracer.conclude_trace(result)

@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 
 from galileo import GalileoLogger
+from galileo_core.schemas.logging.agent import AgentType
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,11 @@ class TurnTracer:
         except Exception:
             logger.exception("Galileo conclude_trace failed")
 
-    def start_span(self, agent_type: str, name: str, input: str) -> None:
+    def start_span(self, agent_type: AgentType, name: str, input: str) -> None:
+        """`agent_type` must be a real `AgentType` member — confirmed live
+        that an arbitrary string (e.g. "classify") is silently dropped by
+        the SDK with no exception, no error, and no span. See
+        tests/test_galileo_tracer.py for the full story."""
         if self._logger is None:
             return
         try:
