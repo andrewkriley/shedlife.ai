@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.0...theshed-v0.4.1) (2026-09-19)
+
+
+### Bug Fixes
+
+* one-line install from the latest release asset ([95de117](https://github.com/andrewkriley/shedlife.ai/commit/95de1172b50dde903c08c798e5530cb9392b2343))
+
 ## [0.4.0](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.3.0...theshed-v0.4.0) (2026-09-19)
 
 
