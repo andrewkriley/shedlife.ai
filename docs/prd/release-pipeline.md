@@ -90,12 +90,13 @@ what any tenant is running.
 ### Versioning and changelog
 
 Semantic Versioning (`MAJOR.MINOR.PATCH`), driven by Conventional Commits
-(`feat:`/`fix:`/etc.) rather than a manual per-release decision — commit message
-discipline is what determines the next version and populates the changelog, so a
-release is a natural consequence of what already merged, not a separate authoring
-step. PR titles (which become the squash-merge commit message, see below) are
-themselves format-checked in CI, since they're what the versioning/changelog tooling
-actually reads.
+(`feat:`/`fix:`/etc.) rather than a manual per-release decision. While the
+product is `0.x`, `feat:` and `fix:` both bump **patch** so frequent small
+edits stay granular (`0.4.1`, `0.4.2`); a breaking change bumps minor, not
+1.0. After `1.0.0` the usual mapping applies (`feat:` minor, breaking
+major). PR titles (which become the squash-merge commit message, see below)
+are format-checked in CI, since they're what the versioning/changelog
+tooling actually reads.
 
 ### Branch protection on `main`
 

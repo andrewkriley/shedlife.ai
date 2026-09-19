@@ -4,7 +4,9 @@
     ".": {
       "release-type": "simple",
       "package-name": "theshed",
-      "changelog-path": "CHANGELOG.md"
+      "changelog-path": "CHANGELOG.md",
+      "bump-patch-for-minor-pre-major": true,
+      "bump-minor-pre-major": true
     }
   }
 }
