@@ -105,3 +105,24 @@ class LoopGuard:
                 f"Last {self.unproductive_window} tool results were identical — "
                 "no progress despite varying calls."
             )
+
+    def snapshot(self) -> dict[str, Any]:
+        """JSON-safe state, for a guard that has to survive a pause-for-
+        approval spanning two separate HTTP requests. See `restore`."""
+        return {
+            "max_rounds": self.max_rounds,
+            "unproductive_window": self.unproductive_window,
+            "round": self._round,
+            "seen_calls": [list(key) for key in self._seen_calls],
+            "recent_results": list(self._recent_results),
+        }
+
+    @classmethod
+    def restore(cls, snapshot: dict[str, Any]) -> LoopGuard:
+        guard = cls(
+            max_rounds=snapshot["max_rounds"], unproductive_window=snapshot["unproductive_window"]
+        )
+        guard._round = snapshot["round"]
+        guard._seen_calls = {(name, args) for name, args in snapshot["seen_calls"]}
+        guard._recent_results = list(snapshot["recent_results"])
+        return guard

@@ -1,12 +1,21 @@
 import { useState } from 'react'
-import { streamTurn, verifyTurn } from '../lib/api'
+import { respondToApproval, streamTurn, verifyTurn, type TurnEvent } from '../lib/api'
+
+interface PendingApproval {
+  toolName: string
+  arguments: Record<string, unknown>
+  subAgentId: string
+}
 
 interface Message {
+  id: string
   role: 'user' | 'assistant'
   text: string
   turnId?: string
   verifying?: boolean
   verification?: string
+  pendingApproval?: PendingApproval
+  responding?: boolean
 }
 
 export function Chat({ onOpenSettings }: { onOpenSettings: () => void }) {
@@ -16,60 +25,93 @@ export function Chat({ onOpenSettings }: { onOpenSettings: () => void }) {
   const [status, setStatus] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
 
+  function updateMessage(id: string, updater: (m: Message) => Message) {
+    setMessages((prev) => prev.map((m) => (m.id === id ? updater(m) : m)))
+  }
+
+  // Shared by a fresh submission and a resume after approval — both are the
+  // same SSE event shape (progress/token/approval_required/done), just
+  // opened via a different endpoint.
+  async function consumeEvents(iterator: AsyncGenerator<TurnEvent>, id: string) {
+    for await (const event of iterator) {
+      if (event.type === 'progress') {
+        setStatus(String(event.data.stage ?? ''))
+      } else if (event.type === 'token') {
+        const chunk = String(event.data.text ?? '')
+        updateMessage(id, (m) => ({ ...m, text: m.text + chunk }))
+      } else if (event.type === 'approval_required') {
+        const turnId = event.data.turn_id ? String(event.data.turn_id) : undefined
+        updateMessage(id, (m) => ({
+          ...m,
+          turnId: turnId ?? m.turnId,
+          pendingApproval: {
+            toolName: String(event.data.tool_name ?? ''),
+            arguments: (event.data.arguments as Record<string, unknown>) ?? {},
+            subAgentId: String(event.data.sub_agent_id ?? ''),
+          },
+        }))
+      } else if (event.type === 'error') {
+        setStatus(`Error: ${String(event.data.message ?? 'something went wrong')}`)
+      } else if (event.type === 'done') {
+        if (event.data.conversation_id) {
+          setConversationId(String(event.data.conversation_id))
+        }
+        if (event.data.turn_id) {
+          const turnId = String(event.data.turn_id)
+          updateMessage(id, (m) => ({ ...m, turnId }))
+        }
+        setStatus(null)
+      }
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!input.trim() || sending) return
 
     const userMessage = input
-    setMessages((prev) => [...prev, { role: 'user', text: userMessage }])
+    const assistantId = crypto.randomUUID()
+    setMessages((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), role: 'user', text: userMessage },
+      { id: assistantId, role: 'assistant', text: '' },
+    ])
     setInput('')
     setSending(true)
     setStatus(null)
 
-    let assistantText = ''
-    setMessages((prev) => [...prev, { role: 'assistant', text: '' }])
-
     try {
-      for await (const event of streamTurn(conversationId, userMessage)) {
-        if (event.type === 'progress') {
-          setStatus(String(event.data.stage ?? ''))
-        } else if (event.type === 'token') {
-          assistantText += String(event.data.text ?? '')
-          setMessages((prev) => [...prev.slice(0, -1), { role: 'assistant', text: assistantText }])
-        } else if (event.type === 'error') {
-          setStatus(`Error: ${String(event.data.message ?? 'something went wrong')}`)
-        } else if (event.type === 'done') {
-          if (event.data.conversation_id) {
-            setConversationId(String(event.data.conversation_id))
-          }
-          if (event.data.turn_id) {
-            const turnId = String(event.data.turn_id)
-            setMessages((prev) => [...prev.slice(0, -1), { ...prev[prev.length - 1], turnId }])
-          }
-          setStatus(null)
-        }
-      }
+      await consumeEvents(streamTurn(conversationId, userMessage), assistantId)
     } finally {
       setSending(false)
     }
   }
 
-  async function handleVerify(index: number) {
-    const message = messages[index]
-    if (!message.turnId) return
+  async function handleApprove(id: string, approved: boolean) {
+    const message = messages.find((m) => m.id === id)
+    if (!message?.turnId) return
 
-    setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, verifying: true } : m)))
+    updateMessage(id, (m) => ({ ...m, responding: true, pendingApproval: undefined }))
+    setSending(true)
+    setStatus(null)
+    try {
+      await consumeEvents(respondToApproval(message.turnId, approved), id)
+    } finally {
+      updateMessage(id, (m) => ({ ...m, responding: false }))
+      setSending(false)
+    }
+  }
+
+  async function handleVerify(id: string) {
+    const message = messages.find((m) => m.id === id)
+    if (!message?.turnId) return
+
+    updateMessage(id, (m) => ({ ...m, verifying: true }))
     try {
       const result = await verifyTurn(message.turnId)
-      setMessages((prev) =>
-        prev.map((m, i) => (i === index ? { ...m, verifying: false, verification: result } : m)),
-      )
+      updateMessage(id, (m) => ({ ...m, verifying: false, verification: result }))
     } catch {
-      setMessages((prev) =>
-        prev.map((m, i) =>
-          i === index ? { ...m, verifying: false, verification: 'Verification failed.' } : m,
-        ),
-      )
+      updateMessage(id, (m) => ({ ...m, verifying: false, verification: 'Verification failed.' }))
     }
   }
 
@@ -80,14 +122,37 @@ export function Chat({ onOpenSettings }: { onOpenSettings: () => void }) {
         Settings
       </button>
       <div role="log" aria-label="conversation">
-        {messages.map((m, i) => (
-          <div key={i} data-role={m.role}>
+        {messages.map((m) => (
+          <div key={m.id} data-role={m.role}>
             <p>
               <strong>{m.role === 'user' ? 'You' : 'Shed'}:</strong> {m.text}
             </p>
-            {m.role === 'assistant' && m.turnId && (
+            {m.role === 'assistant' && m.pendingApproval && (
+              <div data-role="approval-request">
+                <p>
+                  <strong>{m.pendingApproval.subAgentId}</strong> wants to run{' '}
+                  <code>{m.pendingApproval.toolName}</code> with{' '}
+                  <code>{JSON.stringify(m.pendingApproval.arguments)}</code>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleApprove(m.id, true)}
+                  disabled={m.responding}
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApprove(m.id, false)}
+                  disabled={m.responding}
+                >
+                  Decline
+                </button>
+              </div>
+            )}
+            {m.role === 'assistant' && m.turnId && !m.pendingApproval && (
               <>
-                <button type="button" onClick={() => handleVerify(i)} disabled={m.verifying}>
+                <button type="button" onClick={() => handleVerify(m.id)} disabled={m.verifying}>
                   {m.verifying ? 'Verifying…' : 'Verify'}
                 </button>
                 {m.verification && <p data-role="verification">{m.verification}</p>}

@@ -78,6 +78,29 @@ class TestClassify:
 
         assert matches == []
 
+    def test_strips_a_markdown_code_fence_before_parsing(self) -> None:
+        # Confirmed live: haiku models often wrap JSON in a ```json fence
+        # despite the prompt asking for "only a JSON array" — every mocked
+        # test before this one used a clean string, so nothing caught it
+        # until a real classifier call did.
+        sub_agents = [make_sub_agent()]
+        llm = FakeLLM(
+            response_text='```json\n[{"macro_category": "assist", "sub_agent_id": "assist"}]\n```'
+        )
+
+        matches = classify("what's the weather", sub_agents, llm, model="claude-haiku-4-5")
+
+        assert len(matches) == 1
+        assert matches[0].sub_agent_id == "assist"
+
+    def test_strips_a_bare_code_fence_without_a_json_language_tag(self) -> None:
+        sub_agents = [make_sub_agent()]
+        llm = FakeLLM(response_text='```\n[{"macro_category": "assist", "sub_agent_id": "assist"}]\n```')
+
+        matches = classify("what's the weather", sub_agents, llm, model="claude-haiku-4-5")
+
+        assert len(matches) == 1
+
     def test_malformed_json_response_yields_no_matches_not_a_crash(self) -> None:
         sub_agents = [make_sub_agent()]
         llm = FakeLLM(response_text="not json at all")

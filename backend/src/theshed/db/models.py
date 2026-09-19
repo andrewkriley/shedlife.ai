@@ -132,6 +132,28 @@ class TurnSubAgentResult(Base):
     turn: Mapped[Turn] = relationship(back_populates="sub_agent_results")
 
 
+class PendingTurnApproval(Base):
+    """Persisted state for a turn paused mid-fan-out awaiting a
+    has_side_effects tool approval — spans the gap between the SSE stream
+    that paused (which ends the HTTP response) and the separate
+    `POST /turns/{id}/approvals` request that resumes it. `turn_id` as the
+    primary key enforces "at most one pending approval per turn" for free.
+    See docs/spec/core-agentic-loop.md step 6d."""
+
+    __tablename__ = "pending_turn_approvals"
+
+    turn_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("turns.id"), primary_key=True)
+    sub_agent_id: Mapped[str] = mapped_column(ForeignKey("sub_agents.id"))
+    tool_name: Mapped[str] = mapped_column(String(128))
+    arguments: Mapped[dict[str, Any]] = mapped_column(JSON)
+    tool_use_id: Mapped[str] = mapped_column(String(128))
+    messages: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    guard_snapshot: Mapped[dict[str, Any]] = mapped_column(JSON)
+    completed_results: Mapped[dict[str, Any]] = mapped_column(JSON)
+    remaining_sub_agent_ids: Mapped[list[str]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
+
+
 class TurnVerification(Base):
     """One row per manual verifier invocation against a turn. See
     docs/spec/core-agentic-loop.md, Data section."""

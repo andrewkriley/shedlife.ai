@@ -33,21 +33,9 @@ export async function login(email: string, password: string): Promise<void> {
   }
 }
 
-export async function* streamTurn(
-  conversationId: string | null,
-  message: string,
-): AsyncGenerator<TurnEvent> {
-  const response = await fetch('/api/turns', {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-csrf-token': readCsrfCookie(),
-    },
-    body: JSON.stringify({ conversation_id: conversationId, message }),
-  })
+async function* consumeSseStream(response: Response): AsyncGenerator<TurnEvent> {
   if (!response.ok || !response.body) {
-    throw new Error('Failed to start turn')
+    throw new Error('Failed to open turn stream')
   }
 
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
@@ -72,6 +60,42 @@ export async function* streamTurn(
       if (event) yield event
     }
   }
+}
+
+export async function* streamTurn(
+  conversationId: string | null,
+  message: string,
+): AsyncGenerator<TurnEvent> {
+  const response = await fetch('/api/turns', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-csrf-token': readCsrfCookie(),
+    },
+    body: JSON.stringify({ conversation_id: conversationId, message }),
+  })
+  yield* consumeSseStream(response)
+}
+
+// Resumes a turn paused by an `approval_required` event, per
+// docs/spec/core-agentic-loop.md step 6d — same SSE shape as streamTurn
+// (progress/token/approval_required/done), since the loop just keeps going
+// from where it paused.
+export async function* respondToApproval(
+  turnId: string,
+  approved: boolean,
+): AsyncGenerator<TurnEvent> {
+  const response = await fetch(`/api/turns/${turnId}/approvals`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-csrf-token': readCsrfCookie(),
+    },
+    body: JSON.stringify({ approved }),
+  })
+  yield* consumeSseStream(response)
 }
 
 export async function verifyTurn(turnId: string): Promise<string> {

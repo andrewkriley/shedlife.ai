@@ -5,10 +5,10 @@ Slice-1 scope (per the approved plan): exactly one sub-agent is registered
 synthesis (docs/spec: more-than-one-match path) is never reached live this
 slice, though `theshed.agents.synthesis` is unit-tested directly.
 
-`assist`'s only tool (`web_search`) is server-executed by Anthropic itself —
-it never appears in `LLMResponse.tool_calls` (that only surfaces
-client-executable `tool_use` blocks), so this slice's real runs typically
-resolve in a single model call. The client-tool-execution path
+`assist`'s tools (`web_search`, `code_execution`) are both server-executed by
+Anthropic itself — they never appear in `LLMResponse.tool_calls` (that only
+surfaces client-executable `tool_use` blocks), so this slice's real runs
+typically resolve in a single model call. The client-tool-execution path
 (`_execute_tool`) still exists and is exercised by the loop-guard's safety
 nets, because `run.network`/`build` (MCP-based, client-executed tools) are
 next.
@@ -16,6 +16,7 @@ next.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -38,6 +39,24 @@ FALLBACK_SUB_AGENT_ID = "assist"
 class SubAgentOutcome:
     result: str
     status_code: int
+
+
+@dataclass
+class SubAgentPaused:
+    """The loop paused before executing a `has_side_effects` tool call.
+    Carries everything needed to resume later, from a separate HTTP
+    request, via `resume_sub_agent` — nothing here is safe to keep only in
+    memory the way a normal Python call stack would, since the pause spans
+    the gap between two unrelated requests."""
+
+    tool_call: ToolCall
+    tool_use_id: str
+    messages: list[dict[str, Any]]
+    guard_snapshot: dict[str, Any]
+
+
+SubAgentRunResult = SubAgentOutcome | SubAgentPaused
+ToolExecutor = Callable[[ToolCall], Awaitable[str]]
 
 
 async def resolve_matches(
@@ -64,28 +83,26 @@ def _to_anthropic_tool_spec(tool: dict[str, Any]) -> dict[str, Any]:
 
 async def _execute_tool(call: ToolCall) -> str:
     """Client-executed tool dispatch. Nothing routes here yet in this
-    slice — `assist`'s web_search is server-executed by Anthropic, so this
+    slice — assist's tools are both server-executed by Anthropic, so this
     is only reachable once an MCP-based sub-agent (run.network) exists."""
     raise NotImplementedError(f"No client-side executor registered for tool {call.tool_name!r}")
 
 
-async def run_sub_agent(
+async def _run_loop(
     sub_agent: SubAgent,
-    user_message: str,
-    context_messages: list[dict[str, Any]],
+    messages: list[dict[str, Any]],
+    guard: LoopGuard,
     llm: LLMClient,
-) -> SubAgentOutcome:
-    guard = LoopGuard()
-    messages: list[dict[str, Any]] = [*context_messages, {"role": "user", "content": user_message}]
-    tools = [_to_anthropic_tool_spec(t) for t in sub_agent.tools]
-    side_effect_by_name = {t["name"]: t.get("has_side_effects", False) for t in sub_agent.tools}
-
+    tools: list[dict[str, Any]],
+    side_effect_by_name: dict[str, bool],
+    tool_executor: ToolExecutor,
+) -> SubAgentRunResult:
+    """The tool-calling loop's core, shared by a fresh start (`run_sub_agent`)
+    and a resume after approval (`resume_sub_agent`) — both just differ in
+    how `messages`/`guard` are seeded going in."""
     while True:
         response = llm.complete(
-            system=sub_agent.system_prompt,
-            messages=messages,
-            model=sub_agent.default_model,
-            tools=tools,
+            system=sub_agent.system_prompt, messages=messages, model=sub_agent.default_model, tools=tools
         )
 
         if not response.tool_calls:
@@ -102,12 +119,71 @@ async def run_sub_agent(
             try:
                 guard.before_call(call)
             except ApprovalRequired:
-                raise
+                return SubAgentPaused(
+                    tool_call=call,
+                    tool_use_id=tc["id"],
+                    messages=messages,
+                    guard_snapshot=guard.snapshot(),
+                )
             except (MaxRoundsExceeded, RepeatedCallDetected, UnproductiveLoopDetected) as exc:
                 return SubAgentOutcome(result=str(exc), status_code=1)
 
-            result = await _execute_tool(call)
-            guard.after_result(result)
+            result = await tool_executor(call)
+            try:
+                guard.after_result(result)
+            except UnproductiveLoopDetected as exc:
+                return SubAgentOutcome(result=str(exc), status_code=1)
             tool_result_messages.append({"tool_use_id": tc["id"], "content": result})
 
         messages.append({"role": "user", "content": tool_result_messages})
+
+
+async def run_sub_agent(
+    sub_agent: SubAgent,
+    user_message: str,
+    context_messages: list[dict[str, Any]],
+    llm: LLMClient,
+    tool_executor: ToolExecutor = _execute_tool,
+) -> SubAgentRunResult:
+    guard = LoopGuard()
+    messages: list[dict[str, Any]] = [*context_messages, {"role": "user", "content": user_message}]
+    tools = [_to_anthropic_tool_spec(t) for t in sub_agent.tools]
+    side_effect_by_name = {t["name"]: t.get("has_side_effects", False) for t in sub_agent.tools}
+    return await _run_loop(sub_agent, messages, guard, llm, tools, side_effect_by_name, tool_executor)
+
+
+async def resume_sub_agent(
+    sub_agent: SubAgent,
+    tool_name: str,
+    arguments: dict[str, Any],
+    tool_use_id: str,
+    messages: list[dict[str, Any]],
+    guard_snapshot: dict[str, Any] | None,
+    llm: LLMClient,
+    approved: bool,
+    tool_executor: ToolExecutor = _execute_tool,
+) -> SubAgentRunResult:
+    """Continues a sub-agent's tool loop from the point `SubAgentPaused` was
+    returned, per docs/spec/core-agentic-loop.md step 6d: approved resumes
+    the loop after executing the tool for real; declined ends it there —
+    no further model call, per the spec's own wording ("the loop ends")."""
+    if not approved:
+        return SubAgentOutcome(
+            result=f"The required action ({tool_name}) was declined, so it wasn't completed.",
+            status_code=1,
+        )
+
+    assert guard_snapshot is not None  # only absent on the declined path, handled above
+    guard = LoopGuard.restore(guard_snapshot)
+    tools = [_to_anthropic_tool_spec(t) for t in sub_agent.tools]
+    side_effect_by_name = {t["name"]: t.get("has_side_effects", False) for t in sub_agent.tools}
+
+    call = ToolCall(tool_name, arguments, has_side_effects=True)
+    result = await tool_executor(call)
+    try:
+        guard.after_result(result)
+    except UnproductiveLoopDetected as exc:
+        return SubAgentOutcome(result=str(exc), status_code=1)
+
+    messages = [*messages, {"role": "user", "content": [{"tool_use_id": tool_use_id, "content": result}]}]
+    return await _run_loop(sub_agent, messages, guard, llm, tools, side_effect_by_name, tool_executor)

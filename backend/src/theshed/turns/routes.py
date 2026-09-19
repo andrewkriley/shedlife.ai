@@ -8,8 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
 from theshed.auth.dependencies import get_current_user_id, require_csrf
+from theshed.db.models import PendingTurnApproval
 from theshed.db.session import get_session
-from theshed.turns.service import stream_turn, verify_turn
+from theshed.turns.service import resume_turn, stream_turn, verify_turn
 
 router = APIRouter(prefix="/turns", tags=["turns"])
 
@@ -21,6 +22,10 @@ class SubmitTurnRequest(BaseModel):
 
 class VerifyTurnResponse(BaseModel):
     result: str
+
+
+class RespondToApprovalRequest(BaseModel):
+    approved: bool
 
 
 @router.post("", dependencies=[Depends(require_csrf)])
@@ -61,3 +66,25 @@ async def verify(
     if verification is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Turn not found or not yet completed")
     return VerifyTurnResponse(result=verification.result)
+
+
+@router.post("/{turn_id}/approvals", dependencies=[Depends(require_csrf)])
+async def respond_to_approval(
+    turn_id: str,
+    body: RespondToApprovalRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_session),
+    user_id: str = Depends(get_current_user_id),  # auth gate; approvals aren't attributed to a user
+) -> EventSourceResponse:
+    pending = await db.get(PendingTurnApproval, uuid.UUID(turn_id))
+    if pending is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No pending approval for this turn")
+    generator = resume_turn(
+        db=db,
+        pending=pending,
+        approved=body.approved,
+        llm=request.app.state.llm_client,
+        classifier_model=request.app.state.classifier_model,
+        tracer=request.app.state.tracer_factory(),
+    )
+    return EventSourceResponse(generator)

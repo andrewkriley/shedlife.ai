@@ -49,6 +49,42 @@ describe('Chat', () => {
     expect(await screen.findByText(/This holds up/)).toBeInTheDocument()
   })
 
+  it('shows an approval prompt when the turn pauses, and resumes on approve', async () => {
+    vi.spyOn(api, 'streamTurn').mockImplementation(async function* () {
+      yield { type: 'token', data: { text: 'Working on it.' } }
+      yield {
+        type: 'approval_required',
+        data: {
+          turn_id: 't1',
+          tool_name: 'confirm_create_firewall_policy',
+          arguments: { rule: 'block all' },
+          sub_agent_id: 'run.network',
+        },
+      }
+    })
+    vi.spyOn(api, 'respondToApproval').mockImplementation(async function* () {
+      yield { type: 'token', data: { text: ' Done.' } }
+      yield { type: 'done', data: { turn_id: 't1', conversation_id: 'c1' } }
+    })
+
+    const user = userEvent.setup()
+    render(<Chat onOpenSettings={() => {}} />)
+
+    await user.type(screen.getByLabelText('Message'), 'lock down the network')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(await screen.findByText(/confirm_create_firewall_policy/)).toBeInTheDocument()
+    expect(screen.getByText(/run\.network/)).toBeInTheDocument()
+    // Not verifiable while a decision is pending.
+    expect(screen.queryByRole('button', { name: 'Verify' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Approve' }))
+
+    expect(api.respondToApproval).toHaveBeenCalledWith('t1', true)
+    expect(await screen.findByText(/Working on it\. Done\./)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
+  })
+
   it('shows an error status if the stream reports one', async () => {
     vi.spyOn(api, 'streamTurn').mockImplementation(async function* () {
       yield { type: 'error', data: { message: 'something broke' } }

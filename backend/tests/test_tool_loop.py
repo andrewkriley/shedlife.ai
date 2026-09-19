@@ -84,3 +84,46 @@ class TestApprovalGate:
     def test_non_side_effect_call_does_not_raise(self) -> None:
         guard = LoopGuard()
         guard.before_call(ToolCall("web_search", {"q": "x"}, has_side_effects=False))  # no raise
+
+
+class TestSnapshotRestore:
+    """A guard's state has to survive a pause-for-approval that spans two
+    separate HTTP requests — snapshot/restore make that a plain JSON-safe
+    round trip rather than reaching into private fields."""
+
+    def test_restored_guard_preserves_round_count_toward_max_rounds(self) -> None:
+        guard = LoopGuard(max_rounds=2)
+        guard.before_call(ToolCall("search", {"q": "a"}))
+        restored = LoopGuard.restore(guard.snapshot())
+        restored.before_call(ToolCall("search", {"q": "b"}))
+        with pytest.raises(MaxRoundsExceeded):
+            restored.before_call(ToolCall("search", {"q": "c"}))
+
+    def test_restored_guard_still_detects_a_call_repeated_before_the_pause(self) -> None:
+        guard = LoopGuard()
+        guard.before_call(ToolCall("search", {"q": "network"}))
+        restored = LoopGuard.restore(guard.snapshot())
+        with pytest.raises(RepeatedCallDetected):
+            restored.before_call(ToolCall("search", {"q": "network"}))
+
+    def test_restored_guard_still_tracks_unproductive_results_from_before_the_pause(
+        self,
+    ) -> None:
+        guard = LoopGuard(unproductive_window=3)
+        guard.before_call(ToolCall("search", {"q": "a"}))
+        guard.after_result("no results found")
+        guard.before_call(ToolCall("search", {"q": "b"}))
+        guard.after_result("no results found")
+        restored = LoopGuard.restore(guard.snapshot())
+        restored.before_call(ToolCall("search", {"q": "c"}))
+        with pytest.raises(UnproductiveLoopDetected):
+            restored.after_result("no results found")
+
+    def test_snapshot_round_trips_through_json(self) -> None:
+        import json
+
+        guard = LoopGuard(max_rounds=5, unproductive_window=2)
+        guard.before_call(ToolCall("search", {"q": "a"}))
+        guard.after_result("result A")
+        restored = LoopGuard.restore(json.loads(json.dumps(guard.snapshot())))
+        assert restored.snapshot() == guard.snapshot()

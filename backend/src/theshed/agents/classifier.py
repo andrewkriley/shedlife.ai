@@ -42,6 +42,23 @@ def build_classifier_prompt(sub_agents: list[SubAgent]) -> str:
     return CLASSIFIER_SYSTEM_PROMPT_TEMPLATE.format(sub_agent_descriptions=descriptions)
 
 
+def _strip_code_fence(text: str) -> str:
+    """Confirmed live: despite the prompt asking for "only a JSON array",
+    haiku models routinely wrap it in a ```json fence anyway — every mocked
+    test before this one used a clean string, so nothing caught it until a
+    real classifier call did (and it silently degraded to zero matches:
+    json.loads on a fenced string raises, and classify() correctly treats
+    a parse failure as "no matches" — this just makes that failure a lot
+    rarer)."""
+    stripped = text.strip()
+    if not stripped.startswith("```"):
+        return stripped
+    lines = stripped.split("\n")[1:]  # drop the opening ``` or ```json line
+    if lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
+
+
 def classify(
     message: str,
     sub_agents: list[SubAgent],
@@ -59,17 +76,21 @@ def classify(
         return []
 
     try:
-        raw_matches = json.loads(response.text)
+        raw_matches = json.loads(_strip_code_fence(response.text))
     except json.JSONDecodeError:
         return []
 
-    valid_ids = {sa.id for sa in sub_agents}
+    # macro_category comes from the registry, not the model's own freeform
+    # guess — sub_agent_id is already validated against it below, and
+    # trusting the model for this one field it could hallucinate any string
+    # into serves no purpose the registry doesn't already serve correctly.
+    by_id = {sa.id: sa for sa in sub_agents}
     matches = []
     for item in raw_matches:
         sub_agent_id = item.get("sub_agent_id")
-        macro_category = item.get("macro_category")
-        if sub_agent_id in valid_ids and macro_category:
+        sub_agent = by_id.get(sub_agent_id)
+        if sub_agent is not None:
             matches.append(
-                ClassificationMatch(macro_category=macro_category, sub_agent_id=sub_agent_id)
+                ClassificationMatch(macro_category=sub_agent.macro_category, sub_agent_id=sub_agent_id)
             )
     return matches

@@ -4,9 +4,15 @@ from typing import Any
 
 import pytest
 
-from theshed.agents.orchestrator import resolve_matches, run_sub_agent
+from theshed.agents.orchestrator import (
+    SubAgentOutcome,
+    SubAgentPaused,
+    resolve_matches,
+    resume_sub_agent,
+    run_sub_agent,
+)
 from theshed.agents.providers.anthropic import LLMResponse
-from theshed.agents.tool_loop import ApprovalRequired
+from theshed.agents.tool_loop import LoopGuard, ToolCall
 from theshed.db.models import SubAgent
 
 
@@ -77,7 +83,7 @@ class TestRunSubAgent:
         assert outcome.result == "The weather is sunny."
         assert outcome.status_code == 0
 
-    async def test_side_effect_tool_call_raises_approval_required(self) -> None:
+    async def test_side_effect_tool_call_returns_paused_instead_of_executing(self) -> None:
         risky = make_sub_agent(
             id="run.network",
             tools=[{"name": "confirm_create_firewall_policy", "has_side_effects": True}],
@@ -87,15 +93,20 @@ class TestRunSubAgent:
                 LLMResponse(
                     text=None,
                     tool_calls=[
-                        {"id": "1", "name": "confirm_create_firewall_policy", "arguments": {"rule": "x"}}
+                        {"id": "tu_1", "name": "confirm_create_firewall_policy", "arguments": {"rule": "x"}}
                     ],
                     stop_reason="tool_use",
                 )
             ]
         )
 
-        with pytest.raises(ApprovalRequired):
-            await run_sub_agent(risky, "lock down the network", [], llm)
+        result = await run_sub_agent(risky, "lock down the network", [], llm)
+
+        assert isinstance(result, SubAgentPaused)
+        assert result.tool_call == ToolCall(
+            "confirm_create_firewall_policy", {"rule": "x"}, has_side_effects=True
+        )
+        assert result.tool_use_id == "tu_1"
 
     async def test_context_messages_are_seeded_before_the_new_user_message(self) -> None:
         assist = make_sub_agent()
@@ -107,3 +118,132 @@ class TestRunSubAgent:
         sent_messages = llm.calls[0]["messages"]
         assert sent_messages[0] == context[0]
         assert sent_messages[-1] == {"role": "user", "content": "new message"}
+
+
+@dataclass
+class FakeExecutor:
+    """Records every call it's given and returns a canned result — stands in
+    for the real client-side tool dispatch, which nothing implements yet."""
+
+    result: str = "executed"
+    calls: list[ToolCall] = field(default_factory=list)
+
+    async def __call__(self, call: ToolCall) -> str:
+        self.calls.append(call)
+        return self.result
+
+
+@pytest.mark.asyncio
+class TestResumeSubAgent:
+    async def test_declined_returns_a_failed_outcome_without_executing_the_tool(self) -> None:
+        risky = make_sub_agent(id="run.network")
+        executor = FakeExecutor()
+
+        result = await resume_sub_agent(
+            risky,
+            tool_name="confirm_create_firewall_policy",
+            arguments={"rule": "x"},
+            tool_use_id="tu_1",
+            messages=[{"role": "user", "content": "lock it down"}],
+            guard_snapshot=None,
+            llm=ScriptedLLM([]),
+            approved=False,
+        )
+
+        assert isinstance(result, SubAgentOutcome)
+        assert result.status_code == 1
+        assert executor.calls == []
+
+    async def test_approved_executes_the_tool_and_continues_the_loop(self) -> None:
+        risky = make_sub_agent(id="run.network")
+        executor = FakeExecutor(result="policy created")
+        llm = ScriptedLLM(
+            [LLMResponse(text="Done — the policy is live.", tool_calls=[], stop_reason="end_turn")]
+        )
+
+        result = await resume_sub_agent(
+            risky,
+            tool_name="confirm_create_firewall_policy",
+            arguments={"rule": "x"},
+            tool_use_id="tu_1",
+            messages=[{"role": "user", "content": "lock it down"}],
+            guard_snapshot=LoopGuard().snapshot(),
+            llm=llm,
+            approved=True,
+            tool_executor=executor,
+        )
+
+        assert isinstance(result, SubAgentOutcome)
+        assert result.result == "Done — the policy is live."
+        assert executor.calls == [ToolCall("confirm_create_firewall_policy", {"rule": "x"}, True)]
+
+    async def test_approved_sends_a_tool_result_referencing_the_original_tool_use_id(self) -> None:
+        risky = make_sub_agent(id="run.network")
+        executor = FakeExecutor(result="policy created")
+        llm = ScriptedLLM([LLMResponse(text="Done.", tool_calls=[], stop_reason="end_turn")])
+
+        await resume_sub_agent(
+            risky,
+            tool_name="confirm_create_firewall_policy",
+            arguments={"rule": "x"},
+            tool_use_id="tu_1",
+            messages=[{"role": "user", "content": "lock it down"}],
+            guard_snapshot=LoopGuard().snapshot(),
+            llm=llm,
+            approved=True,
+            tool_executor=executor,
+        )
+
+        sent_messages = llm.calls[0]["messages"]
+        tool_result_turn = sent_messages[-1]
+        assert tool_result_turn == {
+            "role": "user",
+            "content": [{"tool_use_id": "tu_1", "content": "policy created"}],
+        }
+
+    async def test_guard_state_survives_the_pause_so_a_repeat_after_resume_is_caught(self) -> None:
+        risky = make_sub_agent(
+            id="run.network",
+            tools=[{"name": "confirm_create_firewall_policy", "has_side_effects": True}],
+        )
+        # Simulate: the same call already happened once before the pause.
+        # has_side_effects=False here only so before_call doesn't itself
+        # raise ApprovalRequired — the seen_calls key it registers doesn't
+        # depend on that flag, so this seeds the same state either way.
+        guard = LoopGuard()
+        guard.before_call(ToolCall("confirm_create_firewall_policy", {"rule": "x"}, False))
+        snapshot = guard.snapshot()
+
+        executor = FakeExecutor()
+        # After resuming, the model immediately tries the identical call again.
+        llm = ScriptedLLM(
+            [
+                LLMResponse(
+                    text=None,
+                    tool_calls=[
+                        {
+                            "id": "tu_2",
+                            "name": "confirm_create_firewall_policy",
+                            "arguments": {"rule": "x"},
+                        }
+                    ],
+                    stop_reason="tool_use",
+                )
+            ]
+        )
+
+        result = await resume_sub_agent(
+            risky,
+            tool_name="confirm_create_firewall_policy",
+            arguments={"rule": "x"},
+            tool_use_id="tu_1",
+            messages=[{"role": "user", "content": "lock it down"}],
+            guard_snapshot=snapshot,
+            llm=llm,
+            approved=True,
+            tool_executor=executor,
+        )
+
+        assert isinstance(result, SubAgentOutcome)
+        assert result.status_code == 1
+        assert "epeated" in result.result
