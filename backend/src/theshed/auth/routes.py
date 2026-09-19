@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import secrets
-
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from theshed.auth.cookies import set_session_cookies
 from theshed.auth.dependencies import CSRF_COOKIE, SESSION_COOKIE, get_redis
 from theshed.auth.service import SessionStore, verify_password
 from theshed.db.models import Identity
@@ -40,10 +39,7 @@ async def login(
 
     store = SessionStore(redis_client)
     session_id = await store.create(user_id=str(identity.user_id))
-    csrf_token = secrets.token_urlsafe(32)
-
-    response.set_cookie(SESSION_COOKIE, session_id, httponly=True, secure=True, samesite="lax")
-    response.set_cookie(CSRF_COOKIE, csrf_token, httponly=False, secure=True, samesite="lax")
+    set_session_cookies(response, session_id)
     return {"status": "ok"}
 
 

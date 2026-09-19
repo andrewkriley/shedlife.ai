@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
+from theshed.agents.orchestrator import ToolExecutor
 from theshed.auth.dependencies import get_current_user_id, require_csrf
 from theshed.db.models import PendingTurnApproval
 from theshed.db.session import get_session
@@ -44,7 +45,7 @@ async def submit_turn(
         llm=request.app.state.llm_client,
         classifier_model=request.app.state.classifier_model,
         tracer=request.app.state.tracer_factory(),
-        tool_executor=request.app.state.tool_executor,
+        tool_executor=_tool_executor(request, db),
     )
     return EventSourceResponse(generator)
 
@@ -87,6 +88,15 @@ async def respond_to_approval(
         llm=request.app.state.llm_client,
         classifier_model=request.app.state.classifier_model,
         tracer=request.app.state.tracer_factory(),
-        tool_executor=request.app.state.tool_executor,
+        tool_executor=_tool_executor(request, db),
     )
     return EventSourceResponse(generator)
+
+
+def _tool_executor(request: Request, db: AsyncSession) -> ToolExecutor | None:
+    factory = getattr(request.app.state, "tool_executor_factory", None)
+    if callable(factory):
+        executor = factory(db)
+        return executor if callable(executor) else None
+    executor = getattr(request.app.state, "tool_executor", None)
+    return executor if callable(executor) else None

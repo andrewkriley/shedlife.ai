@@ -1,0 +1,1 @@
+"""Foundations schema and validation."""

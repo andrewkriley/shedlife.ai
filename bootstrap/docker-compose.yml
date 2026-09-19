@@ -1,0 +1,52 @@
+# Runs inside the bootstrap LXC. Passwords come from the CT-local .env the
+# installer writes — not from this repo.
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: theshed
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: theshed
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U theshed"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    image: ${THESHED_IMAGE:-theshed:bootstrap}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      THESHED_PROFILE: bootstrap
+      DATABASE_URL: postgresql+asyncpg://theshed:${POSTGRES_PASSWORD}@postgres:5432/theshed
+      REDIS_URL: redis://redis:6379/0
+      THESHED_LOCAL_SECRETS_PATH: /var/lib/theshed/secrets.json
+      THESHED_FRONTEND_DIST: /app/frontend-dist
+    ports:
+      - "8080:8080"
+    volumes:
+      - secrets:/var/lib/theshed
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:
+  secrets:

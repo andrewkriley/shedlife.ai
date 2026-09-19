@@ -33,6 +33,21 @@ active). It is not a required tenant hostname.
 - One Proxmox host, installed and on the internet.
 - A strong root password for that host, stored in a password manager.
 
+## Install (Phase 1)
+
+On the Proxmox host, as root. This always follows GitHub's latest release —
+not a hardcoded version:
+
+```bash
+tag=$(curl -fsSL https://api.github.com/repos/andrewkriley/shedlife.ai/releases/latest \
+  | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+curl -fsSL "https://raw.githubusercontent.com/andrewkriley/shedlife.ai/${tag}/bootstrap/install.sh" | bash
+```
+
+`THESHED_REF` overrides that tag (a branch or another release). The script
+does not ask for an API key. It prints a LAN URL; the setup gate in the
+browser is the first place that key is typed.
+
 ## How a message becomes an answer
 
 ```mermaid
@@ -58,11 +73,11 @@ designed (and partly built) — they are not the MVP bar.
 ## Status
 
 The Core Agentic Loop is built and running in development (chat, SSE turns,
-classifier, `assist`, `run.network`, verifier, settings, Galileo). That
-machinery is what Bootstrap reuses. The **product** MVP is now the Bootstrap
-phase: install script, LXC, setup gate, foundations interview, probes, local
-issues. It is designed, not yet built as a profile. Deploy / Build / Run
-phases await their own grills.
+classifier, `assist`, `run.network`, verifier, settings, Galileo). Bootstrap
+reuses that machinery as a profile: `bootstrap/install.sh` starts one LXC,
+the setup gate takes the first operator + API key, and the intake assistant
+collects / validates / probes foundations. Deploy / Build / Run phases await
+their own grills.
 
 Current release: see tags / `CHANGELOG.md`.
 

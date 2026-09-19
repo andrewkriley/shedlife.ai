@@ -28,3 +28,18 @@ class TestRegistry:
         tool_names = {t["name"] for t in sub_agent.tools}
         assert tool_names == {"web_search", "code_execution"}
         assert all(t["has_side_effects"] is False for t in sub_agent.tools)
+
+    async def test_bootstrap_intake_is_seeded(self, db_session: AsyncSession) -> None:
+        sub_agent = await get_sub_agent(db_session, "bootstrap.intake")
+        assert sub_agent is not None
+        assert sub_agent.macro_category == "assist"
+        tool_names = {t["name"] for t in sub_agent.tools}
+        assert "foundations_write" in tool_names
+        assert "install_ssh_key" in tool_names
+
+    async def test_bootstrap_profile_lists_only_intake(
+        self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("THESHED_PROFILE", "bootstrap")
+        ids = {sa.id for sa in await list_sub_agents(db_session)}
+        assert ids == {"bootstrap.intake"}

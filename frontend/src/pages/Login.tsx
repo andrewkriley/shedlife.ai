@@ -18,7 +18,7 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="gate">
       <h1>The Shed</h1>
       <label htmlFor="email">Email</label>
       <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />

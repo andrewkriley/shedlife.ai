@@ -6,14 +6,21 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from openai import OpenAI
 from redis.asyncio import Redis
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from theshed.agents.mcp_tools import call_mcp_tool
 from theshed.agents.providers.anthropic import AnthropicClient
 from theshed.agents.tool_loop import ToolCall
 from theshed.auth.routes import router as auth_router
+from theshed.bootstrap.tools import make_bootstrap_tool_executor
+from theshed.foundations.routes import router as foundations_router
+from theshed.issues.routes import router as issues_router
 from theshed.observability.galileo import TurnTracer
-from theshed.secrets.client import EnvVarSecretsClient, SecretNotFoundError
+from theshed.probes.host import DefaultProbeHost
+from theshed.profile import is_bootstrap_profile
+from theshed.secrets.client import EnvVarSecretsClient, LocalSecretsClient, SecretNotFoundError
 from theshed.settings.routes import router as settings_router
+from theshed.setup.routes import router as setup_router
 from theshed.turns.routes import router as turns_router
 
 # Dev-only: loads a .env file into the process environment, so
@@ -37,14 +44,50 @@ GALILEO_PROJECT = os.environ.get("GALILEO_PROJECT_NAME", "the-shed")
 GALILEO_LOG_STREAM = os.environ.get("GALILEO_LOG_STREAM", "default")
 
 
+def _configure_llm(app: FastAPI, provider: str, api_key: str) -> None:
+    if provider == "anthropic":
+        app.state.llm_client = AnthropicClient(api_key=api_key)
+    else:
+        # OpenAI/Gemini use the same Anthropic client path only when the
+        # operator picked Anthropic. Other vendors are accepted at setup
+        # and stored; the first Phase 1 intake model stays Anthropic-shaped
+        # until a native client is wired. A missing client fails the turn
+        # the same way any other LLM outage does.
+        app.state.llm_client = AnthropicClient(api_key=api_key) if provider == "anthropic" else None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.redis = Redis.from_url(REDIS_URL)
+    app.state.classifier_model = CLASSIFIER_MODEL
+    app.state.configure_llm = lambda provider, key: _configure_llm(app, provider, key)
+
+    if is_bootstrap_profile():
+        secrets_path = os.environ.get("THESHED_LOCAL_SECRETS_PATH")
+        secrets: EnvVarSecretsClient | LocalSecretsClient = LocalSecretsClient(path=secrets_path)
+        app.state.secrets = secrets
+        app.state.llm_client = None
+        try:
+            vendor = secrets.get("local://providers/llm/vendor")
+            key = secrets.get("local://providers/llm/api_key")
+            _configure_llm(app, vendor, key)
+        except SecretNotFoundError:
+            pass
+        app.state.openai_client = None
+        app.state.tracer_factory = lambda: TurnTracer(None)
+        app.state.probe_host = DefaultProbeHost(secrets=secrets)
+        app.state.tool_executor = None
+        app.state.tool_executor_factory = lambda db: make_bootstrap_tool_executor(
+            db, app.state.probe_host
+        )
+        yield
+        await app.state.redis.aclose()
+        return
 
     secrets = EnvVarSecretsClient()
+    app.state.secrets = secrets
     anthropic_key = secrets.get("infisical://the-shed/providers/anthropic/api_key")
     app.state.llm_client = AnthropicClient(api_key=anthropic_key)
-    app.state.classifier_model = CLASSIFIER_MODEL
 
     # OpenAI isn't wired into any sub-agent yet (only Anthropic is), but the
     # settings surface's live models-list (docs/spec/core-agentic-loop.md)
@@ -106,10 +149,36 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await app.state.redis.aclose()
 
 
+class StripApiPrefix:
+    """SPA and Vite talk to /api/*; the backend's own routes are unprefixed.
+    Same rewrite a LAN reverse proxy would do. See frontend/vite.config.ts."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            path = scope.get("path", "")
+            if isinstance(path, str) and (path == "/api" or path.startswith("/api/")):
+                scope = dict(scope)
+                scope["path"] = path[4:] or "/"
+        await self.app(scope, receive, send)
+
+
 app = FastAPI(title="The Shed", lifespan=lifespan)
+app.add_middleware(StripApiPrefix)
 app.include_router(auth_router)
+app.include_router(setup_router)
 app.include_router(turns_router)
 app.include_router(settings_router)
+app.include_router(foundations_router)
+app.include_router(issues_router)
+
+_frontend_dist = os.environ.get("THESHED_FRONTEND_DIST")
+if _frontend_dist:
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/", StaticFiles(directory=_frontend_dist, html=True), name="ui")
 
 
 @app.get("/health")

@@ -12,10 +12,13 @@ change.
 
 from __future__ import annotations
 
+import json
 import os
+import stat
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from pathlib import Path
 from typing import ClassVar
 
 
@@ -88,4 +91,51 @@ class EnvVarSecretsClient(SecretsClient):
         value = self._env.get(env_var)
         if not value:
             raise SecretNotFoundError(f"{env_var} is not set (for {reference!r})")
+        return value
+
+
+LOCAL_SCHEME = "local://"
+
+
+class LocalSecretsClient(SecretsClient):
+    """Bootstrap-profile secret-zero. Values live in memory and, when a path
+    is given, a 0600 JSON file on the LXC. References must be local://.
+    See docs/spec/secrets-management.md and docs/spec/bootstrap.md."""
+
+    def __init__(
+        self,
+        store: dict[str, str] | None = None,
+        path: Path | str | None = None,
+        ttl_seconds: float = 300.0,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        super().__init__(ttl_seconds=ttl_seconds, clock=clock)
+        self._path = Path(path) if path is not None else None
+        self._store = dict(store or {})
+        if self._path is not None and self._path.exists():
+            loaded = json.loads(self._path.read_text())
+            if isinstance(loaded, dict):
+                self._store.update({str(k): str(v) for k, v in loaded.items()})
+
+    def set(self, reference: str, value: str) -> None:
+        if not reference.startswith(LOCAL_SCHEME):
+            raise ValueError(f"LocalSecretsClient only stores {LOCAL_SCHEME} references")
+        self._store[reference] = value
+        self._cache.pop(reference, None)
+        self._persist()
+
+    def _persist(self) -> None:
+        if self._path is None:
+            return
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = self._path.with_suffix(self._path.suffix + ".tmp")
+        tmp.write_text(json.dumps(self._store, indent=2, sort_keys=True))
+        tmp.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        tmp.replace(self._path)
+        self._path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+    def _fetch(self, reference: str) -> str:
+        value = self._store.get(reference)
+        if not value:
+            raise SecretNotFoundError(f"No local secret for {reference!r}")
         return value
