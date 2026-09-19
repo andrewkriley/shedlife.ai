@@ -18,6 +18,7 @@ _UBUNTU_STANDARD = re.compile(
 )
 _OSTEMPLATE_MAX = 255
 _PREFERRED_STORAGES = ("local-lvm", "local-zfs", "local")
+DEFAULT_CT_HOSTNAME = "theshed-deploy"
 
 
 @dataclass(frozen=True)

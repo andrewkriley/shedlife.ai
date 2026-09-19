@@ -52,6 +52,13 @@ def test_install_script_detects_rootfs_storage() -> None:
     assert "--rootfs" in text
 
 
+def test_install_script_names_the_ct_theshed_deploy() -> None:
+    text = SCRIPT.read_text()
+    assert "--hostname theshed \\" not in text
+    assert "theshed-deploy" in text
+    assert '--hostname "${CT_HOSTNAME}"' in text
+
+
 def test_install_script_prints_banner_first() -> None:
     text = SCRIPT.read_text()
     assert "Your digital shed -- the place you" in text

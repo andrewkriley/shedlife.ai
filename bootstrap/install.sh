@@ -9,6 +9,7 @@
 # Overrides (all optional):
 #   THESHED_REF          git ref to fetch (default: latest GitHub release, else main)
 #   THESHED_CTID         CT id (default: 9100)
+#   THESHED_HOSTNAME     CT name in Proxmox (default: theshed-deploy)
 #   THESHED_BRIDGE       LAN bridge (default: vmbr0)
 #   THESHED_CT_IP        static CT address (CIDR). DHCP when unset.
 #   THESHED_GATEWAY      used only with THESHED_CT_IP
@@ -27,6 +28,7 @@ REPO="https://github.com/andrewkriley/shedlife.ai.git"
 RAW_API="https://api.github.com/repos/andrewkriley/shedlife.ai/releases/latest"
 STATE_FILE="${THESHED_STATE_FILE:-/var/lib/theshed/install-state.yaml}"
 CTID="${THESHED_CTID:-9100}"
+CT_HOSTNAME="${THESHED_HOSTNAME:-theshed-deploy}"
 BRIDGE="${THESHED_BRIDGE:-vmbr0}"
 MEMORY="${THESHED_MEMORY:-4096}"
 CORES="${THESHED_CORES:-2}"
@@ -236,8 +238,9 @@ create_ct() {
       net="${net},gw=${THESHED_GATEWAY}"
     fi
   fi
+  echo "Creating CT ${CTID} (${CT_HOSTNAME})"
   pct create "${CTID}" "${template}" \
-    --hostname theshed \
+    --hostname "${CT_HOSTNAME}" \
     --memory "${MEMORY}" \
     --cores "${CORES}" \
     --rootfs "${STORAGE}:${DISK}" \

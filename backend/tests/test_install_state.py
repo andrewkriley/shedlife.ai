@@ -1,6 +1,7 @@
 import pytest
 
 from theshed.bootstrap.install_state import (
+    DEFAULT_CT_HOSTNAME,
     PINNED_UBUNTU_VERSION,
     InstallState,
     ostemplate_volume,
@@ -52,6 +53,10 @@ system          ubuntu-26.04-standard_26.04-1_amd64.tar.zst
 
 def test_pinned_ubuntu_version_is_the_current_latest_lts() -> None:
     assert PINNED_UBUNTU_VERSION == "26.04"
+
+
+def test_default_ct_hostname_distinguishes_the_bootstrap_ct() -> None:
+    assert DEFAULT_CT_HOSTNAME == "theshed-deploy"
 
 
 def test_select_os_template_locks_to_pinned_ubuntu_version() -> None:
