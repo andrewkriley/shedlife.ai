@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.6](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.5...theshed-v0.4.6) (2026-09-19)
+
+
+### Bug Fixes
+
+* confirm the admin password on first-run setup ([#20](https://github.com/andrewkriley/shedlife.ai/issues/20)) ([cf86f0c](https://github.com/andrewkriley/shedlife.ai/commit/cf86f0ca4591f762d164da40292cffba2cfc4c75))
+* fit the chat shell to one window and show assistant status ([#22](https://github.com/andrewkriley/shedlife.ai/issues/22)) ([5836c5f](https://github.com/andrewkriley/shedlife.ai/commit/5836c5faffe1a431f735b7917ff9fdefed806d8e))
+
 ## [0.4.5](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.4...theshed-v0.4.5) (2026-09-19)
 
 
