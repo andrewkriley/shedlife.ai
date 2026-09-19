@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.5](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.4...theshed-v0.4.5) (2026-09-19)
+
+
+### Bug Fixes
+
+* name the bootstrap CT theshed-deploy and add --delete ([#18](https://github.com/andrewkriley/shedlife.ai/issues/18)) ([189b2c6](https://github.com/andrewkriley/shedlife.ai/commit/189b2c61ea79d097c702219d6816a2f10e39b8fb))
+
 ## [0.4.4](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.3...theshed-v0.4.4) (2026-09-19)
 
 
