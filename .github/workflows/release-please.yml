@@ -13,6 +13,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v5
+        id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+      # Same job: GITHUB_TOKEN cannot start a second workflow after it
+      # creates the GitHub Release, so attach-install-script.yml never
+      # sees `release: published` from this path.
+      - uses: actions/checkout@v7
+        if: ${{ steps.release.outputs.release_created }}
+        with:
+          ref: ${{ steps.release.outputs.tag_name }}
+      - name: Attach install.sh to the release
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ steps.release.outputs.tag_name }}" bootstrap/install.sh --clobber
