@@ -28,7 +28,10 @@ load_dotenv(os.environ.get("THESHED_ENV_FILE"))
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 CLASSIFIER_MODEL = os.environ.get("CLASSIFIER_MODEL", "claude-haiku-4-5")
-GALILEO_PROJECT = os.environ.get("GALILEO_PROJECT", "the-shed")
+# GALILEO_PROJECT_NAME, not GALILEO_PROJECT — matches this tenant's .env,
+# not the Galileo SDK's own env var name (which is bridged separately
+# below, same reasoning as the API key bridge).
+GALILEO_PROJECT = os.environ.get("GALILEO_PROJECT_NAME", "the-shed")
 GALILEO_LOG_STREAM = os.environ.get("GALILEO_LOG_STREAM", "default")
 
 
@@ -51,12 +54,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except SecretNotFoundError:
         app.state.openai_client = None
 
-    # The Galileo SDK reads GALILEO_API_KEY from the process environment
-    # directly, under a name that doesn't match our own dev-mode env var
-    # (GALILEO_THESHED_API) — bridge the two here rather than renaming the
-    # existing credential.
+    # The Galileo SDK reads GALILEO_API_KEY and GALILEO_CONSOLE_URL directly
+    # from the process environment (pydantic-settings, env_prefix="GALILEO_")
+    # rather than accepting them as constructor arguments — bridged via the
+    # secrets client here rather than read from os.environ directly, so a
+    # real Infisical-backed client later is a constructor swap, not a
+    # call-site change. Confirmed live: without GALILEO_CONSOLE_URL set, the
+    # SDK silently defaults to the public app.galileo.ai instead of this
+    # tenant's actual (self-hosted-equivalent) multitenant instance — every
+    # trace 401'd there, never at the real instance the API key is valid for.
     os.environ.setdefault(
         "GALILEO_API_KEY", secrets.get("infisical://the-shed/observability/galileo_api_key")
+    )
+    os.environ.setdefault(
+        "GALILEO_CONSOLE_URL", secrets.get("infisical://the-shed/observability/galileo_console_url")
     )
     app.state.tracer_factory = lambda: TurnTracer.create(
         project=GALILEO_PROJECT, log_stream=GALILEO_LOG_STREAM

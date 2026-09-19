@@ -54,5 +54,5 @@ def test_refetches_after_ttl_expires_picking_up_rotation() -> None:
 
 def test_default_mapping_includes_galileo_key() -> None:
     galileo_ref = "infisical://the-shed/observability/galileo_api_key"
-    client = EnvVarSecretsClient(env={"GALILEO_THESHED_API": "galileo-test-key"})
+    client = EnvVarSecretsClient(env={"GALILEO_API_KEY": "galileo-test-key"})
     assert client.get(galileo_ref) == "galileo-test-key"
