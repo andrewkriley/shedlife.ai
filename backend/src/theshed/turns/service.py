@@ -218,7 +218,7 @@ async def stream_turn(
         sub_agents = await list_sub_agents(db)
 
         tracer.start_span(AgentType.classifier, "classify", message)
-        matches = await resolve_matches(message, sub_agents, llm, classifier_model)
+        matches = await resolve_matches(message, sub_agents, llm, classifier_model, context)
         tracer.conclude_span(json.dumps([m.id for m in matches]))
         yield _sse("progress", {"stage": "classify:done"})
 

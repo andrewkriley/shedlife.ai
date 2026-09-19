@@ -1,9 +1,10 @@
 """Integration-level coverage for the pause-for-approval path: a real
 Postgres session, a real stream_turn -> PendingTurnApproval -> resume_turn
-round trip, only the LLM mocked. Nothing in the live registry has a
-has_side_effects tool yet (assist's tools are both server-executed), so
-this is the only way this path is exercised at all before run.network
-exists — same situation synthesis.py was in before today."""
+round trip, only the LLM mocked (a real approval-gate round trip against
+run.network's actual confirm_* tools is covered by live verification, not
+this suite — this file predates run.network's own seed migration and keeps
+its own throwaway sub-agent, `run.test-risky`, deliberately distinct from
+the real `run.network` id so the two don't collide in the registry)."""
 
 import json
 from dataclasses import dataclass, field
@@ -77,7 +78,7 @@ async def user(db_session: AsyncSession) -> User:
 @pytest_asyncio.fixture
 async def risky_sub_agent(db_session: AsyncSession) -> SubAgent:
     sub_agent = SubAgent(
-        id="run.network",
+        id="run.test-risky",
         macro_category="run",
         description="Network operations, including ones that change live config.",
         system_prompt="You manage the network.",
@@ -91,13 +92,7 @@ async def risky_sub_agent(db_session: AsyncSession) -> SubAgent:
 
 
 def _classify_response(sub_agent: SubAgent) -> LLMResponse:
-    return LLMResponse(
-        text=json.dumps(
-            [{"macro_category": sub_agent.macro_category, "sub_agent_id": sub_agent.id}]
-        ),
-        tool_calls=[],
-        stop_reason="end_turn",
-    )
+    return LLMResponse(text=json.dumps([sub_agent.id]), tool_calls=[], stop_reason="end_turn")
 
 
 @pytest.mark.asyncio
@@ -145,7 +140,7 @@ class TestPauseAndResume:
         payload = json.loads(events[-1]["data"])
         assert payload["tool_name"] == "confirm_create_firewall_policy"
         assert payload["arguments"] == {"rule": "block all"}
-        assert payload["sub_agent_id"] == "run.network"
+        assert payload["sub_agent_id"] == "run.test-risky"
 
         turn_id = payload["turn_id"]
         pending = await db_session.get(PendingTurnApproval, turn_id)

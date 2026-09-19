@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from typing import Any
 
 from theshed.agents.providers.anthropic import LLMClient
 from theshed.db.models import SubAgent
@@ -24,9 +25,16 @@ than one sub-agent if it genuinely spans multiple areas.
 Available sub-agents:
 {sub_agent_descriptions}
 
-Respond with only a JSON array of objects, each with "macro_category" and \
-"sub_agent_id", matching only sub-agents from the list above. If nothing \
-matches, respond with an empty array []."""
+The conversation so far (if any) is included as prior turns before the latest \
+user message. A short confirmation, correction, or continuation on its own \
+("yes", "proceed", "do it", "use X instead") carries no topic of its own — route \
+it to whichever sub-agent the immediately preceding assistant turn was acting as \
+or asking on behalf of, not to a generic default. Only fall back to a topic-less \
+match when the prior turns give no such signal either.
+
+Respond with only a JSON array of the matching sub-agent ids, copied exactly as \
+listed above (e.g. ["run.network"]) — not a macro category, not a description, \
+just the id. If nothing matches, respond with an empty array []."""
 
 
 @dataclass(frozen=True)
@@ -64,14 +72,22 @@ def classify(
     sub_agents: list[SubAgent],
     llm: LLMClient,
     model: str,
+    context: list[dict[str, Any]] | None = None,
 ) -> list[ClassificationMatch]:
     """Zero matches (nothing parses, or the model returns []) is a valid,
     expected result — the orchestrator's no-match fallback (routing to
-    `assist`) handles it, not this function."""
+    `assist`) handles it, not this function.
+
+    `context` (prior turns of the same conversation, already loaded by the
+    caller for the sub-agent call itself) is included so a terse follow-up
+    ("Yes, please proceed") can be routed by what it's a follow-up *to* —
+    confirmed live: without it, a bare confirmation like that carries no
+    signal pointing at any sub-agent and gets dropped to the `assist`
+    fallback mid-conversation, even when the prior turn was a run.network
+    plan awaiting exactly that confirmation."""
     system = build_classifier_prompt(sub_agents)
-    response = llm.complete(
-        system=system, messages=[{"role": "user", "content": message}], model=model
-    )
+    messages = [*(context or []), {"role": "user", "content": message}]
+    response = llm.complete(system=system, messages=messages, model=model)
     if not response.text:
         return []
 
@@ -80,14 +96,20 @@ def classify(
     except json.JSONDecodeError:
         return []
 
-    # macro_category comes from the registry, not the model's own freeform
-    # guess — sub_agent_id is already validated against it below, and
-    # trusting the model for this one field it could hallucinate any string
-    # into serves no purpose the registry doesn't already serve correctly.
+    # The model returns bare id strings now, not {macro_category,
+    # sub_agent_id} objects — confirmed live that the two-field shape let a
+    # real "run.network" get misrouted as sub_agent_id "run" (its own
+    # macro_category prefix, not the actual id), silently degrading to a
+    # no-match. macro_category itself always comes from the registry here,
+    # never trusted from the model.
+    if not isinstance(raw_matches, list):
+        return []
+
     by_id = {sa.id: sa for sa in sub_agents}
     matches = []
-    for item in raw_matches:
-        sub_agent_id = item.get("sub_agent_id")
+    for sub_agent_id in raw_matches:
+        if not isinstance(sub_agent_id, str):
+            continue
         sub_agent = by_id.get(sub_agent_id)
         if sub_agent is not None:
             matches.append(

@@ -1,17 +1,23 @@
 """Turn orchestration, per docs/spec/core-agentic-loop.md's Sequence.
 
-Slice-1 scope (per the approved plan): exactly one sub-agent is registered
-(`assist`), so the classifier can only ever produce zero or one match —
-synthesis (docs/spec: more-than-one-match path) is never reached live this
-slice, though `theshed.agents.synthesis` is unit-tested directly.
+Two sub-agents are registered: `assist` (Anthropic-native `web_search` and
+`code_execution`, both server-executed — they never appear in
+`LLMResponse.tool_calls`, which only surfaces client-executable `tool_use`
+blocks, so an `assist` turn typically resolves in a single model call) and
+`run.network` (all 29 of unifi-mcp's tools, genuinely client-executed).
+Synthesis (docs/spec: more-than-one-match path) is live-reachable now that
+a second sub-agent exists, not just unit-tested — a message matching both
+macro categories fans out to both and combines their results.
 
-`assist`'s tools (`web_search`, `code_execution`) are both server-executed by
-Anthropic itself — they never appear in `LLMResponse.tool_calls` (that only
-surfaces client-executable `tool_use` blocks), so this slice's real runs
-typically resolve in a single model call. The client-tool-execution path
-(`_execute_tool`) still exists and is exercised by the loop-guard's safety
-nets, because `run.network`/`build` (MCP-based, client-executed tools) are
-next.
+`_execute_tool` below is only the *default* client-tool executor — a
+deliberate dead end (`NotImplementedError`), since this module has no
+business knowing about any particular MCP server. The real dispatcher is
+built in `main.py` (currently a single unifi-mcp-backed one, since that's
+the only client-tool source that exists) and threaded through
+`turns/service.py` as an explicit `tool_executor` parameter, per the
+`ToolExecutor` shape below — `run_sub_agent`/`resume_sub_agent` only fall
+back to `_execute_tool` when no real one is supplied (e.g. missing
+credentials, or a unit test with nothing to dispatch to at all).
 """
 
 from __future__ import annotations
@@ -64,11 +70,12 @@ async def resolve_matches(
     sub_agents: list[SubAgent],
     classifier_llm: LLMClient,
     classifier_model: str,
+    context: list[dict[str, Any]] | None = None,
 ) -> list[SubAgent]:
     """Classify, then resolve to actual SubAgent rows. Falls back to
     `assist` on zero matches (docs/prd: no-match fallback), rather than a
     dead end."""
-    matches = classify(message, sub_agents, classifier_llm, classifier_model)
+    matches = classify(message, sub_agents, classifier_llm, classifier_model, context)
     if not matches:
         fallback = next((sa for sa in sub_agents if sa.id == FALLBACK_SUB_AGENT_ID), None)
         return [fallback] if fallback else []
@@ -82,9 +89,10 @@ def _to_anthropic_tool_spec(tool: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _execute_tool(call: ToolCall) -> str:
-    """Client-executed tool dispatch. Nothing routes here yet in this
-    slice — assist's tools are both server-executed by Anthropic, so this
-    is only reachable once an MCP-based sub-agent (run.network) exists."""
+    """The fallback when no real `tool_executor` was supplied — see the
+    module docstring. Reachable in practice when `main.py` couldn't build
+    a real dispatcher (missing unifi-mcp credentials) or in a unit test
+    that doesn't inject one."""
     raise NotImplementedError(f"No client-side executor registered for tool {call.tool_name!r}")
 
 
@@ -108,7 +116,24 @@ async def _run_loop(
         if not response.tool_calls:
             return SubAgentOutcome(result=response.text or "(no answer produced)", status_code=0)
 
-        messages.append({"role": "assistant", "content": response.text or ""})
+        # Confirmed live (the first real client-executed tool call
+        # run.network ever made): Anthropic rejects the next round with
+        # "content.0.type: Field required" unless the assistant's own turn
+        # replays its tool_use blocks verbatim, not just any text alongside
+        # them — LLMResponse.tool_calls already carries exactly what's
+        # needed (id/name/arguments), just under Anthropic's own field
+        # names (name/input) for a tool_use block. Never exercised against
+        # the real API before now: assist's tools are both server-executed,
+        # so response.tool_calls was always empty for every real run.
+        assistant_content: list[dict[str, Any]] = []
+        if response.text:
+            assistant_content.append({"type": "text", "text": response.text})
+        assistant_content.extend(
+            {"type": "tool_use", "id": tc["id"], "name": tc["name"], "input": tc["arguments"]}
+            for tc in response.tool_calls
+        )
+        messages.append({"role": "assistant", "content": assistant_content})
+
         tool_result_messages = []
         for tc in response.tool_calls:
             call = ToolCall(
@@ -133,7 +158,9 @@ async def _run_loop(
                 guard.after_result(result)
             except UnproductiveLoopDetected as exc:
                 return SubAgentOutcome(result=str(exc), status_code=1)
-            tool_result_messages.append({"tool_use_id": tc["id"], "content": result})
+            tool_result_messages.append(
+                {"type": "tool_result", "tool_use_id": tc["id"], "content": result}
+            )
 
         messages.append({"role": "user", "content": tool_result_messages})
 
@@ -185,5 +212,11 @@ async def resume_sub_agent(
     except UnproductiveLoopDetected as exc:
         return SubAgentOutcome(result=str(exc), status_code=1)
 
-    messages = [*messages, {"role": "user", "content": [{"tool_use_id": tool_use_id, "content": result}]}]
+    messages = [
+        *messages,
+        {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": tool_use_id, "content": result}],
+        },
+    ]
     return await _run_loop(sub_agent, messages, guard, llm, tools, side_effect_by_name, tool_executor)

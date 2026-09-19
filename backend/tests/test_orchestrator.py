@@ -107,6 +107,51 @@ class TestRunSubAgent:
             "confirm_create_firewall_policy", {"rule": "x"}, has_side_effects=True
         )
         assert result.tool_use_id == "tu_1"
+        # Confirmed live (run.network's first real tool call): Anthropic
+        # rejects the next round unless the assistant's own prior turn
+        # replays its tool_use block verbatim — a flat text string in its
+        # place (this loop's original shape, never exercised against the
+        # real API before assist had a genuinely client-executed sibling)
+        # gets "content.0.type: Field required" back.
+        assert result.messages[-1] == {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "tool_use",
+                    "id": "tu_1",
+                    "name": "confirm_create_firewall_policy",
+                    "input": {"rule": "x"},
+                }
+            ],
+        }
+
+    async def test_a_non_side_effect_tool_calls_result_is_fed_back_with_a_proper_type(
+        self,
+    ) -> None:
+        assist = make_sub_agent(tools=[{"name": "web_search", "has_side_effects": False}])
+        llm = ScriptedLLM(
+            [
+                LLMResponse(
+                    text=None,
+                    tool_calls=[{"id": "tu_1", "name": "web_search", "arguments": {"query": "weather"}}],
+                    stop_reason="tool_use",
+                ),
+                LLMResponse(text="It's sunny.", tool_calls=[], stop_reason="end_turn"),
+            ]
+        )
+
+        async def fake_executor(call: ToolCall) -> str:
+            return "72F and sunny"
+
+        outcome = await run_sub_agent(assist, "what's the weather", [], llm, tool_executor=fake_executor)
+
+        assert isinstance(outcome, SubAgentOutcome)
+        assert outcome.result == "It's sunny."
+        second_round_messages = llm.calls[1]["messages"]
+        assert second_round_messages[-1] == {
+            "role": "user",
+            "content": [{"type": "tool_result", "tool_use_id": "tu_1", "content": "72F and sunny"}],
+        }
 
     async def test_context_messages_are_seeded_before_the_new_user_message(self) -> None:
         assist = make_sub_agent()
@@ -198,7 +243,7 @@ class TestResumeSubAgent:
         tool_result_turn = sent_messages[-1]
         assert tool_result_turn == {
             "role": "user",
-            "content": [{"tool_use_id": "tu_1", "content": "policy created"}],
+            "content": [{"type": "tool_result", "tool_use_id": "tu_1", "content": "policy created"}],
         }
 
     async def test_guard_state_survives_the_pause_so_a_repeat_after_resume_is_caught(self) -> None:
