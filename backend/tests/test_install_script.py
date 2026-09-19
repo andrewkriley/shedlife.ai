@@ -86,6 +86,12 @@ def test_install_script_prints_connect_url_before_health_wait() -> None:
     assert 'The Shed is at: http://${1}:${PORT}' in text
     main = text.split("main() {", 1)[1]
     assert main.index("print_url") < main.index("wait_health")
+    print_url = text.split("print_url() {", 1)[1].split("print_summary() {", 1)[0]
+    assert "User:" in print_url
+    assert "Pass:" in print_url
+    assert "CT user: root" in print_url
+    assert "CT pass:" in print_url
+    assert "CT_ROOT_PASSWORD" in print_url
 
 
 def test_install_script_prints_completion_summary() -> None:
@@ -95,10 +101,26 @@ def test_install_script_prints_completion_summary() -> None:
     assert "URL:" in text
     assert "User:" in text
     assert "Pass:" in text
+    assert "CT user: root" in text
+    assert "CT pass:" in text
     assert "THESHED_OPERATOR_EMAIL" in text
     assert "THESHED_OPERATOR_PASSWORD" in text
+    assert "THESHED_CT_ROOT_PASSWORD" in text
     main = text.split("main() {", 1)[1]
     assert main.index("wait_health") < main.index("print_summary")
+
+
+def test_install_script_sets_generated_ct_root_password() -> None:
+    text = SCRIPT.read_text()
+    assert "--password" in text
+    assert "ensure_ct_root_password" in text
+    assert "CT_ROOT_PASSWORD" in text
+    assert "chpasswd" in text
+    assert "persist_ct_root_password" in text
+    create = text.split("create_ct() {", 1)[1].split("bootstrap_ct() {", 1)[0]
+    assert '--password "${CT_ROOT_PASSWORD}"' in create
+    main = text.split("main() {", 1)[1]
+    assert main.index("ensure_ct_root_password") < main.index("create_ct")
 
 
 def test_install_script_accepts_debug_flag() -> None:

@@ -81,6 +81,7 @@ def completion_summary(
     port: int = 8080,
     email: str | None = None,
     password: str | None = None,
+    ct_password: str | None = None,
     debug: bool = False,
 ) -> str:
     """Final installer block: done, where to open the UI, and how to log in."""
@@ -94,6 +95,9 @@ def completion_summary(
         lines.append(f"  User: {email}")
     if password:
         lines.append(f"  Pass: {password}")
+    if ct_password:
+        lines.append("  CT user: root")
+        lines.append(f"  CT pass: {ct_password}")
     if debug:
         lines.append(f"  Debug: on  ({render_url(ct_ip, port)}/api/debug/logs)")
     return "\n".join(lines) + "\n"

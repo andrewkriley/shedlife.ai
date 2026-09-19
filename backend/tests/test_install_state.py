@@ -76,10 +76,13 @@ def test_completion_summary_includes_login_and_debug() -> None:
         image_ref="theshed-v0.4.6",
         email="operator@theshed.local",
         password="once-only",
+        ct_password="ct-root-once",
         debug=True,
     )
     assert "User: operator@theshed.local" in text
     assert "Pass: once-only" in text
+    assert "CT user: root" in text
+    assert "CT pass: ct-root-once" in text
     assert "Debug: on" in text
     assert "/api/debug/logs" in text
 

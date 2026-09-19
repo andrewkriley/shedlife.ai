@@ -26,10 +26,11 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    a release tag (overrideable). Example shape:
    `curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash`
 2. The script creates the LXC if no healthy CT is recorded in its state
-   file, generates an operator email + password, writes them into the CT
-   `.env`, starts The Shed image, waits until `GET /health` succeeds from
-   the host, prints `http://<ct-ip>:<port>` plus those credentials.
-   `--debug` also writes `THESHED_DEBUG=1`.
+   file, generates an operator email + password and a CT `root` password
+   (`pct create --password`), writes them into the CT `.env`, starts The
+   Shed image, prints `http://<ct-ip>:<port>` plus User / Pass / CT user
+   / CT pass immediately, then waits until `GET /health` succeeds and
+   reprints the same block. `--debug` also writes `THESHED_DEBUG=1`.
 3. Operator opens the URL. Seeded identity exists → login with the
    printed credentials, then setup if no LLM key yet. No identity →
    setup gate.
@@ -191,7 +192,10 @@ turn it on or off.
 ## Security model
 
 - Install script: root on Proxmox, creates one unprivileged LXC. Product
-  image from GHCR (or the pinned script's documented equivalent).
+  image from GHCR (or the pinned script's documented equivalent). The
+  CT `root` password is generated (never prompted), printed next to the
+  URL, and stored on the CT for reprint; it is not the Proxmox host
+  root password.
 - Setup gate and login: Argon2id, session cookie `HttpOnly` + `SameSite=Lax`,
   `Secure` off, CSRF on writes — Auth SPEC, bootstrap exception on `Secure`.
 - Root password: memory-only, dropped after `ssh_key_installed` succeeds

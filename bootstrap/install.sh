@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Thin Phase 1 installer. Run as root on a Proxmox host.
-# Does not collect an LLM API key, the Proxmox root password, or tenant facts.
+# Does not collect an LLM API key, the Proxmox host root password, or tenant facts.
 # Those belong to the web app after this script prints a LAN URL.
+# Generates (does not prompt for) the operator login and the CT root password.
 #
 #   curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash
 # Override the cloned ref with THESHED_REF (a branch or another release).
@@ -41,6 +42,7 @@ DISK="${THESHED_DISK:-16}"
 PORT="${THESHED_PORT:-8080}"
 OPERATOR_EMAIL="${THESHED_OPERATOR_EMAIL:-operator@theshed.local}"
 OPERATOR_PASSWORD=""
+CT_ROOT_PASSWORD=""
 APP_DIR="/opt/theshed"
 
 print_banner() {
@@ -112,12 +114,38 @@ ensure_operator_password() {
   fi
 }
 
+ensure_ct_root_password() {
+  if [[ -z "${CT_ROOT_PASSWORD}" ]]; then
+    CT_ROOT_PASSWORD="$(openssl rand -base64 18 | tr -d '/+=' | head -c 24)"
+  fi
+}
+
+apply_ct_root_password() {
+  ensure_ct_root_password
+  pct exec "${CTID}" -- bash -c "echo 'root:${CT_ROOT_PASSWORD}' | chpasswd"
+}
+
+persist_ct_root_password() {
+  ensure_ct_root_password
+  pct exec "${CTID}" -- bash -c "
+    set -euo pipefail
+    if [[ -f ${APP_DIR}/.env ]]; then
+      if grep -q '^THESHED_CT_ROOT_PASSWORD=' ${APP_DIR}/.env; then
+        sed -i 's/^THESHED_CT_ROOT_PASSWORD=.*/THESHED_CT_ROOT_PASSWORD=${CT_ROOT_PASSWORD}/' ${APP_DIR}/.env
+      else
+        echo 'THESHED_CT_ROOT_PASSWORD=${CT_ROOT_PASSWORD}' >> ${APP_DIR}/.env
+      fi
+    fi
+  "
+}
+
 load_operator_from_ct() {
   local line
-  line="$(pct exec "${CTID}" -- bash -c "grep -E '^THESHED_OPERATOR_EMAIL=|^THESHED_OPERATOR_PASSWORD=|^THESHED_DEBUG=' ${APP_DIR}/.env" 2>/dev/null || true)"
+  line="$(pct exec "${CTID}" -- bash -c "grep -E '^THESHED_OPERATOR_EMAIL=|^THESHED_OPERATOR_PASSWORD=|^THESHED_CT_ROOT_PASSWORD=|^THESHED_DEBUG=' ${APP_DIR}/.env" 2>/dev/null || true)"
   if [[ -n "${line}" ]]; then
     OPERATOR_EMAIL="$(printf '%s\n' "${line}" | awk -F= '/^THESHED_OPERATOR_EMAIL=/{print $2}')"
     OPERATOR_PASSWORD="$(printf '%s\n' "${line}" | awk -F= '/^THESHED_OPERATOR_PASSWORD=/{print $2}')"
+    CT_ROOT_PASSWORD="$(printf '%s\n' "${line}" | awk -F= '/^THESHED_CT_ROOT_PASSWORD=/{print $2}')"
     if printf '%s\n' "${line}" | grep -q '^THESHED_DEBUG=1'; then
       THESHED_DEBUG=1
     fi
@@ -192,6 +220,11 @@ print_url() {
   echo
   echo "The Shed is at: http://${1}:${PORT}"
   echo "Open that URL from a browser on this LAN. Setup happens there."
+  echo
+  echo "  User:    ${OPERATOR_EMAIL}"
+  echo "  Pass:    ${OPERATOR_PASSWORD}"
+  echo "  CT user: root"
+  echo "  CT pass: ${CT_ROOT_PASSWORD}"
 }
 
 print_summary() {
@@ -200,17 +233,20 @@ print_summary() {
   echo "========================================"
   echo "The Shed is ready."
   echo
-  echo "  URL:  http://${ip}:${PORT}"
-  echo "  User: ${OPERATOR_EMAIL}"
-  echo "  Pass: ${OPERATOR_PASSWORD}"
-  echo "  CT:   ${CTID} (${CT_HOSTNAME})"
-  echo "  Ref:  ${THESHED_REF}"
+  echo "  URL:     http://${ip}:${PORT}"
+  echo "  User:    ${OPERATOR_EMAIL}"
+  echo "  Pass:    ${OPERATOR_PASSWORD}"
+  echo "  CT user: root"
+  echo "  CT pass: ${CT_ROOT_PASSWORD}"
+  echo "  CT:      ${CTID} (${CT_HOSTNAME})"
+  echo "  Ref:     ${THESHED_REF}"
   if wants_debug; then
-    echo "  Debug: on  (http://${ip}:${PORT}/api/debug/logs)"
+    echo "  Debug:   on  (http://${ip}:${PORT}/api/debug/logs)"
   fi
   echo
   echo "Open that URL from a browser on this LAN."
   echo "Log in with the user and pass above, then add an API key if asked."
+  echo "Proxmox console / pct console: root and the CT pass."
   echo "========================================"
 }
 
@@ -226,6 +262,10 @@ maybe_reuse() {
   fi
   if ct_health_ok "${ip}"; then
     load_operator_from_ct
+    if [[ -z "${CT_ROOT_PASSWORD}" ]]; then
+      apply_ct_root_password
+      persist_ct_root_password
+    fi
     write_state "${ip}" "${THESHED_REF}"
     print_summary "${ip}"
     return 0
@@ -336,12 +376,14 @@ create_ct() {
     fi
   fi
   echo "Creating CT ${CTID} (${CT_HOSTNAME})"
+  ensure_ct_root_password
   pct create "${CTID}" "${template}" \
     --hostname "${CT_HOSTNAME}" \
     --memory "${MEMORY}" \
     --cores "${CORES}" \
     --rootfs "${STORAGE}:${DISK}" \
     --net0 "${net}" \
+    --password "${CT_ROOT_PASSWORD}" \
     --unprivileged 1 \
     --features nesting=1 \
     --onboot 1
@@ -363,6 +405,7 @@ INNER
   local db_pass debug_flag
   db_pass="$(openssl rand -hex 24)"
   ensure_operator_password
+  ensure_ct_root_password
   debug_flag="0"
   if wants_debug; then
     debug_flag="1"
@@ -373,6 +416,7 @@ THESHED_IMAGE=${THESHED_IMAGE:-}
 THESHED_DEBUG=${debug_flag}
 THESHED_OPERATOR_EMAIL=${OPERATOR_EMAIL}
 THESHED_OPERATOR_PASSWORD=${OPERATOR_PASSWORD}
+THESHED_CT_ROOT_PASSWORD=${CT_ROOT_PASSWORD}
 EOF"
   if [[ -n "${THESHED_IMAGE:-}" ]]; then
     pct exec "${CTID}" -- bash -c "cd ${APP_DIR} && docker compose --env-file .env -f bootstrap/docker-compose.yml up -d"
@@ -408,6 +452,8 @@ main() {
   echo "Using storage ${STORAGE} for the CT rootfs"
   local template
   template="$(ensure_template)"
+  ensure_operator_password
+  ensure_ct_root_password
   create_ct "${template}"
   bootstrap_ct "${THESHED_REF}"
   local ip
