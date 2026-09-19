@@ -17,6 +17,7 @@ _UBUNTU_STANDARD = re.compile(
     rf"^ubuntu-{re.escape(PINNED_UBUNTU_VERSION)}-standard\S*$"
 )
 _OSTEMPLATE_MAX = 255
+_PREFERRED_STORAGES = ("local-lvm", "local-zfs", "local")
 
 
 @dataclass(frozen=True)
@@ -75,3 +76,38 @@ def ostemplate_volume(template_name: str, storage: str = "local") -> str:
             "(pveam download output must not be captured)"
         )
     return volume
+
+
+def parse_pvesm_status(status_text: str) -> list[str]:
+    """Active storage names from `pvesm status --content rootdir` text."""
+    names: list[str] = []
+    for raw in status_text.splitlines():
+        fields = raw.split()
+        if len(fields) < 3 or fields[0].lower() == "name":
+            continue
+        name, status = fields[0], fields[2]
+        if status == "active":
+            names.append(name)
+    return names
+
+
+def select_rootfs_storage(status_text: str, requested: str | None = None) -> str:
+    """Pick a storage that can hold a CT rootfs. Names are host-specific."""
+    names = parse_pvesm_status(status_text)
+    available = ", ".join(names) or "(none)"
+    if requested:
+        if requested in names:
+            return requested
+        raise ValueError(
+            f"storage {requested!r} does not exist or cannot hold a CT rootfs. "
+            f"Available: {available}"
+        )
+    for candidate in _PREFERRED_STORAGES:
+        if candidate in names:
+            return candidate
+    if names:
+        return names[0]
+    raise ValueError(
+        "no active Proxmox storage with content rootdir. "
+        "Enable rootdir on a storage, or set THESHED_STORAGE."
+    )
