@@ -175,7 +175,10 @@ status, the assistant list (a lone agent is pre-selected), and a
 In-memory ring (last 500 events). Enabled by `THESHED_DEBUG=1` or
 `local://debug/enabled`. Toggle wins over the env var. Events: HTTP
 (except `/health` and `/debug/logs`), UI clicks, provider connect
-attempts, unhandled errors. Secrets are redacted. Interfaces:
+attempts, unhandled errors. Secrets are redacted. Each recorded event
+is also printed to the app process stdout as one `[debug]` line
+(container console / `docker compose logs -f app`, and `/dev/console`
+when writable). Interfaces:
 
 - `GET /debug/status` — `{enabled}`
 - `POST /debug/enabled` — `{enabled}` persists the toggle

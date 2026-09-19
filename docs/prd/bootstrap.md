@@ -77,8 +77,9 @@ has to exist before Git, Kubernetes, or a secrets backend do.
   showed.
 - `--debug` (or `THESHED_DEBUG=1`) starts the CT with the live debug
   console on: HTTP requests, UI clicks, provider connection attempts, and
-  errors. The same log is on `GET /debug/logs` and can be toggled from
-  the UI after the platform is up.
+  errors. The same log is on `GET /debug/logs`, on the app process
+  stdout (Proxmox / container console, `docker compose logs`), and can
+  be toggled from the UI after the platform is up.
 - Optional static CT IP via an environment variable; otherwise DHCP. Either
   way the printed URL is the address the operator's browser will use — not
   localhost on the CT.

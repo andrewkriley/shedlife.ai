@@ -6,8 +6,10 @@ Never stores raw secrets — values that look like keys/passwords are redacted.
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import sys
 import threading
 from collections import deque
 from datetime import UTC, datetime
@@ -18,6 +20,8 @@ from theshed.secrets.client import LocalSecretsClient, SecretNotFoundError, Secr
 DEBUG_SECRET = "local://debug/enabled"
 DEBUG_ENV = "THESHED_DEBUG"
 RING_SIZE = 500
+# LXC/Proxmox console is bind-mounted at /host/console when compose can.
+CONSOLE_PATHS = ("/host/console", "/dev/console")
 
 _SECRET_KEYS = re.compile(
     r"(password|passwd|api[_-]?key|authorization|token|secret|credential)",
@@ -91,7 +95,29 @@ def record(
     }
     with _lock:
         _events.append(entry)
+    _write_console(format_console_line(entry))
     return entry
+
+
+def format_console_line(entry: dict[str, Any]) -> str:
+    line = (
+        f"[debug] {entry['at']} {entry['level']} "
+        f"{entry['source']}.{entry['event']}: {entry['message']}"
+    )
+    if entry.get("detail") is not None:
+        line += f" {json.dumps(entry['detail'], default=str)}"
+    return line
+
+
+def _write_console(line: str) -> None:
+    print(line, file=sys.stdout, flush=True)
+    for path in CONSOLE_PATHS:
+        try:
+            with open(path, "a", encoding="utf-8", errors="replace") as console:
+                console.write(line + "\n")
+                console.flush()
+        except OSError:
+            continue
 
 
 def snapshot() -> list[dict[str, Any]]:

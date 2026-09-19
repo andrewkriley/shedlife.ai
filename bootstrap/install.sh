@@ -23,7 +23,7 @@
 #   THESHED_STATE_FILE   host-side state (default: /var/lib/theshed/install-state.yaml)
 #   THESHED_PORT         published app port (default: 8080)
 #   THESHED_DELETE=1     same as --delete: destroy the bootstrap CT, then install
-#   THESHED_DEBUG=1      same as --debug: live debug console + GET /debug/logs
+#   THESHED_DEBUG=1      same as --debug: live debug console, CT stdout, GET /debug/logs
 #
 #   curl -fsSL .../install.sh | bash -s -- --delete
 #   curl -fsSL .../install.sh | bash -s -- --debug
@@ -86,7 +86,7 @@ parse_args() {
       --help|-h)
         echo "Usage: install.sh [--delete] [--debug]"
         echo "  --delete   destroy the bootstrap CT, then install"
-        echo "  --debug    enable the live debug console and GET /debug/logs"
+        echo "  --debug    enable the live debug console, container stdout, and GET /debug/logs"
         exit 0
         ;;
       *)
