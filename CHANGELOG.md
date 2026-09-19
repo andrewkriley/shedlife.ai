@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.4](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.3...theshed-v0.4.4) (2026-09-19)
+
+
+### Bug Fixes
+
+* print the Shed ASCII banner at the start of install.sh ([fe112ac](https://github.com/andrewkriley/shedlife.ai/commit/fe112ac001baea185498861f9f2a5e84f14d2e74))
+* skip a missing local-lvm instead of aborting install ([2319e1c](https://github.com/andrewkriley/shedlife.ai/commit/2319e1c5efbbd2e6acec68c3e8cb9ad27a021e10))
+
 ## [0.4.3](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.2...theshed-v0.4.3) (2026-09-19)
 
 
