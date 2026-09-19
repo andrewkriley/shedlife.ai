@@ -5,6 +5,7 @@ from theshed.bootstrap.install_state import (
     InstallState,
     ostemplate_volume,
     parse_state,
+    parse_storage_cfg,
     render_url,
     select_os_template,
     select_rootfs_storage,
@@ -157,3 +158,32 @@ nvme-tank     lvmthin     active       500000000        10000000       490000000
 def test_select_rootfs_storage_requires_an_active_rootdir() -> None:
     with pytest.raises(ValueError, match="rootdir"):
         select_rootfs_storage("Name             Type     Status\n")
+
+
+STORAGE_CFG = """
+dir: local
+	path /var/lib/vz
+	content iso,vztmpl,backup,snippets
+
+lvmthin: local-lvm
+	thinpool data
+	vgname pve
+	content rootdir,images
+
+zfspool: tank
+	pool tank
+	content images,rootdir
+
+dir: stale
+	path /mnt/stale
+	content rootdir
+	disable 1
+"""
+
+
+def test_parse_storage_cfg_lists_enabled_rootdir_only() -> None:
+    assert parse_storage_cfg(STORAGE_CFG) == ["local-lvm", "tank"]
+
+
+def test_select_rootfs_storage_skips_unusable_local_lvm() -> None:
+    assert select_rootfs_storage(PVESM_STATUS, usable=["tank", "local"]) == "local"

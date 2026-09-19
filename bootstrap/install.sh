@@ -159,24 +159,45 @@ ensure_template() {
   echo "${volume}"
 }
 
+rootdir_from_cfg() {
+  # storage.cfg — do not call `pvesm status` here. A stale local-lvm
+  # entry makes that command exit non-zero and abort the installer.
+  awk '
+    BEGIN { name=""; content=""; disabled=0 }
+    /^[A-Za-z0-9._-]+:/ {
+      if (name != "" && disabled == 0 && content ~ /(^|,)rootdir(,|$)/) print name
+      name=$2
+      content=""
+      disabled=0
+      next
+    }
+    $1 == "content" { content=$2 }
+    $1 == "disable" { disabled=1 }
+    END {
+      if (name != "" && disabled == 0 && content ~ /(^|,)rootdir(,|$)/) print name
+    }
+  ' /etc/pve/storage.cfg 2>/dev/null || true
+}
+
+usable_storages() {
+  local name
+  while read -r name; do
+    [[ -z "${name}" ]] && continue
+    if pvesm status --storage "${name}" >/dev/null 2>&1; then
+      printf '%s\n' "${name}"
+    fi
+  done
+}
+
 resolve_storage() {
-  local status names first candidate
-  status="$(pvesm status --content rootdir)"
-  names="$(printf '%s\n' "${status}" | awk 'NR>1 && $3=="active" {print $1}')"
+  local names first candidate
+  names="$(rootdir_from_cfg | usable_storages)"
   if [[ -n "${THESHED_STORAGE:-}" ]]; then
     if printf '%s\n' "${names}" | grep -qx "${THESHED_STORAGE}"; then
       echo "${THESHED_STORAGE}"
       return
     fi
-    echo "storage '${THESHED_STORAGE}' does not exist or cannot hold a CT rootfs." >&2
-    echo "Available rootdir storages:" >&2
-    if [[ -z "${names}" ]]; then
-      echo "  (none)" >&2
-    else
-      printf '%s\n' "${names}" | sed 's/^/  /' >&2
-    fi
-    echo "Set THESHED_STORAGE to one of those names." >&2
-    exit 1
+    echo "THESHED_STORAGE='${THESHED_STORAGE}' is not a usable rootdir storage; ignoring it." >&2
   fi
   for candidate in local-lvm local-zfs local; do
     if printf '%s\n' "${names}" | grep -qx "${candidate}"; then
@@ -189,8 +210,8 @@ resolve_storage() {
     echo "${first}"
     return
   fi
-  echo "No active Proxmox storage with content type rootdir." >&2
-  echo "Enable rootdir on a storage, or set THESHED_STORAGE." >&2
+  echo "No usable Proxmox storage with content type rootdir." >&2
+  echo "Enable rootdir on a working pool, or set THESHED_STORAGE." >&2
   exit 1
 }
 

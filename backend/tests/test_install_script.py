@@ -46,7 +46,8 @@ def test_install_script_pins_ubuntu_26_04() -> None:
 def test_install_script_detects_rootfs_storage() -> None:
     text = SCRIPT.read_text()
     assert 'STORAGE="${THESHED_STORAGE:-local-lvm}"' not in text
-    assert "pvesm status --content rootdir" in text
+    assert "/etc/pve/storage.cfg" in text
+    assert "pvesm status --storage" in text
     assert "THESHED_STORAGE" in text
     assert "--rootfs" in text
 
