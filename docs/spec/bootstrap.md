@@ -34,7 +34,10 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    Writes `local://providers/llm/api_key` (and optional Galileo refs).
    Creates `users` / `identities` rows. Sets the session cookie
    (`Secure` off).
-5. Chat UI loads. Registry has one row (`bootstrap.intake`); the turn
+5. Chat UI loads in a single-window shell (header + chat + tabbed review).
+   The header polls `GET /health` and `GET /settings/sub-agents` and shows
+   **AI Assistant is Connected** when both succeed and at least one agent
+   is registered. Registry has one row (`bootstrap.intake`); the turn
    path short-circuits classification and opens that agent.
 6. `collect-foundations`: the agent asks for schema fields, writes them
    through a `foundations.write` tool (no side effects beyond the store).
@@ -159,7 +162,9 @@ New:
   refused once an identity exists.
 
 Settings (`GET /settings/models`, model overrides) stay; they are how the
-operator changes provider after the gate.
+operator changes provider after the gate. The page groups connection
+status, the assistant list (a lone agent is pre-selected), and a
+"Change the model" assignment block.
 
 ## Security model
 

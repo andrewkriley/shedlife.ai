@@ -138,6 +138,14 @@ export async function getLiveModels(): Promise<Record<string, string[]>> {
   return response.json()
 }
 
+export async function getHealth(): Promise<{ status: string }> {
+  const response = await fetch('/api/health', { credentials: 'include' })
+  if (!response.ok) {
+    throw new Error('Failed to load health')
+  }
+  return response.json()
+}
+
 export async function getSetupStatus(): Promise<{ needed: boolean }> {
   const response = await fetch('/api/setup/status', { credentials: 'include' })
   if (!response.ok) {

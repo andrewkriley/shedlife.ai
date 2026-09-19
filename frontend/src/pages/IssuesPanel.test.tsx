@@ -52,6 +52,8 @@ describe('IssuesPanel', () => {
     render(<IssuesPanel />)
 
     expect(await screen.findByText(/probe outbound_https crashed/)).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Open issues' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'File an issue' })).toBeInTheDocument()
     await user.type(screen.getByLabelText('Summary'), 'UI 500')
     await user.type(screen.getByLabelText('Detail'), 'boom')
     await user.click(screen.getByRole('button', { name: 'File issue' }))
