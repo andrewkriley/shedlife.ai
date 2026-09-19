@@ -32,6 +32,19 @@ def test_readme_install_is_a_one_line_latest_release() -> None:
     assert "tag=$(" not in text
 
 
+def test_readme_shows_phase_progress_and_ends_at_the_loop() -> None:
+    text = README.read_text()
+    assert "1. Bootstrap" in text
+    assert "In progress" in text
+    assert "Not started" in text
+    assert "## How a message becomes an answer" in text
+    assert "## Status" not in text
+    assert "## Documentation" not in text
+    assert "## Contributing" not in text
+    headings = [line for line in text.splitlines() if line.startswith("## ")]
+    assert headings[-1] == "## How a message becomes an answer"
+
+
 def test_install_script_pins_ubuntu_26_04() -> None:
     text = SCRIPT.read_text()
     assert "debian-12-standard" not in text
