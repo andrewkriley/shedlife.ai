@@ -1,6 +1,7 @@
 import pytest
 
 from theshed.bootstrap.install_state import (
+    PINNED_UBUNTU_VERSION,
     InstallState,
     ostemplate_volume,
     parse_state,
@@ -40,39 +41,50 @@ def test_parse_state_reads_the_spec_shape() -> None:
 
 PVEAM_AVAILABLE = """
 system          alpine-3.21-default_20241217_amd64.tar.xz
-system          debian-12-standard_12.7-1_amd64.tar.zst
-system          debian-13-standard_13.1-1_amd64.tar.zst
-system          ubuntu-22.04-standard_22.04-1_amd64.tar.zst
-system          ubuntu-24.04-standard_24.04-1_amd64.tar.zst
+system          debian-13-standard_13.6-1_amd64.tar.zst
 system          ubuntu-24.04-standard_24.04-2_amd64.tar.zst
-system          ubuntu-25.04-standard_25.04-1_amd64.tar.zst
+system          ubuntu-25.04-standard_25.04-1.1_amd64.tar.zst
+system          ubuntu-26.04-standard_26.04-1_amd64.tar.zst
 """
 
 
-def test_select_os_template_picks_latest_ubuntu_standard() -> None:
+def test_pinned_ubuntu_version_is_the_current_latest_lts() -> None:
+    assert PINNED_UBUNTU_VERSION == "26.04"
+
+
+def test_select_os_template_locks_to_pinned_ubuntu_version() -> None:
     assert (
         select_os_template(PVEAM_AVAILABLE)
-        == "ubuntu-25.04-standard_25.04-1_amd64.tar.zst"
+        == "ubuntu-26.04-standard_26.04-1_amd64.tar.zst"
     )
 
 
-def test_select_os_template_prefers_newer_build_of_same_series() -> None:
+def test_select_os_template_ignores_newer_unpinned_ubuntu() -> None:
+    available = (
+        PVEAM_AVAILABLE + "system          ubuntu-26.10-standard_26.10-1_amd64.tar.zst\n"
+    )
+    assert (
+        select_os_template(available) == "ubuntu-26.04-standard_26.04-1_amd64.tar.zst"
+    )
+
+
+def test_select_os_template_prefers_newer_build_of_pinned_series() -> None:
     available = """
-system          ubuntu-24.04-standard_24.04-1_amd64.tar.zst
-system          ubuntu-24.04-standard_24.04-2_amd64.tar.zst
+system          ubuntu-26.04-standard_26.04-1_amd64.tar.zst
+system          ubuntu-26.04-standard_26.04-2_amd64.tar.zst
 """
     assert (
-        select_os_template(available) == "ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
+        select_os_template(available) == "ubuntu-26.04-standard_26.04-2_amd64.tar.zst"
     )
 
 
-def test_select_os_template_returns_none_without_ubuntu() -> None:
-    assert select_os_template("system          debian-12-standard_12.7-1_amd64.tar.zst") is None
+def test_select_os_template_returns_none_without_pinned_ubuntu() -> None:
+    assert select_os_template("system          ubuntu-24.04-standard_24.04-2_amd64.tar.zst") is None
 
 
 def test_ostemplate_volume_is_a_short_pve_volume_id() -> None:
-    volume = ostemplate_volume("ubuntu-25.04-standard_25.04-1_amd64.tar.zst")
-    assert volume == "local:vztmpl/ubuntu-25.04-standard_25.04-1_amd64.tar.zst"
+    volume = ostemplate_volume("ubuntu-26.04-standard_26.04-1_amd64.tar.zst")
+    assert volume == "local:vztmpl/ubuntu-26.04-standard_26.04-1_amd64.tar.zst"
     assert len(volume) <= 255
 
 
