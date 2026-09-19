@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.3](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.2...theshed-v0.4.3) (2026-09-19)
+
+
+### Bug Fixes
+
+* pick a rootdir storage instead of assuming local-lvm ([28b7de1](https://github.com/andrewkriley/shedlife.ai/commit/28b7de1f35b053c37448f32f4845c9f333bd4bc8))
+* pin the bootstrap CT to Ubuntu 26.04 ([db99fbe](https://github.com/andrewkriley/shedlife.ai/commit/db99fbe216871e98f038e8eeed309240b9dad813))
+
 ## [0.4.2](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.1...theshed-v0.4.2) (2026-09-19)
 
 
