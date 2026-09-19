@@ -15,6 +15,7 @@ describe('Setup', () => {
     await user.type(screen.getByLabelText('API key'), 'sk-ant-api03-test')
     await user.type(screen.getByLabelText('Email'), 'op@example.com')
     await user.type(screen.getByLabelText('Password'), 'correct-horse-battery-staple')
+    await user.type(screen.getByLabelText('Confirm password'), 'correct-horse-battery-staple')
     await user.click(screen.getByRole('button', { name: 'Create operator' }))
 
     expect(completeSetup).toHaveBeenCalledWith({
@@ -38,8 +39,24 @@ describe('Setup', () => {
     await user.type(screen.getByLabelText('API key'), 'claude subscription')
     await user.type(screen.getByLabelText('Email'), 'op@example.com')
     await user.type(screen.getByLabelText('Password'), 'x')
+    await user.type(screen.getByLabelText('Confirm password'), 'x')
     await user.click(screen.getByRole('button', { name: 'Create operator' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('subscription will not work')
+  })
+
+  it('does not submit when the password fields do not match', async () => {
+    const completeSetup = vi.spyOn(api, 'completeSetup').mockResolvedValue()
+    const user = userEvent.setup()
+    render(<Setup onComplete={() => {}} />)
+
+    await user.type(screen.getByLabelText('API key'), 'sk-ant-api03-test')
+    await user.type(screen.getByLabelText('Email'), 'op@example.com')
+    await user.type(screen.getByLabelText('Password'), 'correct-horse-battery-staple')
+    await user.type(screen.getByLabelText('Confirm password'), 'different-password')
+    await user.click(screen.getByRole('button', { name: 'Create operator' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Passwords do not match')
+    expect(completeSetup).not.toHaveBeenCalled()
   })
 })

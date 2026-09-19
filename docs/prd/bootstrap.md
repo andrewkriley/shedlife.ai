@@ -93,8 +93,8 @@ has to exist before Git, Kubernetes, or a secrets backend do.
   with an explanation, not retried as a key.
 - API key, validated with a live, cheap provider call. Failure stays on this
   screen.
-- Operator email + password (Argon2id). This *is* the first user — not a
-  later Fleet apply.
+- Operator email + password (Argon2id), typed twice; the two entries
+  must match. This *is* the first user — not a later Fleet apply.
 - Optional Galileo key / console URL; omitted means the existing no-op
   tracer.
 - Gate is skippable on later visits once an operator identity exists
