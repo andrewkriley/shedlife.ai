@@ -34,6 +34,33 @@ DISK="${THESHED_DISK:-16}"
 PORT="${THESHED_PORT:-8080}"
 APP_DIR="/opt/theshed"
 
+print_banner() {
+  cat <<'EOF'
+ ___  _  _  ___  ___     _     ___  ___  ___     _    ___ 
+/ __|| || || __||   \   | |   |_ _|| __|| __|   /_\  |_ _|
+\__ \| __ || _| | |) |  | |__  | | | _| | _|   / _ \  | | 
+|___/|_||_||___||___/   |____||___||_|  |___| /_/ \_\|___|
+
+                 ______________________
+                /                     /|
+               /_____________________/ |
+               |  _______    _____   | |
+               | |       |  |     |  | |
+               | |   o   |  |_____|  | |
+               | |_______|           | /
+               |_____________________|/
+             ,,,"",,,"",,,,"",,,"",,,"",,,
+
+           ____________________________________
+          | Your digital shed -- the place you |
+          | go to spend lots of time building, |
+          | tinkering, and fixing things.      |
+          |____________________________________|
+              ||                          ||
+      ,,,"",,,||,,"",,,,"",,,"",,,"",,,,,||,,"",,,
+EOF
+}
+
 need_root() {
   if [[ "$(id -u)" -ne 0 ]]; then
     echo "install.sh must run as root on the Proxmox host" >&2
@@ -238,6 +265,7 @@ wait_health() {
 }
 
 main() {
+  print_banner
   need_root
   THESHED_REF="$(resolve_ref)"
   echo "The Shed installer — ref ${THESHED_REF}"
