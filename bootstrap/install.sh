@@ -9,6 +9,7 @@
 # Overrides (all optional):
 #   THESHED_REF          git ref to fetch (default: latest GitHub release, else main)
 #   THESHED_CTID         CT id (default: 9100)
+#   THESHED_HOSTNAME     CT name in Proxmox (default: theshed-deploy)
 #   THESHED_BRIDGE       LAN bridge (default: vmbr0)
 #   THESHED_CT_IP        static CT address (CIDR). DHCP when unset.
 #   THESHED_GATEWAY      used only with THESHED_CT_IP
@@ -21,12 +22,16 @@
 #   THESHED_IMAGE        prebuilt image (skips compose build when set)
 #   THESHED_STATE_FILE   host-side state (default: /var/lib/theshed/install-state.yaml)
 #   THESHED_PORT         published app port (default: 8080)
+#   THESHED_DELETE=1     same as --delete: destroy the bootstrap CT, then install
+#
+#   curl -fsSL .../install.sh | bash -s -- --delete
 set -euo pipefail
 
 REPO="https://github.com/andrewkriley/shedlife.ai.git"
 RAW_API="https://api.github.com/repos/andrewkriley/shedlife.ai/releases/latest"
 STATE_FILE="${THESHED_STATE_FILE:-/var/lib/theshed/install-state.yaml}"
 CTID="${THESHED_CTID:-9100}"
+CT_HOSTNAME="${THESHED_HOSTNAME:-theshed-deploy}"
 BRIDGE="${THESHED_BRIDGE:-vmbr0}"
 MEMORY="${THESHED_MEMORY:-4096}"
 CORES="${THESHED_CORES:-2}"
@@ -66,6 +71,51 @@ need_root() {
     echo "install.sh must run as root on the Proxmox host" >&2
     exit 1
   fi
+}
+
+parse_args() {
+  local arg
+  for arg in "$@"; do
+    case "${arg}" in
+      --delete) THESHED_DELETE=1 ;;
+      --help|-h)
+        echo "Usage: install.sh [--delete]"
+        echo "  --delete   destroy the bootstrap CT, then install"
+        exit 0
+        ;;
+      *)
+        echo "Unknown option: ${arg}" >&2
+        echo "Usage: install.sh [--delete]" >&2
+        exit 1
+        ;;
+    esac
+  done
+}
+
+wants_delete() {
+  [[ "${THESHED_DELETE:-}" == "1" || "${THESHED_DELETE:-}" == "true" ]]
+}
+
+delete_existing_ct() {
+  local recorded name
+  recorded="$(read_state_ctid || true)"
+  if [[ -n "${recorded}" ]]; then
+    CTID="${recorded}"
+  fi
+  if ! pct status "${CTID}" >/dev/null 2>&1; then
+    echo "No CT ${CTID} to delete."
+    rm -f "${STATE_FILE}"
+    return
+  fi
+  name="$(pct config "${CTID}" 2>/dev/null | awk '/^hostname:/{print $2}')"
+  if [[ -n "${name}" && "${name}" != "${CT_HOSTNAME}" && "${name}" != "theshed" ]]; then
+    echo "CT ${CTID} is hostname '${name}', not ${CT_HOSTNAME}. Refusing --delete." >&2
+    exit 1
+  fi
+  echo "Deleting CT ${CTID} (${name:-unknown})"
+  pct stop "${CTID}" >/dev/null 2>&1 || true
+  pct destroy "${CTID}"
+  rm -f "${STATE_FILE}"
 }
 
 resolve_ref() {
@@ -112,8 +162,23 @@ EOF
 
 print_url() {
   echo
-  echo "The Shed is up: http://${1}:${PORT}"
+  echo "The Shed is at: http://${1}:${PORT}"
   echo "Open that URL from a browser on this LAN. Setup happens there."
+}
+
+print_summary() {
+  local ip="$1"
+  echo
+  echo "========================================"
+  echo "The Shed is ready."
+  echo
+  echo "  URL:  http://${ip}:${PORT}"
+  echo "  CT:   ${CTID} (${CT_HOSTNAME})"
+  echo "  Ref:  ${THESHED_REF}"
+  echo
+  echo "Open that URL from a browser on this LAN."
+  echo "Setup happens there."
+  echo "========================================"
 }
 
 maybe_reuse() {
@@ -128,7 +193,7 @@ maybe_reuse() {
   fi
   if ct_health_ok "${ip}"; then
     write_state "${ip}" "${THESHED_REF}"
-    print_url "${ip}"
+    print_summary "${ip}"
     return 0
   fi
   return 1
@@ -236,8 +301,9 @@ create_ct() {
       net="${net},gw=${THESHED_GATEWAY}"
     fi
   fi
+  echo "Creating CT ${CTID} (${CT_HOSTNAME})"
   pct create "${CTID}" "${template}" \
-    --hostname theshed \
+    --hostname "${CT_HOSTNAME}" \
     --memory "${MEMORY}" \
     --cores "${CORES}" \
     --rootfs "${STORAGE}:${DISK}" \
@@ -286,11 +352,14 @@ wait_health() {
 }
 
 main() {
+  parse_args "$@"
   print_banner
   need_root
   THESHED_REF="$(resolve_ref)"
   echo "The Shed installer — ref ${THESHED_REF}"
-  if maybe_reuse; then
+  if wants_delete; then
+    delete_existing_ct
+  elif maybe_reuse; then
     exit 0
   fi
   STORAGE="$(resolve_storage)"
@@ -305,9 +374,11 @@ main() {
     echo "Could not determine the CT address. Set THESHED_CT_IP." >&2
     exit 1
   fi
+  print_url "${ip}"
+  echo "Waiting for GET /health ..."
   wait_health "${ip}"
   write_state "${ip}" "${THESHED_REF}"
-  print_url "${ip}"
+  print_summary "${ip}"
 }
 
 main "$@"

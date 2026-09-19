@@ -32,6 +32,19 @@ def test_readme_install_is_a_one_line_latest_release() -> None:
     assert "tag=$(" not in text
 
 
+def test_readme_shows_phase_progress_and_ends_at_the_loop() -> None:
+    text = README.read_text()
+    assert "1. Bootstrap" in text
+    assert "In progress" in text
+    assert "Not started" in text
+    assert "## How a message becomes an answer" in text
+    assert "## Status" not in text
+    assert "## Documentation" not in text
+    assert "## Contributing" not in text
+    headings = [line for line in text.splitlines() if line.startswith("## ")]
+    assert headings[-1] == "## How a message becomes an answer"
+
+
 def test_install_script_pins_ubuntu_26_04() -> None:
     text = SCRIPT.read_text()
     assert "debian-12-standard" not in text
@@ -50,6 +63,38 @@ def test_install_script_detects_rootfs_storage() -> None:
     assert "pvesm status --storage" in text
     assert "THESHED_STORAGE" in text
     assert "--rootfs" in text
+
+
+def test_install_script_names_the_ct_theshed_deploy() -> None:
+    text = SCRIPT.read_text()
+    assert "--hostname theshed \\" not in text
+    assert "theshed-deploy" in text
+    assert '--hostname "${CT_HOSTNAME}"' in text
+
+
+def test_install_script_accepts_delete_flag() -> None:
+    text = SCRIPT.read_text()
+    assert "--delete" in text
+    assert "THESHED_DELETE" in text
+    assert "pct destroy" in text
+    assert "pct stop" in text
+    assert "bash -s -- --delete" in README.read_text()
+
+
+def test_install_script_prints_connect_url_before_health_wait() -> None:
+    text = SCRIPT.read_text()
+    assert 'The Shed is at: http://${1}:${PORT}' in text
+    main = text.split("main() {", 1)[1]
+    assert main.index("print_url") < main.index("wait_health")
+
+
+def test_install_script_prints_completion_summary() -> None:
+    text = SCRIPT.read_text()
+    assert "print_summary" in text
+    assert "The Shed is ready." in text
+    assert "URL:" in text
+    main = text.split("main() {", 1)[1]
+    assert main.index("wait_health") < main.index("print_summary")
 
 
 def test_install_script_prints_banner_first() -> None:

@@ -1,8 +1,11 @@
 import pytest
 
 from theshed.bootstrap.install_state import (
+    DEFAULT_CT_HOSTNAME,
     PINNED_UBUNTU_VERSION,
     InstallState,
+    completion_summary,
+    delete_target_ctid,
     ostemplate_volume,
     parse_state,
     parse_storage_cfg,
@@ -20,6 +23,17 @@ def test_no_state_means_create() -> None:
 def test_healthy_recorded_and_live_ct_is_reused() -> None:
     state = InstallState(ctid=200, ct_ip="192.0.2.50", image_ref="v0.3.0", health_ok=True)
     assert should_reuse(state, live_health_ok=True) is True
+
+
+def test_delete_flag_skips_reuse() -> None:
+    state = InstallState(ctid=200, ct_ip="192.0.2.50", image_ref="v0.3.0", health_ok=True)
+    assert should_reuse(state, live_health_ok=True, delete_requested=True) is False
+
+
+def test_delete_target_prefers_recorded_ctid() -> None:
+    state = InstallState(ctid=200, ct_ip="192.0.2.50", image_ref="v0.3.0", health_ok=True)
+    assert delete_target_ctid(state, default_ctid=9100) == 200
+    assert delete_target_ctid(None, default_ctid=9100) == 9100
 
 
 def test_stale_state_without_live_health_creates_again() -> None:
@@ -41,6 +55,19 @@ def test_parse_state_reads_the_spec_shape() -> None:
     assert render_url(parsed.ct_ip) == "http://192.0.2.50:8080"
 
 
+def test_completion_summary_includes_ready_and_url() -> None:
+    text = completion_summary(
+        ct_ip="192.0.2.50",
+        ctid=9100,
+        hostname="theshed-deploy",
+        image_ref="theshed-v0.4.4",
+    )
+    assert "The Shed is ready." in text
+    assert "URL:  http://192.0.2.50:8080" in text
+    assert "CT:   9100 (theshed-deploy)" in text
+    assert "Ref:  theshed-v0.4.4" in text
+
+
 PVEAM_AVAILABLE = """
 system          alpine-3.21-default_20241217_amd64.tar.xz
 system          debian-13-standard_13.6-1_amd64.tar.zst
@@ -52,6 +79,10 @@ system          ubuntu-26.04-standard_26.04-1_amd64.tar.zst
 
 def test_pinned_ubuntu_version_is_the_current_latest_lts() -> None:
     assert PINNED_UBUNTU_VERSION == "26.04"
+
+
+def test_default_ct_hostname_distinguishes_the_bootstrap_ct() -> None:
+    assert DEFAULT_CT_HOSTNAME == "theshed-deploy"
 
 
 def test_select_os_template_locks_to_pinned_ubuntu_version() -> None:

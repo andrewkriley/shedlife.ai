@@ -18,6 +18,7 @@ _UBUNTU_STANDARD = re.compile(
 )
 _OSTEMPLATE_MAX = 255
 _PREFERRED_STORAGES = ("local-lvm", "local-zfs", "local")
+DEFAULT_CT_HOSTNAME = "theshed-deploy"
 
 
 @dataclass(frozen=True)
@@ -28,10 +29,23 @@ class InstallState:
     health_ok: bool
 
 
-def should_reuse(state: InstallState | None, live_health_ok: bool) -> bool:
+def should_reuse(
+    state: InstallState | None,
+    live_health_ok: bool,
+    delete_requested: bool = False,
+) -> bool:
+    if delete_requested:
+        return False
     if state is None:
         return False
     return state.health_ok and live_health_ok and bool(state.ct_ip)
+
+
+def delete_target_ctid(state: InstallState | None, default_ctid: int) -> int:
+    """CT id --delete will destroy. Prefer the id recorded on the host."""
+    if state is not None:
+        return state.ctid
+    return default_ctid
 
 
 def parse_state(data: dict[str, Any] | None) -> InstallState | None:
@@ -50,6 +64,22 @@ def parse_state(data: dict[str, Any] | None) -> InstallState | None:
 
 def render_url(ct_ip: str, port: int = 8080) -> str:
     return f"http://{ct_ip}:{port}"
+
+
+def completion_summary(
+    ct_ip: str,
+    ctid: int,
+    hostname: str,
+    image_ref: str,
+    port: int = 8080,
+) -> str:
+    """Final installer block: done, and where to open the UI."""
+    return (
+        "The Shed is ready.\n"
+        f"  URL:  {render_url(ct_ip, port)}\n"
+        f"  CT:   {ctid} ({hostname})\n"
+        f"  Ref:  {image_ref}\n"
+    )
 
 
 def select_os_template(available_text: str) -> str | None:
