@@ -16,7 +16,7 @@
 #   THESHED_CORES        CT vCPU (default: 2)
 #   THESHED_DISK         rootfs size (default: 16)
 #   THESHED_STORAGE      Proxmox storage for the rootfs (default: local-lvm)
-#   THESHED_TEMPLATE     pveam template volume id
+#   THESHED_TEMPLATE     pveam volume id (default: latest ubuntu-*-standard)
 #   THESHED_IMAGE        prebuilt image (skips compose build when set)
 #   THESHED_STATE_FILE   host-side state (default: /var/lib/theshed/install-state.yaml)
 #   THESHED_PORT         published app port (default: 8080)
@@ -114,15 +114,22 @@ ensure_template() {
   fi
   pveam update >/dev/null
   local name
-  name="$(pveam available --section system | awk '/debian-12-standard/{print $2}' | tail -1)"
+  # Column 2 only — never capture `pveam download` progress; pct create
+  # rejects an ostemplate longer than 255 characters.
+  name="$(pveam available --section system | awk '$2 ~ /^ubuntu-[0-9]+\.[0-9]+-standard/ {print $2}' | sort -V | tail -1)"
   if [[ -z "${name}" ]]; then
-    echo "Could not find a debian-12-standard template. Set THESHED_TEMPLATE." >&2
+    echo "Could not find an ubuntu-*-standard template. Set THESHED_TEMPLATE." >&2
     exit 1
   fi
   if ! pveam list local | grep -q "${name}"; then
-    pveam download local "${name}"
+    pveam download local "${name}" >&2
   fi
-  echo "local:vztmpl/${name}"
+  local volume="local:vztmpl/${name}"
+  if [[ ${#volume} -gt 255 ]]; then
+    echo "ostemplate is ${#volume} characters; pct create allows 255. Set THESHED_TEMPLATE." >&2
+    exit 1
+  fi
+  echo "${volume}"
 }
 
 ct_ip() {
