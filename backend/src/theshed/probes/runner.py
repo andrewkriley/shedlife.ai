@@ -53,9 +53,12 @@ def run_probe(probe_id: str, host: ProbeHost) -> ProbeResult:
     if probe_id not in PROBE_IDS:
         return ProbeResult("error", detail=f"unknown probe: {probe_id}")
     method = getattr(host, probe_id, None)
-    if method is None:
+    if not callable(method):
         return ProbeResult("error", detail=f"host cannot run {probe_id}")
     try:
-        return method()
-    except Exception as exc:
+        result = method()
+    except Exception as exc:  # noqa: BLE001 — unexpected probe crash becomes an issue
         return ProbeResult("error", detail=str(exc))
+    if not isinstance(result, ProbeResult):
+        return ProbeResult("error", detail=f"host returned a non-result for {probe_id}")
+    return result

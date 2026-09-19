@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from datetime import UTC, datetime
 
 from theshed.db.models import FoundationDocument
 from theshed.foundations.schema import empty_foundations, merge_foundations

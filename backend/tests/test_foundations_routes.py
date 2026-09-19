@@ -11,6 +11,7 @@ from theshed.db.session import get_session
 from theshed.foundations.schema import empty_foundations
 from theshed.main import app
 from theshed.probes.host import DefaultProbeHost
+from theshed.probes.runner import ProbeResult
 from theshed.secrets.client import LocalSecretsClient
 
 
@@ -18,6 +19,7 @@ from theshed.secrets.client import LocalSecretsClient
 async def client(db_session: AsyncSession, redis_client: Redis) -> AsyncClient:
     app.dependency_overrides[get_session] = lambda: db_session
     app.dependency_overrides[get_redis] = lambda: redis_client
+    app.state.redis = redis_client
     app.state.secrets = LocalSecretsClient()
     app.state.probe_host = DefaultProbeHost(
         secrets=app.state.secrets,
@@ -26,7 +28,7 @@ async def client(db_session: AsyncSession, redis_client: Redis) -> AsyncClient:
         clock_offset=lambda: 0.0,
     )
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(transport=transport, base_url="https://test") as ac:
         yield ac
     app.dependency_overrides.clear()
 
@@ -81,9 +83,8 @@ async def test_put_get_validate_and_export(
     validated = await client.post("/foundations/validate", headers=authed)
     assert validated.status_code == 200
     body = validated.json()
-    assert body["ok"] is False
-    assert "network.address" not in body["errors"]
-    assert "proxmox.host" not in body["errors"]
+    assert body["ok"] is True
+    assert body["errors"] == {}
 
     exported = await client.get("/foundations/export")
     assert exported.status_code == 200
@@ -119,10 +120,11 @@ async def test_probe_persists_and_crashes_open_an_issue(
     blocked = await client.post("/probes/ssh_key_installed", headers=authed)
     assert blocked.status_code == 409
 
-    def boom(_url: str, _timeout: float) -> tuple[int, str]:
-        raise RuntimeError("socket closed")
+    class BoomHost:
+        def outbound_https(self) -> ProbeResult:
+            raise RuntimeError("socket closed")
 
-    app.state.probe_host = DefaultProbeHost(http_get=boom)
+    app.state.probe_host = BoomHost()
     crashed = await client.post("/probes/outbound_https", headers=authed)
     assert crashed.status_code == 200
     assert crashed.json()["status"] == "error"

@@ -54,14 +54,14 @@ class DefaultProbeHost:
             return ProbeResult("fail", detail="no secrets client")
         try:
             self._secrets.get("local://providers/llm/api_key")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — any secrets miss is a probe fail
             return ProbeResult("fail", detail=str(exc))
         return ProbeResult("pass")
 
     def outbound_https(self) -> ProbeResult:
         try:
             status, _ = self._http_get("https://example.com", 5.0)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — injected HTTP can raise anything
             return ProbeResult("fail", detail=str(exc))
         if status >= 400:
             return ProbeResult("fail", detail=f"HTTP {status}")
@@ -74,7 +74,7 @@ class DefaultProbeHost:
         url = host if host.startswith("http") else f"https://{host}:8006"
         try:
             status, _ = self._http_get(url, 5.0)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — injected HTTP can raise anything
             return ProbeResult("fail", detail=str(exc))
         return ProbeResult("pass" if status < 500 else "fail", detail=f"HTTP {status}")
 
@@ -125,7 +125,7 @@ class DefaultProbeHost:
     def adopted_endpoint(self) -> ProbeResult:
         intent = self._doc().get("intent") or {}
         urls: list[str] = []
-        for name, entry in intent.items():
+        for entry in intent.values():
             mode = (entry or {}).get("mode")
             if mode in {"adopt", "brownfield"} and (entry or {}).get("url"):
                 urls.append(str(entry["url"]))
@@ -134,7 +134,7 @@ class DefaultProbeHost:
         for url in urls:
             try:
                 status, _ = self._http_get(url, 5.0)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — injected HTTP can raise anything
                 return ProbeResult("fail", detail=f"{url}: {exc}")
             if status >= 500:
                 return ProbeResult("fail", detail=f"{url}: HTTP {status}")
@@ -153,7 +153,7 @@ class DefaultProbeHost:
 def _http_get(url: str, timeout: float) -> tuple[int, str]:
     request = Request(url, method="GET")
     try:
-        with urlopen(request, timeout=timeout) as response:  # noqa: S310
+        with urlopen(request, timeout=timeout) as response:
             return int(response.status), ""
     except URLError as exc:
         raise RuntimeError(str(exc.reason if exc.reason else exc)) from exc
@@ -164,4 +164,4 @@ def _resolve(name: str) -> list[str]:
         infos = socket.getaddrinfo(name, None)
     except socket.gaierror:
         return []
-    return sorted({item[4][0] for item in infos if item[4]})
+    return sorted({str(item[4][0]) for item in infos if item[4]})

@@ -46,23 +46,23 @@ def make_bootstrap_tool_executor(db: Any, probe_host: Any) -> ToolExecutor:
         if name == "foundations_read":
             return json.dumps(await load_foundations(db))
         if name == "foundations_validate":
-            result = validate_foundations(await load_foundations(db))
-            return json.dumps({"ok": result.ok, "errors": result.errors})
+            checked = validate_foundations(await load_foundations(db))
+            return json.dumps({"ok": checked.ok, "errors": checked.errors})
         if name == "run_probe":
             probe_id = str(args.get("probe_id") or "")
             doc = await load_foundations(db)
-            result = run_probe(probe_id, _bind_host(probe_host, doc))
-            await _persist_probe(db, probe_id, result)
+            probe = run_probe(probe_id, _bind_host(probe_host, doc))
+            await _persist_probe(db, probe_id, probe)
             return json.dumps(
-                {"probe_id": probe_id, "status": result.status, "detail": result.detail}
+                {"probe_id": probe_id, "status": probe.status, "detail": probe.detail}
             )
         if name == "export_state":
             return dump_yaml(await load_foundations(db))
         if name == "install_ssh_key":
             doc = await load_foundations(db)
-            result = run_probe("ssh_key_installed", _bind_host(probe_host, doc))
-            await _persist_probe(db, "ssh_key_installed", result)
-            return json.dumps({"status": result.status, "detail": result.detail})
+            probe = run_probe("ssh_key_installed", _bind_host(probe_host, doc))
+            await _persist_probe(db, "ssh_key_installed", probe)
+            return json.dumps({"status": probe.status, "detail": probe.detail})
         raise NotImplementedError(name)
 
     return execute

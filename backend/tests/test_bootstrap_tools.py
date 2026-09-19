@@ -75,7 +75,7 @@ def test_default_host_uses_injected_http() -> None:
 def test_default_host_bind_sees_foundations() -> None:
     host = DefaultProbeHost(
         http_get=lambda url, _t: (200, "") if "8006" in url else (500, ""),
-        foundations=lambda: {},
+        foundations=dict,
     )
     bound = host.bind(lambda: {"proxmox": {"host": "192.0.2.10"}})
     assert bound.proxmox_api().status == "pass"

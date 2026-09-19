@@ -43,7 +43,7 @@ def run_playbook(playbook_id: str, execute: Execute) -> PlaybookResult:
         try:
             detail = execute(step)
             results.append(StepResult(tool=step.tool, status="done", detail=detail))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 — playbook steps must not take down the engine
             results.append(StepResult(tool=step.tool, status="error", detail=str(exc)))
             if step.required:
                 return PlaybookResult(playbook_id=playbook_id, ok=False, steps=results)

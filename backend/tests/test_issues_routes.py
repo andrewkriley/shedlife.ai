@@ -15,8 +15,9 @@ from theshed.main import app
 async def client(db_session: AsyncSession, redis_client: Redis) -> AsyncClient:
     app.dependency_overrides[get_session] = lambda: db_session
     app.dependency_overrides[get_redis] = lambda: redis_client
+    app.state.redis = redis_client
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(transport=transport, base_url="https://test") as ac:
         yield ac
     app.dependency_overrides.clear()
 

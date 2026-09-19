@@ -17,11 +17,11 @@ def looks_like_subscription(key: str) -> bool:
     stripped = key.strip().lower()
     if not stripped:
         return False
-    if "subscription" in stripped:
-        return True
-    if stripped.startswith("claude.ai") or "console.anthropic.com/login" in stripped:
-        return True
-    return False
+    return (
+        "subscription" in stripped
+        or stripped.startswith("claude.ai")
+        or "console.anthropic.com/login" in stripped
+    )
 
 
 def reject_if_not_api_key(vendor: str, key: str) -> None:

@@ -76,6 +76,8 @@ async def post_probe(
     template = getattr(request.app.state, "probe_host", None)
     if isinstance(template, DefaultProbeHost):
         host = template.bind(lambda: doc)
+    elif template is not None:
+        host = template
     else:
         host = DefaultProbeHost(
             secrets=getattr(request.app.state, "secrets", None),
