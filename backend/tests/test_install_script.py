@@ -23,8 +23,10 @@ def test_install_script_does_not_collect_operator_secrets() -> None:
     assert "sk-ant" not in text
 
 
-def test_readme_install_follows_the_latest_release() -> None:
+def test_readme_install_is_a_one_line_latest_release() -> None:
     text = README.read_text()
-    assert "releases/latest" in text
-    assert "shedlife.ai/<tag>/bootstrap/install.sh" not in text
-    assert "${tag}/bootstrap/install.sh" in text
+    assert (
+        "curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash"
+        in text
+    )
+    assert "tag=$(" not in text

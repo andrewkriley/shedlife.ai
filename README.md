@@ -35,18 +35,15 @@ active). It is not a required tenant hostname.
 
 ## Install (Phase 1)
 
-On the Proxmox host, as root. This always follows GitHub's latest release —
-not a hardcoded version:
+On the Proxmox host, as root. This always follows GitHub's latest release:
 
 ```bash
-tag=$(curl -fsSL https://api.github.com/repos/andrewkriley/shedlife.ai/releases/latest \
-  | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
-curl -fsSL "https://raw.githubusercontent.com/andrewkriley/shedlife.ai/${tag}/bootstrap/install.sh" | bash
+curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash
 ```
 
-`THESHED_REF` overrides that tag (a branch or another release). The script
-does not ask for an API key. It prints a LAN URL; the setup gate in the
-browser is the first place that key is typed.
+`THESHED_REF` overrides the ref the script clones (a branch or another
+release). The script does not ask for an API key. It prints a LAN URL; the
+setup gate in the browser is the first place that key is typed.
 
 ## How a message becomes an answer
 
