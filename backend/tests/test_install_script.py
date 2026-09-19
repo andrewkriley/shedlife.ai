@@ -41,3 +41,11 @@ def test_install_script_pins_ubuntu_26_04() -> None:
     assert "pveam download local \"${name}\" >&2" in text
     assert 'volume="local:vztmpl/${name}"' in text
     assert "-gt 255" in text
+
+
+def test_install_script_detects_rootfs_storage() -> None:
+    text = SCRIPT.read_text()
+    assert 'STORAGE="${THESHED_STORAGE:-local-lvm}"' not in text
+    assert "pvesm status --content rootdir" in text
+    assert "THESHED_STORAGE" in text
+    assert "--rootfs" in text

@@ -15,7 +15,8 @@
 #   THESHED_MEMORY       CT RAM MiB (default: 4096)
 #   THESHED_CORES        CT vCPU (default: 2)
 #   THESHED_DISK         rootfs size (default: 16)
-#   THESHED_STORAGE      Proxmox storage for the rootfs (default: local-lvm)
+#   THESHED_STORAGE      Proxmox storage for the rootfs (default: first
+#                        active rootdir storage, preferring local-lvm)
 #   THESHED_TEMPLATE     pveam volume id (default: ubuntu-26.04-standard)
 #   THESHED_IMAGE        prebuilt image (skips compose build when set)
 #   THESHED_STATE_FILE   host-side state (default: /var/lib/theshed/install-state.yaml)
@@ -30,7 +31,6 @@ BRIDGE="${THESHED_BRIDGE:-vmbr0}"
 MEMORY="${THESHED_MEMORY:-4096}"
 CORES="${THESHED_CORES:-2}"
 DISK="${THESHED_DISK:-16}"
-STORAGE="${THESHED_STORAGE:-local-lvm}"
 PORT="${THESHED_PORT:-8080}"
 APP_DIR="/opt/theshed"
 
@@ -132,6 +132,41 @@ ensure_template() {
   echo "${volume}"
 }
 
+resolve_storage() {
+  local status names first candidate
+  status="$(pvesm status --content rootdir)"
+  names="$(printf '%s\n' "${status}" | awk 'NR>1 && $3=="active" {print $1}')"
+  if [[ -n "${THESHED_STORAGE:-}" ]]; then
+    if printf '%s\n' "${names}" | grep -qx "${THESHED_STORAGE}"; then
+      echo "${THESHED_STORAGE}"
+      return
+    fi
+    echo "storage '${THESHED_STORAGE}' does not exist or cannot hold a CT rootfs." >&2
+    echo "Available rootdir storages:" >&2
+    if [[ -z "${names}" ]]; then
+      echo "  (none)" >&2
+    else
+      printf '%s\n' "${names}" | sed 's/^/  /' >&2
+    fi
+    echo "Set THESHED_STORAGE to one of those names." >&2
+    exit 1
+  fi
+  for candidate in local-lvm local-zfs local; do
+    if printf '%s\n' "${names}" | grep -qx "${candidate}"; then
+      echo "${candidate}"
+      return
+    fi
+  done
+  first="$(printf '%s\n' "${names}" | head -1)"
+  if [[ -n "${first}" ]]; then
+    echo "${first}"
+    return
+  fi
+  echo "No active Proxmox storage with content type rootdir." >&2
+  echo "Enable rootdir on a storage, or set THESHED_STORAGE." >&2
+  exit 1
+}
+
 ct_ip() {
   if [[ -n "${THESHED_CT_IP:-}" ]]; then
     echo "${THESHED_CT_IP%%/*}"
@@ -209,6 +244,8 @@ main() {
   if maybe_reuse; then
     exit 0
   fi
+  STORAGE="$(resolve_storage)"
+  echo "Using storage ${STORAGE} for the CT rootfs"
   local template
   template="$(ensure_template)"
   create_ct "${template}"

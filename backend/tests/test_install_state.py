@@ -7,6 +7,7 @@ from theshed.bootstrap.install_state import (
     parse_state,
     render_url,
     select_os_template,
+    select_rootfs_storage,
     should_reuse,
 )
 
@@ -99,3 +100,60 @@ def test_ostemplate_volume_rejects_pve_download_noise() -> None:
     assert len(f"local:vztmpl/{noise}") > 255
     with pytest.raises(ValueError, match="255"):
         ostemplate_volume(noise)
+
+
+PVESM_STATUS = """
+Name             Type     Status           Total            Used       Available        %
+local             dir     active        98402356         8234123        90168233    8.37%
+local-lvm     lvmthin     active       157286400        12345678       144940722    7.85%
+"""
+
+
+def test_select_rootfs_storage_prefers_local_lvm() -> None:
+    assert select_rootfs_storage(PVESM_STATUS) == "local-lvm"
+
+
+def test_select_rootfs_storage_falls_back_to_local_zfs() -> None:
+    status = """
+Name             Type     Status           Total            Used       Available        %
+local             dir     active        98402356         8234123        90168233    8.37%
+local-zfs     zfspool     active      1900012344        12345678      1887666666    0.65%
+"""
+    assert select_rootfs_storage(status) == "local-zfs"
+
+
+def test_select_rootfs_storage_uses_first_custom_name() -> None:
+    status = """
+Name             Type     Status           Total            Used       Available        %
+nvme-tank     lvmthin     active       500000000        10000000       490000000    2.00%
+"""
+    assert select_rootfs_storage(status) == "nvme-tank"
+
+
+def test_select_rootfs_storage_honors_requested_name() -> None:
+    assert select_rootfs_storage(PVESM_STATUS, requested="local") == "local"
+
+
+def test_select_rootfs_storage_rejects_missing_requested() -> None:
+    with pytest.raises(ValueError, match="local-lvm"):
+        select_rootfs_storage(
+            """
+Name             Type     Status           Total            Used       Available        %
+nvme-tank     lvmthin     active       500000000        10000000       490000000    2.00%
+""",
+            requested="local-lvm",
+        )
+
+
+def test_select_rootfs_storage_skips_inactive() -> None:
+    status = """
+Name             Type     Status           Total            Used       Available        %
+local-lvm     lvmthin  inactive       157286400               0       157286400    0.00%
+nvme-tank     lvmthin     active       500000000        10000000       490000000    2.00%
+"""
+    assert select_rootfs_storage(status) == "nvme-tank"
+
+
+def test_select_rootfs_storage_requires_an_active_rootdir() -> None:
+    with pytest.raises(ValueError, match="rootdir"):
+        select_rootfs_storage("Name             Type     Status\n")
