@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.7](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.6...theshed-v0.4.7) (2026-09-19)
+
+
+### Bug Fixes
+
+* add a live debug console and print install login ([#23](https://github.com/andrewkriley/shedlife.ai/issues/23)) ([83b88e8](https://github.com/andrewkriley/shedlife.ai/commit/83b88e8494f0fa5633aee0206981bc96252e3ff2))
+
 ## [0.4.6](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.5...theshed-v0.4.6) (2026-09-19)
 
 
