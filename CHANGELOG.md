@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.3.0...theshed-v0.4.0) (2026-09-19)
+
+
+### Features
+
+* bootstrap Phase 1 profile, setup gate, and installer ([e6d79f0](https://github.com/andrewkriley/shedlife.ai/commit/e6d79f0553c72d0b9acb7b6e258e0d07b71b4383))
+
 ## [0.3.0](https://github.com/andrewkriley/theshed/compare/theshed-v0.2.0...theshed-v0.3.0) (2026-09-19)
 
 
