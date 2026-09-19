@@ -19,17 +19,22 @@ const baseSubAgents: api.SubAgentSetting[] = [
 
 describe('Settings', () => {
   it('lists sub-agents with their current provider/model', async () => {
+    vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
     vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue(baseSubAgents)
     vi.spyOn(api, 'getLiveModels').mockResolvedValue({ anthropic: ['claude-sonnet-5'] })
 
     render(<Settings onClose={() => {}} />)
 
-    expect(await screen.findByText(/assist/)).toBeInTheDocument()
-    expect(screen.getByText(/anthropic\/claude-haiku-4-5/)).toBeInTheDocument()
-    expect(screen.getByText(/\(default\)/)).toBeInTheDocument()
+    expect(await screen.findByText('assist')).toBeInTheDocument()
+    expect(screen.getByText('anthropic/claude-haiku-4-5')).toBeInTheDocument()
+    expect(screen.getByText(/Using the default model/)).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Your assistants' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Change the model' })).toBeInTheDocument()
+    expect(await screen.findByText('AI Assistant is Connected')).toBeInTheDocument()
   })
 
-  it('applies a model assignment to the selected sub-agents', async () => {
+  it('preselects the only assistant and applies a model without an extra click', async () => {
+    vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
     vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue(baseSubAgents)
     vi.spyOn(api, 'getLiveModels').mockResolvedValue({ anthropic: ['claude-sonnet-5'] })
     const setModelAssignments = vi.spyOn(api, 'setModelAssignments').mockResolvedValue([
@@ -39,15 +44,15 @@ describe('Settings', () => {
     const user = userEvent.setup()
     render(<Settings onClose={() => {}} />)
 
-    await screen.findByText(/assist/)
-    await user.click(screen.getByRole('checkbox'))
-    await user.click(screen.getByRole('button', { name: 'Apply to selected' }))
+    expect(await screen.findByRole('checkbox')).toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'Apply this model' }))
 
     expect(setModelAssignments).toHaveBeenCalledWith(['assist'], 'anthropic', 'claude-sonnet-5')
-    expect(await screen.findByText(/\(override\)/)).toBeInTheDocument()
+    expect(await screen.findByText(/Custom model/)).toBeInTheDocument()
   })
 
   it('clears an override for the selected sub-agents', async () => {
+    vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
     vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue([
       { ...baseSubAgents[0], provider: 'openai', model: 'gpt-5', overridden: true },
     ])
@@ -59,11 +64,10 @@ describe('Settings', () => {
     const user = userEvent.setup()
     render(<Settings onClose={() => {}} />)
 
-    await screen.findByText(/\(override\)/)
-    await user.click(screen.getByRole('checkbox'))
-    await user.click(screen.getByRole('button', { name: 'Clear override' }))
+    expect(await screen.findByRole('checkbox')).toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'Use default model' }))
 
     expect(setModelAssignments).toHaveBeenCalledWith(['assist'], null, null)
-    expect(await screen.findByText(/\(default\)/)).toBeInTheDocument()
+    expect(await screen.findByText(/Using the default model/)).toBeInTheDocument()
   })
 })

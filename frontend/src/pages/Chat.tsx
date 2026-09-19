@@ -18,7 +18,7 @@ interface Message {
   responding?: boolean
 }
 
-export function Chat({ onOpenSettings }: { onOpenSettings: () => void }) {
+export function Chat() {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -117,32 +117,31 @@ export function Chat({ onOpenSettings }: { onOpenSettings: () => void }) {
 
   return (
     <div className="chat-pane">
-      <h1>The Shed</h1>
-      <button type="button" onClick={onOpenSettings}>
-        Settings
-      </button>
-      <div role="log" aria-label="conversation">
+      <div className="message-list" role="log" aria-label="conversation">
+        {messages.length === 0 && (
+          <p className="message-list__empty">
+            Ask the bootstrap assistant to collect foundations, validate them, or run a probe.
+          </p>
+        )}
         {messages.map((m) => (
-          <div key={m.id} data-role={m.role}>
-            <p>
-              <strong>{m.role === 'user' ? 'You' : 'Shed'}:</strong> {m.text}
+          <div key={m.id} data-role={m.role} className={`message message--${m.role}`}>
+            <span className="message__role">{m.role === 'user' ? 'You' : 'Shed'}</span>
+            <p className="message__content">
+              {m.text || (m.role === 'assistant' && sending ? 'thinking…' : '')}
             </p>
             {m.role === 'assistant' && m.pendingApproval && (
-              <div data-role="approval-request">
+              <div data-role="approval-request" className="message__actions">
                 <p>
                   <strong>{m.pendingApproval.subAgentId}</strong> wants to run{' '}
                   <code>{m.pendingApproval.toolName}</code> with{' '}
                   <code>{JSON.stringify(m.pendingApproval.arguments)}</code>
                 </p>
-                <button
-                  type="button"
-                  onClick={() => handleApprove(m.id, true)}
-                  disabled={m.responding}
-                >
-                  Approve
+                <button type="button" onClick={() => handleApprove(m.id, true)} disabled={m.responding}>
+                  {m.responding ? 'Working…' : 'Approve'}
                 </button>
                 <button
                   type="button"
+                  className="button-secondary"
                   onClick={() => handleApprove(m.id, false)}
                   disabled={m.responding}
                 >
@@ -151,27 +150,35 @@ export function Chat({ onOpenSettings }: { onOpenSettings: () => void }) {
               </div>
             )}
             {m.role === 'assistant' && m.turnId && !m.pendingApproval && (
-              <>
-                <button type="button" onClick={() => handleVerify(m.id)} disabled={m.verifying}>
+              <div className="message__actions">
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={() => handleVerify(m.id)}
+                  disabled={m.verifying}
+                >
                   {m.verifying ? 'Verifying…' : 'Verify'}
                 </button>
                 {m.verification && <p data-role="verification">{m.verification}</p>}
-              </>
+              </div>
             )}
           </div>
         ))}
       </div>
       {status && <p role="status">{status}</p>}
-      <form onSubmit={handleSubmit}>
-        <label htmlFor="message">Message</label>
+      <form className="composer" aria-label="composer" onSubmit={handleSubmit}>
+        <label htmlFor="message" className="visually-hidden">
+          Message
+        </label>
         <input
           id="message"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={sending}
+          placeholder="Ask something…"
         />
-        <button type="submit" disabled={sending}>
-          Send
+        <button type="submit" disabled={sending || !input.trim()}>
+          {sending ? 'Sending…' : 'Send'}
         </button>
       </form>
     </div>

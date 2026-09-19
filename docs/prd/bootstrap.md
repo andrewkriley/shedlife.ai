@@ -104,8 +104,13 @@ has to exist before Git, Kubernetes, or a secrets backend do.
 ### Foundations interview
 
 Driven by chat, stored as a schema (see SPEC). The UI shows schema state
-next to the conversation. The assistant fills records; it does not invent
-keys.
+next to the conversation, grouped the same way as the field list below.
+The working chrome fits one browser window: the transcript scrolls inside
+the chat pane, and Foundations / Issues share a tabbed review column.
+Buttons depress and show a busy label while work is in flight. The header
+shows **AI Assistant is Connected** once `/health` is ok and a sub-agent
+is registered — so the operator can tell the assistant is live before
+sending a message. The assistant fills records; it does not invent keys.
 
 Field groups:
 

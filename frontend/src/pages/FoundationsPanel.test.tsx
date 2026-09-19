@@ -35,6 +35,12 @@ describe('FoundationsPanel', () => {
 
     expect(await screen.findByDisplayValue('Riley Lab')).toBeInTheDocument()
     expect(screen.getByText(/llm_key: pass/)).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Tenant' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Proxmox' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Network' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Storage' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Domains' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Platform intent' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Validate' }))
 

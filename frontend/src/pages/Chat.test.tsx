@@ -6,9 +6,15 @@ import * as api from '../lib/api'
 
 describe('Chat', () => {
   it('renders the message input and send button', () => {
-    render(<Chat onOpenSettings={() => {}} />)
+    render(<Chat />)
     expect(screen.getByLabelText('Message')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument()
+  })
+
+  it('keeps the composer visible and shows an empty-state hint before any messages', () => {
+    render(<Chat />)
+    expect(screen.getByText(/Ask the bootstrap assistant/)).toBeInTheDocument()
+    expect(screen.getByRole('form', { name: 'composer' })).toBeInTheDocument()
   })
 
   it('shows the user message immediately and the streamed assistant response as it arrives', async () => {
@@ -20,7 +26,7 @@ describe('Chat', () => {
     })
 
     const user = userEvent.setup()
-    render(<Chat onOpenSettings={() => {}} />)
+    render(<Chat />)
 
     await user.type(screen.getByLabelText('Message'), 'hi')
     await user.click(screen.getByRole('button', { name: 'Send' }))
@@ -37,7 +43,7 @@ describe('Chat', () => {
     vi.spyOn(api, 'verifyTurn').mockResolvedValue('This holds up — it answers the question.')
 
     const user = userEvent.setup()
-    render(<Chat onOpenSettings={() => {}} />)
+    render(<Chat />)
 
     await user.type(screen.getByLabelText('Message'), 'capital of France?')
     await user.click(screen.getByRole('button', { name: 'Send' }))
@@ -68,7 +74,7 @@ describe('Chat', () => {
     })
 
     const user = userEvent.setup()
-    render(<Chat onOpenSettings={() => {}} />)
+    render(<Chat />)
 
     await user.type(screen.getByLabelText('Message'), 'lock down the network')
     await user.click(screen.getByRole('button', { name: 'Send' }))
@@ -91,7 +97,7 @@ describe('Chat', () => {
     })
 
     const user = userEvent.setup()
-    render(<Chat onOpenSettings={() => {}} />)
+    render(<Chat />)
 
     await user.type(screen.getByLabelText('Message'), 'hi')
     await user.click(screen.getByRole('button', { name: 'Send' }))
