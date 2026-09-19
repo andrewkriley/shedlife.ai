@@ -31,6 +31,22 @@ class FakeLLM:
         return LLMResponse(text=self.response_text, tool_calls=[], stop_reason="end_turn")
 
 
+class SpyTracer(TurnTracer):
+    """Confirmed live: a session with no traces or spans in it despite no
+    errors anywhere — GalileoLogger batches locally and only uploads on an
+    explicit flush(), which nothing ever called. This spy exists to make
+    "flush happened at the point a trace actually concludes" a assertable
+    fact instead of something only a live Galileo dashboard check reveals."""
+
+    def __init__(self) -> None:
+        super().__init__(None)
+        self.flush_count = 0
+
+    def flush(self) -> None:
+        self.flush_count += 1
+        super().flush()
+
+
 @pytest_asyncio.fixture
 async def completed_turn(db_session: AsyncSession) -> Turn:
     user = User(display_name="Verify Test User")
@@ -57,6 +73,7 @@ class TestVerifyTurnService:
         llm = FakeLLM(response_text="This holds up — it directly answers the question.")
         conversation = await db_session.get(Conversation, completed_turn.conversation_id)
         assert conversation is not None
+        tracer = SpyTracer()
 
         verification = await verify_turn(
             db=db_session,
@@ -64,12 +81,13 @@ class TestVerifyTurnService:
             user_id=conversation.user_id,
             llm=llm,
             verifier_model="claude-sonnet-5",
-            tracer=TurnTracer(None),
+            tracer=tracer,
         )
 
         assert verification is not None
         assert verification.result == "This holds up — it directly answers the question."
         assert verification.turn_id == completed_turn.id
+        assert tracer.flush_count == 1
 
     async def test_returns_none_for_an_unknown_turn(self, db_session: AsyncSession) -> None:
         result = await verify_turn(

@@ -26,6 +26,22 @@ from theshed.observability.galileo import TurnTracer
 from theshed.turns.service import resume_turn, stream_turn
 
 
+class SpyTracer(TurnTracer):
+    """Confirmed live: a Galileo session with no traces or spans in it,
+    despite no errors anywhere — GalileoLogger batches locally and only
+    uploads on an explicit flush(), which nothing ever called. This spy
+    makes "flush happened when a tracer's work is actually done" an
+    assertable fact rather than something only a dashboard check reveals."""
+
+    def __init__(self) -> None:
+        super().__init__(None)
+        self.flush_count = 0
+
+    def flush(self) -> None:
+        self.flush_count += 1
+        super().flush()
+
+
 @dataclass
 class ScriptedLLM:
     responses: list[LLMResponse]
@@ -99,6 +115,7 @@ class TestPauseAndResume:
             ]
         )
 
+        tracer = SpyTracer()
         events = [
             event
             async for event in stream_turn(
@@ -108,11 +125,15 @@ class TestPauseAndResume:
                 message="lock down the network",
                 llm=llm,
                 classifier_model="claude-haiku-4-5",
-                tracer=TurnTracer(None),
+                tracer=tracer,
             )
         ]
 
         assert events[-1]["event"] == "approval_required"
+        # Pausing stops using this tracer instance for good (resume gets a
+        # fresh one from tracer_factory()) — whatever was recorded before
+        # the pause has to be flushed now or it's never flushed at all.
+        assert tracer.flush_count == 1
 
         payload = json.loads(events[-1]["data"])
         assert payload["tool_name"] == "confirm_create_firewall_policy"
@@ -179,6 +200,7 @@ class TestPauseAndResume:
             assert call.arguments == {"rule": "block all"}
             return "policy created"
 
+        resume_tracer = SpyTracer()
         resume_events = [
             e
             async for e in resume_turn(
@@ -187,7 +209,7 @@ class TestPauseAndResume:
                 approved=True,
                 llm=llm,
                 classifier_model="claude-haiku-4-5",
-                tracer=TurnTracer(None),
+                tracer=resume_tracer,
                 tool_executor=fake_executor,
             )
         ]
@@ -195,6 +217,10 @@ class TestPauseAndResume:
         assert resume_events[-1]["event"] == "done"
         token_events = [json.loads(e["data"])["text"] for e in resume_events if e["event"] == "token"]
         assert "".join(token_events) == "Done — the policy is live."
+        # A real request gets a fresh tracer from tracer_factory(), so this
+        # only has to account for what resume_turn itself did — one flush,
+        # at _finalize's conclude_trace.
+        assert resume_tracer.flush_count == 1
 
         turn = await db_session.get(Turn, turn_id)
         assert turn is not None
@@ -245,6 +271,7 @@ class TestPauseAndResume:
         pending = await db_session.get(PendingTurnApproval, turn_id)
         assert pending is not None
 
+        resume_tracer = SpyTracer()
         resume_events = [
             e
             async for e in resume_turn(
@@ -253,11 +280,12 @@ class TestPauseAndResume:
                 approved=False,
                 llm=llm,
                 classifier_model="claude-haiku-4-5",
-                tracer=TurnTracer(None),
+                tracer=resume_tracer,
             )
         ]
 
         assert resume_events[-1]["event"] == "done"
+        assert resume_tracer.flush_count == 1
         turn = await db_session.get(Turn, turn_id)
         assert turn is not None
         assert turn.final_response is not None

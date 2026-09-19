@@ -126,6 +126,7 @@ async def _run_matches(
                     remaining_sub_agent_ids=[sa.id for sa in matches[i + 1 :]],
                 )
             )
+            tracer.flush()
             yield _sse(
                 "approval_required",
                 {
@@ -181,6 +182,7 @@ async def _finalize(
 
     turn.final_response = final_response
     tracer.conclude_trace(final_response, worst_status)
+    tracer.flush()
     await db.commit()
 
     yield _sse("done", {"turn_id": str(turn.id), "conversation_id": str(conversation_id)})
@@ -293,6 +295,7 @@ async def resume_turn(
                 remaining_sub_agent_ids=remaining_ids,
             )
         )
+        tracer.flush()
         yield _sse(
             "approval_required",
             {
@@ -361,6 +364,7 @@ async def verify_turn(
     result = verify(turn.user_message, turn.final_response, llm, verifier_model)
     tracer.conclude_span(result)
     tracer.conclude_trace(result)
+    tracer.flush()
 
     verification = TurnVerification(turn_id=turn.id, result=result, invoked_by_user_id=user_id)
     db.add(verification)
