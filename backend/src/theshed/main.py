@@ -69,6 +69,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     os.environ.setdefault(
         "GALILEO_CONSOLE_URL", secrets.get("infisical://the-shed/observability/galileo_console_url")
     )
+    # get_or_create_session_id() (see observability/galileo.py) calls the
+    # SDK's own top-level start_session() outside any explicit
+    # galileo_context(...) block, per cl-ai-builders' own pattern (a
+    # conversation's session has to exist before its first turn's trace
+    # does) — that resolves project/log_stream from GALILEO_PROJECT/
+    # GALILEO_LOG_STREAM env vars, not from a passed-in argument, so those
+    # need bridging here same as the API key/console URL above.
+    os.environ.setdefault("GALILEO_PROJECT", GALILEO_PROJECT)
+    os.environ.setdefault("GALILEO_LOG_STREAM", GALILEO_LOG_STREAM)
     app.state.tracer_factory = lambda: TurnTracer.create(
         project=GALILEO_PROJECT, log_stream=GALILEO_LOG_STREAM
     )

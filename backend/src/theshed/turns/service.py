@@ -127,7 +127,6 @@ async def _run_matches(
                     remaining_sub_agent_ids=[sa.id for sa in matches[i + 1 :]],
                 )
             )
-            tracer.flush()
             yield _sse(
                 "approval_required",
                 {
@@ -183,7 +182,6 @@ async def _finalize(
 
     turn.final_response = final_response
     tracer.conclude_trace(final_response, worst_status)
-    tracer.flush()
     await db.commit()
 
     yield _sse("done", {"turn_id": str(turn.id), "conversation_id": str(conversation_id)})
@@ -213,29 +211,31 @@ async def stream_turn(
     db.add(turn)
     await db.flush()
 
-    if is_new_conversation:
-        tracer.start_session(str(conversation_id))
-    tracer.start_trace(message, str(turn.id))
+    tracer.use_conversation(str(conversation_id))
+    with tracer:
+        tracer.start_trace(message, str(turn.id))
 
-    sub_agents = await list_sub_agents(db)
+        sub_agents = await list_sub_agents(db)
 
-    tracer.start_span(AgentType.classifier, "classify", message)
-    matches = await resolve_matches(message, sub_agents, llm, classifier_model)
-    tracer.conclude_span(json.dumps([m.id for m in matches]))
-    yield _sse("progress", {"stage": "classify:done"})
+        tracer.start_span(AgentType.classifier, "classify", message)
+        matches = await resolve_matches(message, sub_agents, llm, classifier_model)
+        tracer.conclude_span(json.dumps([m.id for m in matches]))
+        yield _sse("progress", {"stage": "classify:done"})
 
-    state = _FanOutState()
-    async for event in _run_matches(
-        db, turn, message, context, matches, llm, tracer, state, tool_executor
-    ):
-        yield event
+        state = _FanOutState()
+        async for event in _run_matches(
+            db, turn, message, context, matches, llm, tracer, state, tool_executor
+        ):
+            yield event
 
-    if state.paused is not None:
-        await db.commit()
-        return
+        if state.paused is not None:
+            await db.commit()
+            return
 
-    async for event in _finalize(db, turn, conversation_id, message, state, llm, classifier_model, tracer):
-        yield event
+        async for event in _finalize(
+            db, turn, conversation_id, message, state, llm, classifier_model, tracer
+        ):
+            yield event
 
 
 async def resume_turn(
@@ -266,83 +266,84 @@ async def resume_turn(
     await db.delete(pending)
 
     executor_kwargs = {} if tool_executor is None else {"tool_executor": tool_executor}
-    tracer.start_span(AgentType.default, sub_agent.id, turn.user_message)
-    outcome = await resume_sub_agent(
-        sub_agent,
-        pending.tool_name,
-        pending.arguments,
-        pending.tool_use_id,
-        pending.messages,
-        pending.guard_snapshot,
-        llm,
-        approved,
-        **executor_kwargs,
-    )
+    tracer.use_conversation(str(turn.conversation_id))
+    with tracer:
+        tracer.start_span(AgentType.default, sub_agent.id, turn.user_message)
+        outcome = await resume_sub_agent(
+            sub_agent,
+            pending.tool_name,
+            pending.arguments,
+            pending.tool_use_id,
+            pending.messages,
+            pending.guard_snapshot,
+            llm,
+            approved,
+            **executor_kwargs,
+        )
 
-    if isinstance(outcome, SubAgentPaused):
+        if isinstance(outcome, SubAgentPaused):
+            db.add(
+                PendingTurnApproval(
+                    turn_id=turn.id,
+                    sub_agent_id=sub_agent.id,
+                    tool_name=outcome.tool_call.tool_name,
+                    arguments=outcome.tool_call.arguments,
+                    tool_use_id=outcome.tool_use_id,
+                    messages=outcome.messages,
+                    guard_snapshot=outcome.guard_snapshot,
+                    completed_results={
+                        sid: {"result": r, "status_code": state.status_codes[sid]}
+                        for sid, r in state.results.items()
+                    },
+                    remaining_sub_agent_ids=remaining_ids,
+                )
+            )
+            yield _sse(
+                "approval_required",
+                {
+                    "turn_id": str(turn.id),
+                    "tool_name": outcome.tool_call.tool_name,
+                    "arguments": outcome.tool_call.arguments,
+                    "sub_agent_id": sub_agent.id,
+                },
+            )
+            await db.commit()
+            return
+
+        tracer.conclude_span(outcome.result, outcome.status_code)
+        state.results[sub_agent.id] = outcome.result
+        state.status_codes[sub_agent.id] = outcome.status_code
+        state.worst_status = max(state.worst_status, outcome.status_code)
         db.add(
-            PendingTurnApproval(
+            TurnSubAgentResult(
                 turn_id=turn.id,
                 sub_agent_id=sub_agent.id,
-                tool_name=outcome.tool_call.tool_name,
-                arguments=outcome.tool_call.arguments,
-                tool_use_id=outcome.tool_use_id,
-                messages=outcome.messages,
-                guard_snapshot=outcome.guard_snapshot,
-                completed_results={
-                    sid: {"result": r, "status_code": state.status_codes[sid]}
-                    for sid, r in state.results.items()
-                },
-                remaining_sub_agent_ids=remaining_ids,
+                result=outcome.result,
+                status_code=outcome.status_code,
             )
         )
-        tracer.flush()
-        yield _sse(
-            "approval_required",
-            {
-                "turn_id": str(turn.id),
-                "tool_name": outcome.tool_call.tool_name,
-                "arguments": outcome.tool_call.arguments,
-                "sub_agent_id": sub_agent.id,
-            },
-        )
-        await db.commit()
-        return
+        yield _sse("progress", {"stage": f"agent:{sub_agent.id} done", "status": outcome.status_code})
 
-    tracer.conclude_span(outcome.result, outcome.status_code)
-    state.results[sub_agent.id] = outcome.result
-    state.status_codes[sub_agent.id] = outcome.status_code
-    state.worst_status = max(state.worst_status, outcome.status_code)
-    db.add(
-        TurnSubAgentResult(
-            turn_id=turn.id,
-            sub_agent_id=sub_agent.id,
-            result=outcome.result,
-            status_code=outcome.status_code,
-        )
-    )
-    yield _sse("progress", {"stage": f"agent:{sub_agent.id} done", "status": outcome.status_code})
+        remaining_sub_agents = []
+        for sub_agent_id in remaining_ids:
+            remaining = await get_sub_agent(db, sub_agent_id)
+            if remaining is not None:
+                remaining_sub_agents.append(remaining)
 
-    remaining_sub_agents = []
-    for sub_agent_id in remaining_ids:
-        remaining = await get_sub_agent(db, sub_agent_id)
-        if remaining is not None:
-            remaining_sub_agents.append(remaining)
+        context = await _load_context(db, turn.conversation_id)
+        async for event in _run_matches(
+            db, turn, turn.user_message, context, remaining_sub_agents, llm, tracer, state, tool_executor
+        ):
+            yield event
 
-    context = await _load_context(db, turn.conversation_id)
-    async for event in _run_matches(
-        db, turn, turn.user_message, context, remaining_sub_agents, llm, tracer, state, tool_executor
-    ):
-        yield event
+        if state.paused is not None:
+            await db.commit()
+            return
 
-    if state.paused is not None:
-        await db.commit()
-        return
-
-    async for event in _finalize(
-        db, turn, turn.conversation_id, turn.user_message, state, llm, classifier_model, tracer
-    ):
-        yield event
+        async for event in _finalize(
+            db, turn, turn.conversation_id, turn.user_message, state, llm, classifier_model, tracer
+        ):
+            yield event
 
 
 async def verify_turn(
@@ -360,12 +361,13 @@ async def verify_turn(
     if turn is None or turn.final_response is None:
         return None
 
-    tracer.start_trace(turn.final_response, f"verify:{turn.id}")
-    tracer.start_span(AgentType.judge, "verify", turn.user_message)
-    result = verify(turn.user_message, turn.final_response, llm, verifier_model)
-    tracer.conclude_span(result)
-    tracer.conclude_trace(result)
-    tracer.flush()
+    tracer.use_conversation(str(turn.conversation_id))
+    with tracer:
+        tracer.start_trace(turn.final_response, f"verify:{turn.id}")
+        tracer.start_span(AgentType.judge, "verify", turn.user_message)
+        result = verify(turn.user_message, turn.final_response, llm, verifier_model)
+        tracer.conclude_span(result)
+        tracer.conclude_trace(result)
 
     verification = TurnVerification(turn_id=turn.id, result=result, invoked_by_user_id=user_id)
     db.add(verification)

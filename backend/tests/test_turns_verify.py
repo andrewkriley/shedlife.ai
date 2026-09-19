@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from types import TracebackType
 from typing import Any
 from uuid import uuid4
 
@@ -34,17 +35,23 @@ class FakeLLM:
 class SpyTracer(TurnTracer):
     """Confirmed live: a session with no traces or spans in it despite no
     errors anywhere — GalileoLogger batches locally and only uploads on an
-    explicit flush(), which nothing ever called. This spy exists to make
-    "flush happened at the point a trace actually concludes" a assertable
-    fact instead of something only a live Galileo dashboard check reveals."""
+    explicit flush(). TurnTracer now flushes automatically on `__exit__`
+    (galileo_context's own exit does it) — this spy counts exits, making
+    "the tracer's context was actually closed" an assertable fact instead
+    of something only a live Galileo dashboard check reveals."""
 
     def __init__(self) -> None:
         super().__init__(None)
-        self.flush_count = 0
+        self.exit_count = 0
 
-    def flush(self) -> None:
-        self.flush_count += 1
-        super().flush()
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        self.exit_count += 1
+        super().__exit__(exc_type, exc_value, traceback)
 
 
 @pytest_asyncio.fixture
@@ -87,7 +94,7 @@ class TestVerifyTurnService:
         assert verification is not None
         assert verification.result == "This holds up — it directly answers the question."
         assert verification.turn_id == completed_turn.id
-        assert tracer.flush_count == 1
+        assert tracer.exit_count == 1
 
     async def test_returns_none_for_an_unknown_turn(self, db_session: AsyncSession) -> None:
         result = await verify_turn(
