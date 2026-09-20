@@ -38,6 +38,34 @@ describe('DebugDock', () => {
     expect(screen.getByText(/anthropic rejected the key/)).toBeInTheDocument()
   })
 
+  it('lists the newest debug event first', async () => {
+    vi.spyOn(api, 'getDebugStatus').mockResolvedValue({ enabled: true })
+    vi.spyOn(api, 'getDebugLogs').mockResolvedValue({
+      enabled: true,
+      events: [
+        {
+          at: '2026-09-20T00:00:00Z',
+          level: 'info',
+          source: 'turn',
+          event: 'start',
+          message: 'older turn started',
+        },
+        {
+          at: '2026-09-20T00:00:02Z',
+          level: 'info',
+          source: 'llm',
+          event: 'done',
+          message: 'newest model returned',
+        },
+      ],
+    })
+
+    render(<DebugDock />)
+    const items = await screen.findAllByRole('listitem')
+    expect(items[0]).toHaveTextContent('newest model returned')
+    expect(items[1]).toHaveTextContent('older turn started')
+  })
+
   it('shows logs when debug is already on and hides them when turned off', async () => {
     vi.spyOn(api, 'getDebugStatus').mockResolvedValue({ enabled: true })
     vi.spyOn(api, 'getDebugLogs').mockResolvedValue(sampleLogs)

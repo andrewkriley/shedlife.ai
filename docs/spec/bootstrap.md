@@ -233,7 +233,8 @@ console). `--debug` also tails compose logs onto `tty1`. Interfaces:
 
 The UI toggle is green when debug is on and muted when off. The log
 panel is shown only while debug is enabled, in the page flow under the
-chat — not as a fixed overlay.
+chat — not as a fixed overlay. The panel lists newest events first;
+`GET /debug/logs` and the CT console stay chronological (oldest first).
 
 ## Security model
 
