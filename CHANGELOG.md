@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.12](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.11...theshed-v0.4.12) (2026-09-20)
+
+
+### Bug Fixes
+
+* keep chat mounted, refresh the active model, and log LLM calls ([#34](https://github.com/andrewkriley/shedlife.ai/issues/34)) ([6b6e731](https://github.com/andrewkriley/shedlife.ai/commit/6b6e73194a2a652ee97cf2dc52d585b774553b1f))
+
 ## [0.4.11](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.10...theshed-v0.4.11) (2026-09-20)
 
 
