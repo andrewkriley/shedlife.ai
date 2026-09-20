@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.8](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.7...theshed-v0.4.8) (2026-09-20)
+
+
+### Features
+
+* print live debug events to the container console ([#25](https://github.com/andrewkriley/shedlife.ai/issues/25)) ([ee709c6](https://github.com/andrewkriley/shedlife.ai/commit/ee709c63bac3c8881f525d21686a4f95536a2c6e))
+
 ## [0.4.7](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.6...theshed-v0.4.7) (2026-09-19)
 
 
