@@ -38,6 +38,12 @@ continues.
 
 ## Commit and PR conventions
 
+- Open PRs against [`andrewkriley/shedlife.ai`](https://github.com/andrewkriley/shedlife.ai).
+  `theshed` is the product / package name only. `andrewkriley/theshed` is a
+  GitHub rename redirect, not the repository Cloud Agents or the PR tool should
+  treat as current. Self-hosted Cursor workers take their registered repo from
+  the checkout's `origin` at worker start — that remote must be
+  `shedlife.ai`, then start a new Cloud Agent from this repo.
 - **Commits must be signed** (GPG or SSH signing) — enforced by branch protection on
   `main`, not just a suggestion.
 - **PR titles must follow [Conventional Commits](https://www.conventionalcommits.org/)**
