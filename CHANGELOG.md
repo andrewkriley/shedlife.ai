@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.14](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.13...theshed-v0.4.14) (2026-09-20)
+
+
+### Bug Fixes
+
+* default OpenAI chat to gpt-4.1-mini ([#36](https://github.com/andrewkriley/shedlife.ai/issues/36)) ([1194c3b](https://github.com/andrewkriley/shedlife.ai/commit/1194c3b359d9a4ce547505bcdefdf8cc7350a41f))
+
 ## [0.4.13](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.12...theshed-v0.4.13) (2026-09-20)
 
 
