@@ -130,6 +130,24 @@ def test_install_script_prints_completion_summary() -> None:
     assert main.index("wait_ready") < main.index("print_summary")
 
 
+def test_install_script_writes_completion_details_to_ct_notes() -> None:
+    text = SCRIPT.read_text()
+    assert "write_ct_notes" in text
+    assert 'pct set "${CTID}" --description' in text
+    notes = text.split("write_ct_notes() {", 1)[1].split("\n}\n", 1)[0]
+    assert "URL:" in notes
+    assert "Username:" in notes
+    assert "Password:" in notes
+    assert "CT user:" in notes
+    assert "CT pass:" in notes
+    assert "OPERATOR_PASSWORD" in notes
+    assert "CT_ROOT_PASSWORD" in notes
+    summary = text.split("print_summary() {", 1)[1].split("\n}\n", 1)[0]
+    assert "write_ct_notes" in summary
+    main = text.split("main() {", 1)[1]
+    assert main.index("wait_ready") < main.index("print_summary")
+
+
 def test_install_script_sets_generated_ct_root_password() -> None:
     text = SCRIPT.read_text()
     assert "--password" in text

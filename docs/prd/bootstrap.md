@@ -74,9 +74,10 @@ has to exist before Git, Kubernetes, or a secrets backend do.
   tenant facts. Those belong to the web app. It *does* generate the first
   operator username (`admin`) + password and a CT `root` password, print
   them next to   the URL (including the early "The Shed is at" line, before
-  `/api/setup/status` returns), set the CT password so the Proxmox
-  console can log in, and seed the operator identity so the web UI
-  accepts `admin`.
+  `/api/setup/status` returns), write the same completion details (URL,
+  Username / Password, CT user / CT pass) to the CT Proxmox notes field,
+  set the CT password so the Proxmox console can log in, and seed the
+  operator identity so the web UI accepts `admin`.
 - Before changing anything, the installer inspects whether a bootstrap CT
   is already present and whether the app answers. It prints that status,
   a warning for the planned action, and waits for `yes` on the TTY

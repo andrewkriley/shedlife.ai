@@ -36,7 +36,10 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    CT user / CT pass immediately, then waits until
    `GET /api/setup/status` succeeds (from the host, or `pct exec` to
    localhost). Do not wait on `GET /health`. `--debug` writes
-   `THESHED_DEBUG=1`.
+   `THESHED_DEBUG=1`. The same completion details (URL, Username /
+   Password, CT user / CT pass, CT id, ref) are written to the CT
+   Proxmox notes field (`pct set --description`) so they stay visible
+   on the guest in the Proxmox UI after the installer exits.
 3. Operator opens the URL. Seeded identity exists → login with username
    `admin` and the printed password, then setup if no LLM key yet. No
    identity → setup gate.
@@ -206,8 +209,10 @@ chat — not as a fixed overlay.
 - Install script: root on Proxmox, creates one unprivileged LXC. Product
   image from GHCR (or the pinned script's documented equivalent). The
   CT `root` password is generated (never prompted), printed next to the
-  URL, and stored on the CT for reprint; it is not the Proxmox host
-  root password.
+  URL, stored on the CT for reprint, and written to the CT Proxmox notes
+  field with the URL and operator login; it is not the Proxmox host
+  root password. Those notes are on the Proxmox host (same trust as
+  root on that node), not in the product repo.
 - Setup gate and login: Argon2id, session cookie `HttpOnly` + `SameSite=Lax`,
   `Secure` off, CSRF on writes — Auth SPEC, bootstrap exception on `Secure`.
 - Root password: memory-only, dropped after `ssh_key_installed` succeeds

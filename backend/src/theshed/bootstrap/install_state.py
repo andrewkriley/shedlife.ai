@@ -164,6 +164,33 @@ def completion_summary(
     return "\n".join(lines) + "\n"
 
 
+def proxmox_notes(
+    ct_ip: str,
+    ctid: int,
+    hostname: str,
+    image_ref: str,
+    port: int = 8080,
+    username: str | None = None,
+    email: str | None = None,
+    password: str | None = None,
+    ct_password: str | None = None,
+    debug: bool = False,
+) -> str:
+    """Same completion details, written to the CT Proxmox notes field."""
+    return completion_summary(
+        ct_ip,
+        ctid,
+        hostname,
+        image_ref,
+        port=port,
+        username=username,
+        email=email,
+        password=password,
+        ct_password=ct_password,
+        debug=debug,
+    )
+
+
 def select_os_template(available_text: str) -> str | None:
     """Pinned ubuntu-<version>-standard filename from `pveam available` text."""
     best_name: str | None = None
