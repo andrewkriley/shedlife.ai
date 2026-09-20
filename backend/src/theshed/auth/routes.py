@@ -16,8 +16,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 class LoginRequest(BaseModel):
-    email: str
     password: str
+    username: str | None = None
+    email: str | None = None
+
+    def login_id(self) -> str:
+        return (self.username or self.email or "").strip()
 
 
 @router.post("/login")
@@ -27,15 +31,16 @@ async def login(
     db: AsyncSession = Depends(get_session),
     redis_client: Redis = Depends(get_redis),
 ) -> dict[str, str]:
+    login_id = body.login_id()
     result = await db.execute(
-        select(Identity).where(Identity.provider == "local", Identity.provider_user_id == body.email)
+        select(Identity).where(Identity.provider == "local", Identity.provider_user_id == login_id)
     )
     identity = result.scalar_one_or_none()
 
     if identity is None or identity.password_hash is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid username or password")
     if not verify_password(body.password, identity.password_hash):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid email or password")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid username or password")
 
     store = SessionStore(redis_client)
     session_id = await store.create(user_id=str(identity.user_id))

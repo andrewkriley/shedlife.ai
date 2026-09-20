@@ -60,7 +60,7 @@ describe('App', () => {
 
     const user = userEvent.setup()
     render(<App />)
-    await user.type(await screen.findByLabelText('Email'), 'op@example.com')
+    await user.type(await screen.findByLabelText('Username'), 'admin')
     await user.type(screen.getByLabelText('Password'), 'secret')
     await user.click(screen.getByRole('button', { name: 'Log in' }))
 

@@ -23,7 +23,7 @@ first account is created.
 | Table | Key fields |
 |---|---|
 | `users` | `id`, `display_name`, `created_at` — no credential fields here |
-| `identities` | `id`, `user_id`, `provider` (`local` \| `google` \| `github`, only `local` implemented this phase), `provider_user_id` (unique per `provider` — the login-lookup identifier: the email for `local`, the provider's own user id for OAuth later — **correction**: an earlier draft of this table said "not applicable" for `local`, but `local` needs *something* to look an identity up by, and email is it), `password_hash` (only populated for `provider = local`) |
+| `identities` | `id`, `user_id`, `provider` (`local` \| `google` \| `github`, only `local` implemented this phase), `provider_user_id` (unique per `provider` — the login-lookup identifier: the username for `local`, the provider's own user id for OAuth later), `password_hash` (only populated for `provider = local`) |
 
 A user has one `identities` row per way they can authenticate. Adding `google`/`github`
 later is a new `provider` value and new rows — no change to `users`, no migration of
@@ -31,7 +31,7 @@ existing `local` rows.
 
 ## Sequence (login, happy path)
 
-1. User submits email/username + password.
+1. User submits username + password.
 2. Backend looks up the matching `identities` row (`provider = local`), verifies the
    password against `password_hash` (Argon2id).
 3. On success: backend creates a session record in Redis (session id → user id, with
@@ -50,9 +50,10 @@ existing `local` rows.
 ## First-user seeding
 
 `POST /setup` on a control plane with zero identities (Bootstrap SPEC). Creates
-the `users` / `identities` row and stores the LLM API key in the local secrets
-backend. Refused once any identity exists. No public signup. A later Fleet
-apply may declare the same admin; it must not fight the already-created row.
+the `users` / `identities` row (local `provider_user_id` is the username) and
+stores the LLM API key in the local secrets backend. Refused once any identity
+exists. No public signup. A later Fleet apply may declare the same admin; it
+must not fight the already-created row.
 
 ## Interfaces
 

@@ -13,13 +13,13 @@ describe('Setup', () => {
 
     await user.selectOptions(screen.getByLabelText('Provider'), 'anthropic')
     await user.type(screen.getByLabelText('API key'), 'sk-ant-api03-test')
-    await user.type(screen.getByLabelText('Email'), 'op@example.com')
+    await user.type(screen.getByLabelText('Username'), 'admin')
     await user.type(screen.getByLabelText('Password'), 'correct-horse-battery-staple')
     await user.type(screen.getByLabelText('Confirm password'), 'correct-horse-battery-staple')
     await user.click(screen.getByRole('button', { name: 'Create operator' }))
 
     expect(completeSetup).toHaveBeenCalledWith({
-      email: 'op@example.com',
+      username: 'admin',
       password: 'correct-horse-battery-staple',
       provider: 'anthropic',
       api_key: 'sk-ant-api03-test',
@@ -37,7 +37,7 @@ describe('Setup', () => {
     render(<Setup onComplete={() => {}} />)
 
     await user.type(screen.getByLabelText('API key'), 'claude subscription')
-    await user.type(screen.getByLabelText('Email'), 'op@example.com')
+    await user.type(screen.getByLabelText('Username'), 'admin')
     await user.type(screen.getByLabelText('Password'), 'x')
     await user.type(screen.getByLabelText('Confirm password'), 'x')
     await user.click(screen.getByRole('button', { name: 'Create operator' }))
@@ -51,7 +51,7 @@ describe('Setup', () => {
     render(<Setup onComplete={() => {}} />)
 
     await user.type(screen.getByLabelText('API key'), 'sk-ant-api03-test')
-    await user.type(screen.getByLabelText('Email'), 'op@example.com')
+    await user.type(screen.getByLabelText('Username'), 'admin')
     await user.type(screen.getByLabelText('Password'), 'correct-horse-battery-staple')
     await user.type(screen.getByLabelText('Confirm password'), 'different-password')
     await user.click(screen.getByRole('button', { name: 'Create operator' }))
@@ -65,12 +65,12 @@ describe('Setup', () => {
     const user = userEvent.setup()
     render(<Setup onComplete={() => {}} hasOperator />)
 
-    expect(screen.queryByLabelText('Email')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Username')).not.toBeInTheDocument()
     await user.type(screen.getByLabelText('API key'), 'sk-ant-api03-test')
     await user.click(screen.getByRole('button', { name: 'Save API key' }))
 
     expect(completeSetup).toHaveBeenCalledWith({
-      email: undefined,
+      username: undefined,
       password: undefined,
       provider: 'anthropic',
       api_key: 'sk-ant-api03-test',

@@ -18,12 +18,16 @@ router = APIRouter(prefix="/setup", tags=["setup"])
 
 
 class SetupRequest(BaseModel):
+    username: str | None = None
     email: str | None = None
     password: str | None = None
     provider: str
     api_key: str
     galileo_api_key: str | None = None
     galileo_console_url: str | None = None
+
+    def login_id(self) -> str:
+        return (self.username or self.email or "").strip()
 
 
 def _has_api_key(secrets: object) -> bool:
@@ -69,16 +73,17 @@ async def post_setup(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
     if identities == 0:
-        if not body.email or not body.password:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Email and password are required")
-        user = User(display_name=body.email)
+        login_id = body.login_id()
+        if not login_id or not body.password:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Username and password are required")
+        user = User(display_name=login_id)
         db.add(user)
         await db.flush()
         db.add(
             Identity(
                 user_id=user.id,
                 provider="local",
-                provider_user_id=body.email,
+                provider_user_id=login_id,
                 password_hash=hash_password(body.password),
             )
         )

@@ -21,12 +21,12 @@ function readCsrfCookie(): string {
   return match ? decodeURIComponent(match[1]) : ''
 }
 
-export async function login(email: string, password: string): Promise<void> {
+export async function login(username: string, password: string): Promise<void> {
   const response = await fetch('/api/auth/login', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ username, password }),
   })
   if (!response.ok) {
     throw new Error('Login failed')
@@ -207,7 +207,7 @@ export async function postDebugEvent(body: {
 }
 
 export async function completeSetup(body: {
-  email?: string
+  username?: string
   password?: string
   provider: string
   api_key: string

@@ -192,13 +192,14 @@ app.include_router(settings_router)
 app.include_router(foundations_router)
 app.include_router(issues_router)
 
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 _frontend_dist = os.environ.get("THESHED_FRONTEND_DIST")
 if _frontend_dist:
     from fastapi.staticfiles import StaticFiles
 
     app.mount("/", StaticFiles(directory=_frontend_dist, html=True), name="ui")
-
-
-@app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}

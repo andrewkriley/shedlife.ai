@@ -37,12 +37,16 @@ services:
       THESHED_LOCAL_SECRETS_PATH: /var/lib/theshed/secrets.json
       THESHED_FRONTEND_DIST: /app/frontend-dist
       THESHED_DEBUG: ${THESHED_DEBUG:-0}
-      THESHED_OPERATOR_EMAIL: ${THESHED_OPERATOR_EMAIL:-}
+      THESHED_OPERATOR_USERNAME: ${THESHED_OPERATOR_USERNAME:-admin}
+      THESHED_OPERATOR_EMAIL: ${THESHED_OPERATOR_EMAIL:-${THESHED_OPERATOR_USERNAME:-admin}}
       THESHED_OPERATOR_PASSWORD: ${THESHED_OPERATOR_PASSWORD:-}
+      PYTHONUNBUFFERED: "1"
     ports:
       - "8080:8080"
     volumes:
       - secrets:/var/lib/theshed
+      # Best-effort: LXC/Proxmox console so [debug] lines show on pct console.
+      - /dev/console:/host/console
     depends_on:
       postgres:
         condition: service_healthy

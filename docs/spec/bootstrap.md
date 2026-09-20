@@ -25,15 +25,22 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
 1. Operator, as root on the Proxmox host, runs the install command pinned to
    a release tag (overrideable). Example shape:
    `curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash`
-2. The script creates the LXC if no healthy CT is recorded in its state
-   file, generates an operator email + password, writes them into the CT
-   `.env`, starts The Shed image, waits until `GET /health` succeeds from
-   the host, prints `http://<ct-ip>:<port>` plus those credentials.
-   `--debug` also writes `THESHED_DEBUG=1`.
-3. Operator opens the URL. Seeded identity exists → login with the
-   printed credentials, then setup if no LLM key yet. No identity →
-   setup gate.
-4. Setup gate: provider + API key (live validate). Email + password
+2. The script inspects the recorded CT (if any): present / running /
+   stopped, and whether `GET /api/setup/status` answers. It prints that
+   status and a warning, then requires `yes` on the TTY unless
+   `--yes` / `THESHED_YES=1`. Fresh → create. Existing → update in
+   place (keep `.env` and compose volumes, refresh the clone and
+   image). `--delete` → destroy the CT, then fresh. New CTs get a
+   generated `admin` password and CT `root` password
+   (`pct create --password`). Prints the URL plus Username / Password /
+   CT user / CT pass immediately, then waits until
+   `GET /api/setup/status` succeeds (from the host, or `pct exec` to
+   localhost). Do not wait on `GET /health`. `--debug` writes
+   `THESHED_DEBUG=1`.
+3. Operator opens the URL. Seeded identity exists → login with username
+   `admin` and the printed password, then setup if no LLM key yet. No
+   identity → setup gate.
+4. Setup gate: provider + API key (live validate). Username + password
    (typed twice) only when no operator identity exists yet.
    Writes `local://providers/llm/api_key` (and optional Galileo refs).
    Creates `users` / `identities` rows. Sets the session cookie
@@ -147,7 +154,9 @@ Reused from the living harness:
 - `POST /auth/login`, `POST /auth/logout` — Auth SPEC, with `Secure` off.
 - `POST /turns`, `POST /turns/{id}/approvals`, `POST /turns/{id}/verify` —
   Core Agentic Loop SPEC.
-- `GET /health` — installer wait loop.
+- `GET /health` — UI connected indicator. Registered before the static
+  mount so it is not swallowed.
+- `GET /api/setup/status` — installer wait loop and reuse check.
 
 New:
 
@@ -175,20 +184,26 @@ status, the assistant list (a lone agent is pre-selected), and a
 In-memory ring (last 500 events). Enabled by `THESHED_DEBUG=1` or
 `local://debug/enabled`. Toggle wins over the env var. Events: HTTP
 (except `/health` and `/debug/logs`), UI clicks, provider connect
-attempts, unhandled errors. Secrets are redacted. Interfaces:
+attempts, unhandled errors. Secrets are redacted. Each recorded event
+is also printed to the app process stdout as one `[debug]` line
+(container console / `docker compose logs -f app`, and `/dev/console`
+when writable). Interfaces:
 
 - `GET /debug/status` — `{enabled}`
 - `POST /debug/enabled` — `{enabled}` persists the toggle
 - `GET /debug/logs` — `{enabled, events[]}`
 - `POST /debug/events` — UI clicks / client errors
 
-The UI shows a debug console when enabled and a header control to
-turn it on or off.
+The UI toggle is green when debug is on and muted when off. The log
+panel is shown only while debug is enabled.
 
 ## Security model
 
 - Install script: root on Proxmox, creates one unprivileged LXC. Product
-  image from GHCR (or the pinned script's documented equivalent).
+  image from GHCR (or the pinned script's documented equivalent). The
+  CT `root` password is generated (never prompted), printed next to the
+  URL, and stored on the CT for reprint; it is not the Proxmox host
+  root password.
 - Setup gate and login: Argon2id, session cookie `HttpOnly` + `SameSite=Lax`,
   `Secure` off, CSRF on writes — Auth SPEC, bootstrap exception on `Secure`.
 - Root password: memory-only, dropped after `ssh_key_installed` succeeds

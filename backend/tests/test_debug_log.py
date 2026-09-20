@@ -38,3 +38,36 @@ def test_persisted_toggle_overrides_env(monkeypatch) -> None:
     debug_log.set_enabled(True)
     assert debug_log.is_enabled() is True
     assert secrets.get("local://debug/enabled") == "1"
+
+
+def test_record_prints_redacted_line_to_stdout(monkeypatch, capsys) -> None:
+    monkeypatch.setenv("THESHED_DEBUG", "1")
+    debug_log.record(
+        "ui",
+        "click",
+        "Save",
+        detail={"password": "once-only", "path": "/settings"},
+    )
+    out = capsys.readouterr().out
+    assert "[debug]" in out
+    assert "ui.click" in out
+    assert "Save" in out
+    assert "once-only" not in out
+    assert "***" in out
+
+
+def test_record_does_not_print_when_disabled(monkeypatch, capsys) -> None:
+    monkeypatch.delenv("THESHED_DEBUG", raising=False)
+    debug_log.record("ui", "click", "Save")
+    assert capsys.readouterr().out == ""
+
+
+def test_record_also_writes_host_console(monkeypatch, tmp_path, capsys) -> None:
+    console = tmp_path / "console"
+    monkeypatch.setenv("THESHED_DEBUG", "1")
+    monkeypatch.setattr(debug_log, "CONSOLE_PATHS", (str(console),))
+    debug_log.record("http", "error", "boom")
+    text = console.read_text()
+    assert "[debug]" in text
+    assert "http.error" in text
+    assert "boom" in text
