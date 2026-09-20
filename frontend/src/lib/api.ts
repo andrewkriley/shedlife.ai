@@ -33,9 +33,26 @@ export async function login(username: string, password: string): Promise<void> {
   }
 }
 
+async function readErrorDetail(response: Response, fallback: string): Promise<string> {
+  try {
+    const payload: { detail?: unknown } = await response.clone().json()
+    if (typeof payload.detail === 'string' && payload.detail) return payload.detail
+    if (payload.detail != null) return JSON.stringify(payload.detail)
+  } catch {
+    try {
+      const text = await response.clone().text()
+      if (text.trim()) return text.trim()
+    } catch {
+      // keep fallback
+    }
+  }
+  return fallback
+}
+
 async function* consumeSseStream(response: Response): AsyncGenerator<TurnEvent> {
   if (!response.ok || !response.body) {
-    throw new Error('Failed to open turn stream')
+    const fallback = `Failed to open turn stream (${response.status || 'no response'})`
+    throw new Error(await readErrorDetail(response, fallback))
   }
 
   const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()

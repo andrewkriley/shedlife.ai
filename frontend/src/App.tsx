@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { AssistantStatus } from './components/AssistantStatus'
 import { DebugDock } from './components/DebugDock'
 import { getSetupStatus } from './lib/api'
@@ -11,6 +11,15 @@ import { Setup } from './pages/Setup'
 
 type View = 'chat' | 'settings'
 type ReviewTab = 'foundations' | 'issues'
+
+function AppFrame({ children }: { children: ReactNode }) {
+  return (
+    <div className="app-frame">
+      <div className="app-frame__main">{children}</div>
+      <DebugDock />
+    </div>
+  )
+}
 
 function App() {
   const [setupNeeded, setSetupNeeded] = useState<boolean | null>(null)
@@ -30,15 +39,14 @@ function App() {
 
   if (setupNeeded === null) {
     return (
-      <>
+      <AppFrame>
         <p role="status">Loading…</p>
-        <DebugDock />
-      </>
+      </AppFrame>
     )
   }
   if (setupNeeded && !hasOperator) {
     return (
-      <>
+      <AppFrame>
         <Setup
           onComplete={() => {
             setSetupNeeded(false)
@@ -46,81 +54,79 @@ function App() {
             setLoggedIn(true)
           }}
         />
-        <DebugDock />
-      </>
+      </AppFrame>
     )
   }
   if (!loggedIn) {
     return (
-      <>
+      <AppFrame>
         <Login onLoggedIn={() => setLoggedIn(true)} />
-        <DebugDock />
-      </>
+      </AppFrame>
     )
   }
   if (setupNeeded) {
     return (
-      <>
+      <AppFrame>
         <Setup
           hasOperator
           onComplete={() => {
             setSetupNeeded(false)
           }}
         />
-        <DebugDock />
-      </>
+      </AppFrame>
     )
   }
 
   return (
-    <div className="app-shell" data-layout="single-window">
-      <header className="app-header">
-        <h1>The Shed</h1>
-        <AssistantStatus />
+    <AppFrame>
+      <div className="app-shell" data-layout="single-window">
+        <header className="app-header">
+          <h1>The Shed</h1>
+          <AssistantStatus />
+          {view === 'settings' ? (
+            <button type="button" className="button-secondary" onClick={() => setView('chat')}>
+              Back to chat
+            </button>
+          ) : (
+            <button type="button" className="button-secondary" onClick={() => setView('settings')}>
+              Settings
+            </button>
+          )}
+        </header>
         {view === 'settings' ? (
-          <button type="button" className="button-secondary" onClick={() => setView('chat')}>
-            Back to chat
-          </button>
+          <Settings onClose={() => setView('chat')} />
         ) : (
-          <button type="button" className="button-secondary" onClick={() => setView('settings')}>
-            Settings
-          </button>
+          <>
+            <Chat />
+            <aside className="sidebar">
+              <div className="sidebar-tabs" role="tablist" aria-label="review">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={reviewTab === 'foundations'}
+                  className={reviewTab === 'foundations' ? 'is-active' : undefined}
+                  onClick={() => setReviewTab('foundations')}
+                >
+                  Foundations
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={reviewTab === 'issues'}
+                  className={reviewTab === 'issues' ? 'is-active' : undefined}
+                  onClick={() => setReviewTab('issues')}
+                >
+                  Issues
+                </button>
+              </div>
+              <div className="sidebar-panel" role="tabpanel">
+                {reviewTab === 'foundations' ? <FoundationsPanel /> : <IssuesPanel />}
+              </div>
+            </aside>
+          </>
         )}
-      </header>
-      {view === 'settings' ? (
-        <Settings onClose={() => setView('chat')} />
-      ) : (
-        <>
-          <Chat />
-          <aside className="sidebar">
-            <div className="sidebar-tabs" role="tablist" aria-label="review">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={reviewTab === 'foundations'}
-                className={reviewTab === 'foundations' ? 'is-active' : undefined}
-                onClick={() => setReviewTab('foundations')}
-              >
-                Foundations
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={reviewTab === 'issues'}
-                className={reviewTab === 'issues' ? 'is-active' : undefined}
-                onClick={() => setReviewTab('issues')}
-              >
-                Issues
-              </button>
-            </div>
-            <div className="sidebar-panel" role="tabpanel">
-              {reviewTab === 'foundations' ? <FoundationsPanel /> : <IssuesPanel />}
-            </div>
-          </aside>
-        </>
-      )}
-      <DebugDock />
-    </div>
+      </div>
+    </AppFrame>
   )
 }
 

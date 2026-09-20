@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from theshed.debug import log as debug_log
 from theshed.secrets.client import LocalSecretsClient
 
@@ -71,3 +73,14 @@ def test_record_also_writes_host_console(monkeypatch, tmp_path, capsys) -> None:
     assert "[debug]" in text
     assert "http.error" in text
     assert "boom" in text
+
+
+def test_console_paths_include_ct_tty1() -> None:
+    assert "/host/tty1" in debug_log.CONSOLE_PATHS
+    assert "/dev/tty1" in debug_log.CONSOLE_PATHS
+
+
+def test_compose_bind_mounts_ct_tty1() -> None:
+    compose = Path(__file__).resolve().parents[2] / "bootstrap" / "docker-compose.yml"
+    text = compose.read_text()
+    assert "/dev/tty1:/host/tty1" in text

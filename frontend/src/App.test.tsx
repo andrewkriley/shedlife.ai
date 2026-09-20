@@ -65,6 +65,9 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Log in' }))
 
     expect(document.querySelector('.app-shell')).toHaveAttribute('data-layout', 'single-window')
+    expect(document.querySelector('.app-frame')).toBeInTheDocument()
+    expect(document.querySelector('.app-frame')?.contains(document.querySelector('.debug-dock'))).toBe(true)
+    expect(document.querySelector('.app-shell')?.contains(document.querySelector('.debug-dock'))).toBe(false)
     expect(await screen.findByText('AI Assistant is Connected')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Foundations' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Issues' })).toBeInTheDocument()
