@@ -9,7 +9,7 @@ from __future__ import annotations
 
 VENDOR_DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-haiku-4-5",
-    "openai": "o4-mini",
+    "openai": "gpt-4.1-mini",
     "gemini": "gemini-2.5-flash",
 }
 

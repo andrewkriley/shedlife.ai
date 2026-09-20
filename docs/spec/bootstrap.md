@@ -55,7 +55,7 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    for the live vendor and the model chat will actually call. Registry
    has one row (`bootstrap.intake`); the turn path short-circuits
    classification and opens that agent. The registry default is OpenAI
-   `o4-mini`. If the configured key is a different vendor, chat uses
+   `gpt-4.1-mini`. If the configured key is a different vendor, chat uses
    that vendor's default model rather than sending a Claude id to
    OpenAI (or the reverse).
 6. `collect-foundations`: the agent asks for schema fields, writes them
@@ -138,7 +138,7 @@ document plus those references.
 | `macro_category` | `assist` |
 | `description` | Collect, validate, and probe tenant foundations so Deploy can start |
 | `tools` | playbook tools + `foundations.write` / `foundations.read` + probes |
-| `default_provider` / `default_model` | `openai` / `o4-mini` |
+| `default_provider` / `default_model` | `openai` / `gpt-4.1-mini` |
 
 `assist`, `run.network`, and `build` are **not** registered in this profile.
 They remain in the product; they are not seeded here.

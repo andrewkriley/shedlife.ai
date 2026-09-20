@@ -34,7 +34,7 @@ class TestRegistry:
         assert sub_agent is not None
         assert sub_agent.macro_category == "assist"
         assert sub_agent.default_provider == "openai"
-        assert sub_agent.default_model == "o4-mini"
+        assert sub_agent.default_model == "gpt-4.1-mini"
         tool_names = {t["name"] for t in sub_agent.tools}
         assert "foundations_write" in tool_names
         assert "install_ssh_key" in tool_names
