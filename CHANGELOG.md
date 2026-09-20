@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.10](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.9...theshed-v0.4.10) (2026-09-20)
+
+
+### Features
+
+* write install URL and passwords to the CT notes ([#30](https://github.com/andrewkriley/shedlife.ai/issues/30)) ([1a9b7e9](https://github.com/andrewkriley/shedlife.ai/commit/1a9b7e9ace18960fab8d44fc46dd7359c8b06728))
+
+
+### Bug Fixes
+
+* list all LLM providers in Settings and wire OpenAI chat ([#29](https://github.com/andrewkriley/shedlife.ai/issues/29)) ([18f1b2b](https://github.com/andrewkriley/shedlife.ai/commit/18f1b2b870055c393ead89c65f26801b34bcff03))
+
 ## [0.4.9](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.8...theshed-v0.4.9) (2026-09-20)
 
 
