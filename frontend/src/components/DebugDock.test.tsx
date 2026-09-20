@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { DebugDock } from './DebugDock'
+import { formatDebugTimestamp } from '../lib/debugTime'
 import * as api from '../lib/api'
 
 const sampleLogs = {
@@ -36,6 +37,20 @@ describe('DebugDock', () => {
     expect(await screen.findByRole('button', { name: 'Debug on' })).toHaveClass('debug-dock__toggle--on')
     expect(await screen.findByLabelText('debug console')).toBeInTheDocument()
     expect(screen.getByText(/anthropic rejected the key/)).toBeInTheDocument()
+    expect(
+      screen.getByText(formatDebugTimestamp('2026-09-20T00:00:00Z'), { exact: false }),
+    ).toBeInTheDocument()
+  })
+
+  it('formats timestamps as a local clock without a UTC designator', () => {
+    const formatted = formatDebugTimestamp('2026-09-20T14:05:06.123Z')
+    const date = new Date('2026-09-20T14:05:06.123Z')
+    const pad = (value: number) => String(value).padStart(2, '0')
+    expect(formatted).toBe(
+      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`,
+    )
+    expect(formatted).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
+    expect(formatted).not.toMatch(/Z|T|\+/)
   })
 
   it('lists the newest debug event first', async () => {
