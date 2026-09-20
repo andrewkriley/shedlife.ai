@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import TracebackType
 from typing import Any
 from uuid import uuid4
@@ -15,12 +15,15 @@ from theshed.db.session import get_session
 from theshed.debug import log as debug_log
 from theshed.main import app
 from theshed.observability.galileo import TurnTracer
-from theshed.turns.service import stream_turn, verify_turn
+from theshed.settings.service import set_model_assignments
+from theshed.turns.service import public_turn_error, stream_turn, verify_turn
 
 
 @dataclass
 class FakeLLM:
     response_text: str | None
+    vendor: str = "anthropic"
+    models_called: list[str] = field(default_factory=list)
 
     def complete(
         self,
@@ -30,6 +33,7 @@ class FakeLLM:
         model: str,
         tools: list[dict[str, Any]] | None = None,
     ) -> LLMResponse:
+        self.models_called.append(model)
         return LLMResponse(text=self.response_text, tool_calls=[], stop_reason="end_turn")
 
 
@@ -188,6 +192,56 @@ class TestVerifyTurnRoute:
         response = await client.post(f"/turns/{uuid4()}/verify")
 
         assert response.status_code == 404
+
+    async def test_verify_uses_the_resolved_live_model_not_a_stale_classifier(
+        self,
+        client: AsyncClient,
+        completed_turn_for_route: Turn,
+        db_session: AsyncSession,
+        route_user: User,
+    ) -> None:
+        llm = FakeLLM(response_text="Looks correct to me.", vendor="openai")
+        app.state.llm_client = llm
+        app.state.classifier_model = "claude-haiku-4-5"
+        await set_model_assignments(
+            db=db_session,
+            sub_agent_ids=["bootstrap.intake"],
+            provider="anthropic",
+            model="claude-haiku-4-5",
+            set_by_user_id=route_user.id,
+        )
+
+        response = await client.post(f"/turns/{completed_turn_for_route.id}/verify")
+
+        assert response.status_code == 200
+        assert llm.models_called == ["gpt-4.1-mini"]
+        assert app.state.classifier_model == "gpt-4.1-mini"
+
+
+def test_public_turn_error_prefers_vendor_message() -> None:
+    class VendorError(RuntimeError):
+        def __init__(self) -> None:
+            super().__init__("Error code: 400 - buried dump")
+            self.body = {
+                "error": {
+                    "message": (
+                        "Unsupported value: 'reasoning_effort' does not support "
+                        "'none' with this model."
+                    ),
+                    "type": "invalid_request_error",
+                }
+            }
+
+    assert public_turn_error(VendorError()) == (
+        "The assistant could not answer: Unsupported value: 'reasoning_effort' "
+        "does not support 'none' with this model."
+    )
+
+
+def test_public_turn_error_falls_back_to_str() -> None:
+    assert public_turn_error(RuntimeError("timeout")) == (
+        "The assistant could not answer: timeout"
+    )
 
 
 @pytest.mark.asyncio

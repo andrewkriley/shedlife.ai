@@ -5,9 +5,20 @@ from __future__ import annotations
 from typing import Any
 
 SCHEMA_VERSION = 1
+PROXMOX_API_TOKEN_REF = "local://proxmox/api_token"
 
 KNOWN_TOP_LEVEL = frozenset(
-    {"version", "tenant", "operator", "proxmox", "network", "storage", "domains", "intent", "probes"}
+    {
+        "version",
+        "tenant",
+        "operator",
+        "proxmox",
+        "network",
+        "storage",
+        "domains",
+        "intent",
+        "probes",
+    }
 )
 
 INTENT_KEYS = ("gitlab", "infisical", "dns", "k3s")
@@ -18,7 +29,12 @@ def empty_foundations() -> dict[str, Any]:
         "version": SCHEMA_VERSION,
         "tenant": {"name": "", "slug": ""},
         "operator": {"email": ""},
-        "proxmox": {"host": "", "node": "", "ssh_key_fingerprint": None},
+        "proxmox": {
+            "host": "",
+            "node": "",
+            "api_token_ref": "",
+            "ssh_key_fingerprint": None,
+        },
         "network": {"bridge": "", "address": "", "gateway": "", "ntp": "inherit"},
         "storage": {"pool": ""},
         "domains": {"intended": []},

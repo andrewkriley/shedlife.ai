@@ -26,7 +26,8 @@ Bootstrap profile:
 local://<path...>/<secret_name>
 ```
 
-Example: `local://providers/llm/api_key`.
+Example: `local://providers/llm/api_key`, `local://proxmox/api_token`,
+`local://observability/galileo_api_key`.
 
 After Deploy (scheme reserved now so callers do not invent a third):
 

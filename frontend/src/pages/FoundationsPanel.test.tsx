@@ -37,6 +37,7 @@ describe('FoundationsPanel', () => {
     expect(screen.getByText(/llm_key: pass/)).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Tenant' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Proxmox' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Proxmox API token')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Network' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Storage' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Domains' })).toBeInTheDocument()
@@ -64,5 +65,24 @@ describe('FoundationsPanel', () => {
     expect(putFoundations).toHaveBeenCalled()
     const saved = putFoundations.mock.calls[0][0]
     expect(saved.tenant.slug).toBe('riley-lab')
+  })
+
+  it('saves a proxmox API token from the foundations field', async () => {
+    vi.spyOn(api, 'getFoundations').mockResolvedValue(baseDoc)
+    const putFoundations = vi.spyOn(api, 'putFoundations').mockResolvedValue({
+      ...baseDoc,
+      proxmox: { ...baseDoc.proxmox, api_token_ref: 'local://proxmox/api_token', api_token_set: true },
+    })
+
+    const user = userEvent.setup()
+    render(<FoundationsPanel />)
+    await screen.findByDisplayValue('Riley Lab')
+    await user.type(screen.getByLabelText('Proxmox API token'), 'root@pam!shed=secret-token')
+    await user.click(screen.getByRole('button', { name: 'Save schema' }))
+
+    expect(putFoundations).toHaveBeenCalled()
+    const saved = putFoundations.mock.calls[0][0]
+    expect(saved.proxmox.api_token).toBe('root@pam!shed=secret-token')
+    expect(await screen.findByPlaceholderText(/Token is saved/)).toBeInTheDocument()
   })
 })

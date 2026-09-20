@@ -26,6 +26,7 @@ from theshed.observability.galileo import TurnTracer
 from theshed.probes.host import DefaultProbeHost
 from theshed.profile import is_bootstrap_profile
 from theshed.secrets.client import EnvVarSecretsClient, LocalSecretsClient, SecretNotFoundError
+from theshed.settings.galileo import apply_galileo_runtime
 from theshed.settings.routes import router as settings_router
 from theshed.setup.routes import router as setup_router
 from theshed.turns.routes import router as turns_router
@@ -93,7 +94,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             _configure_llm(app, vendor, key)
         except SecretNotFoundError:
             pass
-        app.state.tracer_factory = lambda: TurnTracer(None)
+        apply_galileo_runtime(app.state, secrets)
         app.state.probe_host = DefaultProbeHost(secrets=secrets)
         app.state.tool_executor = None
         app.state.tool_executor_factory = lambda db: make_bootstrap_tool_executor(

@@ -6,6 +6,7 @@ import {
   setDebugEnabled,
   type DebugEvent,
 } from '../lib/api'
+import { formatDebugTimestamp } from '../lib/debugTime'
 
 export function DebugDock() {
   const [enabled, setEnabled] = useState(false)
@@ -98,10 +99,10 @@ export function DebugDock() {
             <p className="empty-hint">No debug events yet.</p>
           ) : (
             <ol>
-              {events.map((item, index) => (
+              {[...events].reverse().map((item, index) => (
                 <li key={`${item.at}-${index}`} data-level={item.level}>
                   <span className="debug-console__meta">
-                    {item.source} · {item.event}
+                    {formatDebugTimestamp(item.at)} · {item.source} · {item.event}
                   </span>
                   {item.message}
                 </li>

@@ -60,21 +60,30 @@ async function* consumeSseStream(response: Response): AsyncGenerator<TurnEvent> 
 
   while (true) {
     const { value, done } = await reader.read()
-    if (done) break
-    // The server emits \r\n line endings (valid per the SSE spec — Starlette's
-    // own choice, confirmed live by inspecting the raw stream). \r\n\r\n never
-    // contains the substring \n\n, so splitting on a bare '\n\n' silently
-    // matched nothing at all: the buffer just grew forever and no event was
-    // ever parsed out, with no error anywhere — the fetch still completed
-    // normally. Normalizing line endings first is the fix.
-    buffer += value.replace(/\r\n/g, '\n')
+    if (value) {
+      // The server emits \r\n line endings (valid per the SSE spec — Starlette's
+      // own choice, confirmed live by inspecting the raw stream). \r\n\r\n never
+      // contains the substring \n\n, so splitting on a bare '\n\n' silently
+      // matched nothing at all: the buffer just grew forever and no event was
+      // ever parsed out, with no error anywhere — the fetch still completed
+      // normally. Normalizing line endings first is the fix.
+      buffer += value.replace(/\r\n/g, '\n')
 
-    const events = buffer.split('\n\n')
-    buffer = events.pop() ?? ''
+      const events = buffer.split('\n\n')
+      buffer = events.pop() ?? ''
 
-    for (const raw of events) {
-      const event = parseSseEvent(raw)
+      for (const raw of events) {
+        const event = parseSseEvent(raw)
+        if (event) yield event
+      }
+    }
+    if (done) {
+      // A stream that ends without a trailing blank line still has a valid
+      // last event in the leftover buffer. Dropping it is "send a message
+      // and nothing happens" when that last event is `error` or `done`.
+      const event = parseSseEvent(buffer)
       if (event) yield event
+      break
     }
   }
 }
@@ -165,6 +174,43 @@ export async function getConnection(): Promise<ConnectionStatus> {
   const response = await fetch('/api/settings/connection', { credentials: 'include' })
   if (!response.ok) {
     throw new Error('Failed to load connection')
+  }
+  return response.json()
+}
+
+export interface GalileoSettings {
+  project: string
+  host: string
+  log_stream: string
+  api_key_set: boolean
+  configured: boolean
+}
+
+export async function getGalileoSettings(): Promise<GalileoSettings> {
+  const response = await fetch('/api/settings/galileo', { credentials: 'include' })
+  if (!response.ok) {
+    throw new Error('Failed to load Galileo settings')
+  }
+  return response.json()
+}
+
+export async function setGalileoSettings(body: {
+  project: string
+  host: string
+  log_stream: string
+  api_key?: string
+}): Promise<GalileoSettings> {
+  const response = await fetch('/api/settings/galileo', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-csrf-token': readCsrfCookie(),
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    throw new Error(await readErrorDetail(response, 'Failed to save Galileo settings'))
   }
   return response.json()
 }
@@ -273,7 +319,14 @@ export interface FoundationsDocument {
   version: number
   tenant: { name: string; slug: string }
   operator: { email: string }
-  proxmox: { host: string; node: string; ssh_key_fingerprint: string | null }
+  proxmox: {
+    host: string
+    node: string
+    ssh_key_fingerprint: string | null
+    api_token_ref?: string
+    api_token_set?: boolean
+    api_token?: string
+  }
   network: { bridge: string; address: string; gateway: string; ntp: string }
   storage: { pool: string }
   domains: { intended: string[] }
@@ -414,7 +467,7 @@ export async function setModelAssignments(
     body: JSON.stringify({ sub_agent_ids: subAgentIds, provider, model }),
   })
   if (!response.ok) {
-    throw new Error('Failed to update model assignments')
+    throw new Error(await readErrorDetail(response, 'Failed to update model assignments'))
   }
   return response.json()
 }

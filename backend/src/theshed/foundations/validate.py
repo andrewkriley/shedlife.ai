@@ -46,6 +46,8 @@ def validate_foundations(doc: dict[str, Any]) -> ValidationResult:
     proxmox = doc.get("proxmox") or {}
     if not (proxmox.get("host") or "").strip():
         errors.setdefault("proxmox.host", "required")
+    if not (proxmox.get("api_token_ref") or "").strip():
+        errors.setdefault("proxmox.api_token", "required")
 
     network = doc.get("network") or {}
     address = (network.get("address") or "").strip()

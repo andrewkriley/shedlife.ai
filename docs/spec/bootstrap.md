@@ -57,7 +57,23 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    classification and opens that agent. The registry default is OpenAI
    `gpt-4.1-mini`. If the configured key is a different vendor, chat uses
    that vendor's default model rather than sending a Claude id to
-   OpenAI (or the reverse).
+   OpenAI (or the reverse). Classify, synthesize, and verify use that
+   same resolved model — not a stale `classifier_model` left from a
+   previous Apply. A Settings override for `bootstrap.intake` is its
+   own row and **survives image upgrades**; changing the registry
+   default does not clear it. Apply of a vendor that is not the live
+   key is refused (`400`); save that provider's key first. The Settings
+   model picker only lists models for the live vendor. Send must produce a visible reply or a
+   visible error — a silent no-op is a bug. Confirmed live on a LAN
+   HTTP CT URL: `crypto.randomUUID()` throws (not a secure context),
+   so chat message ids must not depend on it. Confirmed live with a
+   persisted `openai/gpt-5` override: Chat Completions
+   `reasoning_effort=none` is a 400 (`minimal` / `low` / `medium` /
+   `high` only); `gpt-5.4` still accepts `none`. The OpenAI client
+   must pick the effort the named model accepts. The SSE client must
+   flush a leftover event when the stream ends without a trailing
+   blank line, or an `error` / `done` is dropped and the UI looks
+   dead.
 6. `collect-foundations`: the agent asks for schema fields, writes them
    through a `foundations.write` tool (no side effects beyond the store).
    It may first enumerate the host and adopted URLs with the discovery
@@ -101,6 +117,7 @@ operator:
 proxmox:
   host: <ip or hostname>
   node: <node name>
+  api_token_ref: local://proxmox/api_token   # value never in this file
   ssh_key_fingerprint: <fingerprint or null>
 network:
   bridge: vmbr0
@@ -131,7 +148,11 @@ probes:
 
 Secret *values* are only in the local secrets store, referenced as
 `local://<path>` (see Secrets Management). The exportable bundle is this
-document plus those references.
+document plus those references. The Foundations panel has a Proxmox API
+token field; saving it writes `local://proxmox/api_token` and leaves only
+the ref on the schema. `foundations_write` does the same if the assistant
+is handed `proxmox.api_token`. GET never returns the raw token — only
+`api_token_set`. `proxmox_api` authenticates with `PVEAPIToken=`.
 
 ### Sub-agent registry (bootstrap profile seed)
 
@@ -186,16 +207,30 @@ New:
   refused once an identity exists.
 
 Settings (`GET /settings/models`, `GET /settings/connection`,
-`POST /settings/provider`, model overrides) stay; they are how the
-operator changes provider after the gate. `GET /settings/connection`
-is the live vendor and the model assigned to `bootstrap.intake` (or the
-first override). Apply / save-key refreshes the header immediately. The
-page always lists Anthropic / OpenAI / Gemini, can save a new
-API key, groups connection status, the assistant list (a lone agent is
-pre-selected), and a "Change the model" assignment block. Bootstrap
-wires an Anthropic or OpenAI client from `local://providers/llm/*` so
-chat and the live models list use the same key. Opening Settings keeps
-the chat transcript mounted (hidden), so Back to chat does not wipe it.
+`POST /settings/provider`, model overrides, `GET`/`POST /settings/galileo`)
+stay; they are how the operator changes provider and Galileo after the
+gate. `GET /settings/galileo` returns the current project, host (console
+URL), log stream, and whether an API key is saved — never the key.
+`POST /settings/galileo` writes `local://observability/galileo_*`,
+applies `GALILEO_*` env for the SDK, and enables the tracer when a key
+is present (otherwise the no-op tracer stays). `GET /settings/connection`
+is the live vendor and the resolved model chat / verify will actually
+call for `bootstrap.intake` (or the first override). Apply / save-key
+refreshes the header immediately. The page always lists Anthropic /
+OpenAI / Gemini for saving a key; the model assignment block is locked
+to the live vendor. `POST /settings/model-assignments` rejects a
+provider that is not the live client (`400`: save that key first) so a
+Claude id cannot be stored and then sent to OpenAI (the live
+`claude-haiku-4-5` / `model_not_found` 404 on `POST /turns/.../verify`).
+Classify, synthesize, and verify resolve the same way as chat, so a
+stale `app.state.classifier_model` cannot outlive the live key.
+Bootstrap wires an Anthropic or OpenAI client from
+`local://providers/llm/*` so chat and the live models list use the
+same key. Opening Settings keeps the chat transcript mounted (hidden),
+so Back to chat does not wipe it. A saved override that matches the
+live vendor is what the next turn calls; a product release that only
+updates `default_model` will not unstick a tenant that already picked
+another id (the v0.4.11–0.4.14 default-model churn did not).
 
 ### Debug log
 
@@ -218,7 +253,11 @@ console). `--debug` also tails compose logs onto `tty1`. Interfaces:
 
 The UI toggle is green when debug is on and muted when off. The log
 panel is shown only while debug is enabled, in the page flow under the
-chat — not as a fixed overlay.
+chat — not as a fixed overlay. Each event shows its timestamp in the
+system local clock (`YYYY-MM-DD HH:MM:SS`), not UTC. The panel lists
+newest events first; `GET /debug/logs` and the CT console stay
+chronological (oldest first). The console line uses the same local
+clock. The stored `at` is timezone-aware ISO in the process timezone.
 
 ## Security model
 
@@ -236,7 +275,11 @@ chat — not as a fixed overlay.
 - Dedicated SSH private key: on the CT's local secrets store, never in
   YAML, never in issues, never in Galileo payloads.
 - LLM API key: local secrets store, same rules.
-- LAN HTTP only. No Cloudflared, no public DNS requirement.
+- LAN HTTP only. No Cloudflared, no public DNS requirement. The
+  printed URL is not a [secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts):
+  do not call `crypto.randomUUID()` (or any other secure-context-only
+  Web API) on the chat send path. Cookie `Secure` is already off for
+  the same reason.
 
 ## Discovery tools
 

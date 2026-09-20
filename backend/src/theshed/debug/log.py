@@ -13,7 +13,7 @@ import sys
 import threading
 import time
 from collections import deque
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from theshed.secrets.client import LocalSecretsClient, SecretNotFoundError, SecretsClient
@@ -87,7 +87,7 @@ def record(
     if not is_enabled():
         return None
     entry = {
-        "at": datetime.now(UTC).isoformat(),
+        "at": datetime.now().astimezone().isoformat(),
         "level": level,
         "source": source,
         "event": event,
@@ -100,9 +100,20 @@ def record(
     return entry
 
 
+def format_local_timestamp(value: str) -> str:
+    """Clock time in the process timezone — the CT / host local time."""
+    try:
+        moment = datetime.fromisoformat(value)
+    except ValueError:
+        return value
+    if moment.tzinfo is None:
+        moment = moment.astimezone()
+    return moment.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+
+
 def format_console_line(entry: dict[str, Any]) -> str:
     line = (
-        f"[debug] {entry['at']} {entry['level']} "
+        f"[debug] {format_local_timestamp(str(entry['at']))} {entry['level']} "
         f"{entry['source']}.{entry['event']}: {entry['message']}"
     )
     if entry.get("detail") is not None:

@@ -118,7 +118,9 @@ has to exist before Git, Kubernetes, or a secrets backend do.
   installer seed), the gate still collects username + password typed
   twice. This *is* the first user — not a later Fleet apply.
 - Optional Galileo key / console URL; omitted means the existing no-op
-  tracer.
+  tracer. Settings later shows the current project, host, log stream,
+  and key (set/unset) and can update all four so turns send traces
+  without re-running setup.
 - Gate is skippable on later visits once an operator identity exists
   (login). Changing the provider key later is a settings action, not a
   re-install.
@@ -129,20 +131,31 @@ Driven by chat, stored as a schema (see SPEC). The UI shows schema state
 next to the conversation, grouped the same way as the field list below.
 The working chrome fits one browser window: the transcript scrolls inside
 the chat pane, Foundations / Issues share a tabbed review column, and
-the debug log (when on) sits under those panes instead of covering them.
+the debug log (when on) sits under those panes instead of covering them,
+newest events first, each line stamped in system local time.
 Buttons depress and show a busy label while work is in flight. The header
 shows **AI Assistant is Connected · provider · model**
 once `/health` is ok and a sub-agent is registered, naming the live
 provider and model chat will call — so the operator can tell the
-assistant is live before sending a message. The assistant fills records; it does not invent keys.
+assistant is live before sending a message. Sending a message on the
+printed LAN HTTP URL must show a reply or an error in the transcript;
+a click that does nothing is a product bug (the page is not a secure
+context). A Settings model override is what chat, the header, and verify call
+when it matches the live vendor; it persists across upgrades. Applying
+another vendor's model is refused until that key is saved — otherwise
+the header and chat keep the live vendor and verify can 404
+(`claude-*` on OpenAI). The assistant fills records; it does not
+invent keys.
 
 Field groups:
 
 - **Tenant**: display name and slug.
 - **Proxmox**: API/URL or host address, node name if more than one node is
-  already there (intent only). Root password is collected once, used to
-  install a dedicated SSH key, then discarded — never persisted, never
-  logged, never written into the YAML bundle.
+  already there (intent only), and a Proxmox API token (fillable field;
+  value in the local secrets store, `api_token_ref` on the schema). Root
+  password is collected once, used to install a dedicated SSH key, then
+  discarded — never persisted, never logged, never written into the YAML
+  bundle.
 - **Network**: bridge name, operator-facing address as CIDR + gateway, NTP
   (`inherit` from the Proxmox host by default).
 - **Storage**: a storage pool name for later VM disks. Single-host only.
@@ -157,9 +170,9 @@ Field groups:
   or contacted except as a *probe* (reachability), and only when the
   operator has chosen adopt.
 
-Explicitly not collected: Proxmox subscription/repo settings; a separate
-Proxmox API token (first contact is root + the dedicated key, same as
-before); cluster node lists to form.
+Explicitly not collected: Proxmox subscription/repo settings; cluster
+node lists to form. The Proxmox API token *is* collected — intake jobs
+(`proxmox_api`, host discovery) authenticate with it.
 
 ### Playbooks
 
@@ -208,7 +221,7 @@ Installing the dedicated SSH key is `true` and needs approval.
 |---|---|
 | `llm_key` | The configured provider accepts the key. |
 | `outbound_https` | The CT can reach the public internet (needed later for images and APIs). |
-| `proxmox_api` | API reachable; root (or the dedicated key once installed) authenticates. |
+| `proxmox_api` | API reachable; the saved API token authenticates (`/version`). |
 | `proxmox_capacity` | CPU / RAM / disk against documented minimums — warn, don't hard-fail, if below. |
 | `bridge_exists` | Named bridge exists on the host. |
 | `storage_pool_exists` | Named pool exists. |

@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -44,6 +45,31 @@ def test_persisted_toggle_overrides_env(monkeypatch) -> None:
     debug_log.set_enabled(True)
     assert debug_log.is_enabled() is True
     assert secrets.get("local://debug/enabled") == "1"
+
+
+def test_record_stores_a_system_local_timestamp(monkeypatch) -> None:
+    monkeypatch.setenv("THESHED_DEBUG", "1")
+    entry = debug_log.record("ui", "click", "Save")
+    assert entry is not None
+    recorded = datetime.fromisoformat(entry["at"])
+    assert recorded.tzinfo is not None
+    assert recorded.utcoffset() == datetime.now().astimezone().utcoffset()
+
+
+def test_console_line_shows_system_local_clock_time() -> None:
+    entry = {
+        "at": "2026-09-20T00:00:00+00:00",
+        "level": "info",
+        "source": "ui",
+        "event": "click",
+        "message": "Save",
+        "detail": None,
+    }
+    local = datetime.fromisoformat(entry["at"]).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+    line = debug_log.format_console_line(entry)
+    assert local in line
+    assert "T00:00:00" not in line
+    assert "+00:00" not in line
 
 
 def test_record_prints_redacted_line_to_stdout(monkeypatch, capsys) -> None:

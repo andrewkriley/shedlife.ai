@@ -121,6 +121,9 @@ reconnection (if wanted) has to be hand-rolled, the same as it would for WebSock
 The infrastructure argument above (no sticky sessions/pub-sub backplane) is unaffected
 by this and remains the actual reason SSE's format still beats WebSocket here — it
 just isn't reinforced by a free-reconnection advantage that doesn't materialize.
+The parser must treat `\r\n` as a line ending and must emit a trailing event
+that arrived without a final blank line — otherwise a failed turn looks like
+the send button did nothing.
 
 The stream carries two kinds of events: **progress** (classify started/done, each
 sub-agent started/done, synthesis started) so the UI shows what's happening rather than
@@ -219,7 +222,9 @@ an answer instead of a dead end.
 Each sub-agent (and the classifier) has a registry-declared default provider/model.
 An operator-facing settings surface allows overriding this per sub-agent — select
 one/some/all via checkboxes, bulk-assign a provider/model — listing live providers and
-models, not a hardcoded list.
+models, not a hardcoded list. The assigned provider must be the live key; switching
+vendors is a key save, not a model apply. Header, chat, and verify share that
+resolved choice.
 
 An override is its own record, distinct from the registry default it overrides — not
 a mutation of the registry row itself, so the original default is never lost and an

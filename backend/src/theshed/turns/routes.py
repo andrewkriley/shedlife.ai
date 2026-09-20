@@ -11,6 +11,7 @@ from theshed.agents.orchestrator import ToolExecutor
 from theshed.auth.dependencies import get_current_user_id, require_csrf
 from theshed.db.models import PendingTurnApproval
 from theshed.db.session import get_session
+from theshed.settings.service import resolved_runtime_choice
 from theshed.turns.service import resume_turn, stream_turn, verify_turn
 
 router = APIRouter(prefix="/turns", tags=["turns"])
@@ -43,7 +44,7 @@ async def submit_turn(
         conversation_id=conversation_id,
         message=body.message,
         llm=request.app.state.llm_client,
-        classifier_model=request.app.state.classifier_model,
+        classifier_model=await _resolved_turn_model(request, db),
         tracer=request.app.state.tracer_factory(),
         tool_executor=_tool_executor(request, db),
     )
@@ -62,7 +63,7 @@ async def verify(
         turn_id=uuid.UUID(turn_id),
         user_id=uuid.UUID(user_id),
         llm=request.app.state.llm_client,
-        verifier_model=request.app.state.classifier_model,
+        verifier_model=await _resolved_turn_model(request, db),
         tracer=request.app.state.tracer_factory(),
     )
     if verification is None:
@@ -86,11 +87,22 @@ async def respond_to_approval(
         pending=pending,
         approved=body.approved,
         llm=request.app.state.llm_client,
-        classifier_model=request.app.state.classifier_model,
+        classifier_model=await _resolved_turn_model(request, db),
         tracer=request.app.state.tracer_factory(),
         tool_executor=_tool_executor(request, db),
     )
     return EventSourceResponse(generator)
+
+
+async def _resolved_turn_model(request: Request, db: AsyncSession) -> str:
+    """Classify, synthesize, and verify use the same live vendor+model as chat."""
+    llm = getattr(request.app.state, "llm_client", None)
+    vendor = getattr(llm, "vendor", None) if llm is not None else None
+    _provider, model = await resolved_runtime_choice(db, vendor)
+    if model:
+        request.app.state.classifier_model = model
+        return model
+    return getattr(request.app.state, "classifier_model", "") or ""
 
 
 def _tool_executor(request: Request, db: AsyncSession) -> ToolExecutor | None:

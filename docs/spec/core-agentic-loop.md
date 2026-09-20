@@ -121,7 +121,7 @@ Technical design for
 
 | Table | Key fields |
 |---|---|
-| `sub_agent_model_overrides` | `sub_agent_id`, `provider`, `model`, `set_by_user_id`, `set_at` — one row per sub-agent currently overridden; absence of a row means "use the registry default." Provider resolution checks this table first, falling back to the registry's `default_provider`/`default_model`. |
+| `sub_agent_model_overrides` | `sub_agent_id`, `provider`, `model`, `set_by_user_id`, `set_at` — one row per sub-agent currently overridden; absence of a row means "use the registry default." Provider resolution checks this table first, falling back to the registry's `default_provider`/`default_model`. A release that changes the registry default does not delete or rewrite these rows. |
 
 ### Conversation / turn (Postgres)
 
@@ -149,17 +149,27 @@ attachments are given to a sub-agent, per step 6c of the Sequence.
   a conversation; response is an SSE stream: `progress` events, an `approval_required`
   event if a side-effect tool call is pending, token-level text for the final answer
   (or an `error` event on failure), then a closing event carrying the turn id and any
-  output attachment references (see Sequence).
+  output attachment references (see Sequence). The client parses `fetch()` bytes
+  (Starlette emits `\r\n`); normalize to `\n` before splitting on blank lines.
+  When the stream ends, parse any leftover buffer — a missing trailing blank
+  line otherwise drops the last `error` or `done` and the UI shows nothing.
+  Vendor failures surface the provider `error.message`, not the SDK dump.
 - `POST /turns/{id}/approvals` — respond (approve/decline) to a pending
   `approval_required` event for that turn; resumes or ends the paused tool loop.
 - `POST /turns/{id}/verify` — manually invoke the verifier against a completed turn;
   returns its assessment (also stored in `turn_verifications`).
 - Settings surface (REST): list sub-agents; `POST /settings/model-assignments` to
   bulk-assign a provider/model to a selected set of sub-agents (writes/clears rows in
-  `sub_agent_model_overrides`); `GET /settings/models` lists live options — a real
+  `sub_agent_model_overrides`). Assigning a provider that is not the live client
+  is `400` — save that key first. Chat, the connection header, classify,
+  synthesize, and verify all resolve the live vendor + matching override (or
+  that vendor's default); a Claude override is never sent to OpenAI.
+  `GET /settings/models` lists live options — a real
   call to each cloud provider's own models-list API, plus whatever's currently
   registered in LiteLLM for local models (the same registrations GPU/Compute
   Management creates — this endpoint reads them, it doesn't maintain a second list).
+  `GET`/`POST /settings/galileo` read and update project, host, log stream,
+  and API key; the key is never returned.
 
 ## Security model
 

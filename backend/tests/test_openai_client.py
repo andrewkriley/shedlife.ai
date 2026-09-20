@@ -75,6 +75,24 @@ def test_o4_mini_uses_low_reasoning_effort() -> None:
     assert kwargs["reasoning_effort"] == "low"
 
 
+def test_gpt_5_uses_minimal_reasoning_effort() -> None:
+    # Live gpt-5 rejects reasoning_effort=none (only minimal/low/medium/high).
+    kwargs = completion_kwargs(
+        model="gpt-5",
+        messages=[{"role": "user", "content": "hi"}],
+    )
+    assert kwargs["max_completion_tokens"] == 4096
+    assert kwargs["reasoning_effort"] == "minimal"
+
+
+def test_gpt_5_mini_uses_minimal_reasoning_effort() -> None:
+    kwargs = completion_kwargs(
+        model="gpt-5-mini",
+        messages=[{"role": "user", "content": "hi"}],
+    )
+    assert kwargs["reasoning_effort"] == "minimal"
+
+
 def test_to_openai_tools_maps_input_schema() -> None:
     tools = _to_openai_tools(
         [{"name": "foundations_read", "description": "Read", "input_schema": {"type": "object"}}]

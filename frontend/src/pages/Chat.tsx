@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { postDebugEvent, respondToApproval, streamTurn, verifyTurn, type TurnEvent } from '../lib/api'
+import { newId } from '../lib/id'
 
 interface PendingApproval {
   toolName: string
@@ -96,10 +97,10 @@ export function Chat() {
     if (!input.trim() || sending) return
 
     const userMessage = input
-    const assistantId = crypto.randomUUID()
+    const assistantId = newId()
     setMessages((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), role: 'user', text: userMessage },
+      { id: newId(), role: 'user', text: userMessage },
       { id: assistantId, role: 'assistant', text: '' },
     ])
     setInput('')

@@ -10,6 +10,11 @@ from theshed.agents.tool_loop import ToolCall
 from theshed.bootstrap.discovery import DISCOVERY_TOOLS, host_for, run_discovery
 from theshed.bootstrap.hostnames import DEFAULT_COUNT, propose_hostnames
 from theshed.foundations.store import load_foundations, patch_foundations, record_probe_result
+from theshed.foundations.tokens import (
+    persist_proxmox_api_token,
+    present_foundations,
+    take_proxmox_api_token,
+)
 from theshed.foundations.validate import validate_foundations
 from theshed.foundations.yamlutil import dump_yaml
 from theshed.issues.store import record_issue
@@ -42,11 +47,14 @@ def make_bootstrap_tool_executor(db: Any, probe_host: Any) -> ToolExecutor:
         name = call.tool_name
         args = call.arguments or {}
         if name == "foundations_write":
-            doc = await patch_foundations(db, args.get("patch") or {})
+            secrets = getattr(probe_host, "_secrets", None)
+            patch = persist_proxmox_api_token(args.get("patch") or {}, secrets)
+            doc = await patch_foundations(db, patch)
             await db.commit()
-            return json.dumps(doc)
+            return json.dumps(present_foundations(doc, secrets))
         if name == "foundations_read":
-            return json.dumps(await load_foundations(db))
+            secrets = getattr(probe_host, "_secrets", None)
+            return json.dumps(present_foundations(await load_foundations(db), secrets))
         if name == "foundations_validate":
             checked = validate_foundations(await load_foundations(db))
             return json.dumps({"ok": checked.ok, "errors": checked.errors})
@@ -98,7 +106,8 @@ def make_bootstrap_tool_executor(db: Any, probe_host: Any) -> ToolExecutor:
                 }
             )
         if name == "export_state":
-            return dump_yaml(await load_foundations(db))
+            cleaned, _token = take_proxmox_api_token(await load_foundations(db))
+            return dump_yaml(cleaned)
         if name == "install_ssh_key":
             doc = await load_foundations(db)
             probe = run_probe("ssh_key_installed", _bind_host(probe_host, doc))
