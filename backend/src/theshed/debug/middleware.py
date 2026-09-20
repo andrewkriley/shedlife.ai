@@ -28,6 +28,12 @@ class DebugHttpMiddleware:
 
         started = time.monotonic()
         status_code = 500
+        debug_log.record(
+            "http",
+            "start",
+            f"{method} {path} started",
+            detail={"method": method, "path": path},
+        )
 
         async def send_wrapper(message: Message) -> None:
             nonlocal status_code

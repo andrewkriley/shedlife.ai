@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { AssistantStatus } from '../components/AssistantStatus'
-import { getLiveModels, getSubAgentSettings, setModelAssignments, setProviderKey } from '../lib/api'
+import {
+  getLiveModels,
+  getSubAgentSettings,
+  notifyConnectionChanged,
+  setModelAssignments,
+  setProviderKey,
+} from '../lib/api'
 import type { SubAgentSetting } from '../lib/api'
 
 const PROVIDERS = [
@@ -67,6 +73,7 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
       const models = await getLiveModels()
       setLiveModels(models)
       setModel(models[provider]?.[0] ?? '')
+      notifyConnectionChanged()
       setStatus(`Saved the ${provider} key. Chat will use this provider.`)
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Failed to save the provider key.')
@@ -85,6 +92,7 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
     try {
       const updated = await setModelAssignments(Array.from(selectedIds), provider, model)
       setSubAgents(updated)
+      notifyConnectionChanged()
       setStatus('This model is now assigned to the selected assistant.')
     } catch {
       setStatus('Failed to apply assignment.')
@@ -103,6 +111,7 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
     try {
       const updated = await setModelAssignments(Array.from(selectedIds), null, null)
       setSubAgents(updated)
+      notifyConnectionChanged()
       setStatus('The selected assistant is back on its default model.')
     } catch {
       setStatus('Failed to clear override.')

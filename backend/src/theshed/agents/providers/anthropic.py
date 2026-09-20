@@ -86,14 +86,21 @@ class AnthropicClient:
         # sites depend on the shape, not the SDK's types). Cast rather than
         # thread the SDK's exact types through classifier/orchestrator/
         # synthesis, which shouldn't need to know about them.
+        from theshed.debug import log as debug_log
+
+        started = debug_log.log_llm_start(self.vendor, model, tools=len(tools or []))
         start = time.monotonic()
-        response = self._client.messages.create(
-            model=model,
-            system=system,
-            messages=cast(Any, messages),
-            tools=cast(Any, tools or []),
-            max_tokens=4096,
-        )
+        try:
+            response = self._client.messages.create(
+                model=model,
+                system=system,
+                messages=cast(Any, messages),
+                tools=cast(Any, tools or []),
+                max_tokens=4096,
+            )
+        except Exception as exc:
+            debug_log.log_llm_error(self.vendor, model, started, exc)
+            raise
         duration_ns = int((time.monotonic() - start) * 1e9)
         text = "".join(block.text for block in response.content if block.type == "text")
         tool_calls = [
@@ -103,6 +110,14 @@ class AnthropicClient:
         ]
         result = LLMResponse(
             text=text or None, tool_calls=tool_calls, stop_reason=str(response.stop_reason)
+        )
+        debug_log.log_llm_done(
+            self.vendor,
+            model,
+            started,
+            chars=len(result.text or ""),
+            tools=len(result.tool_calls),
+            stop_reason=result.stop_reason,
         )
         self._log_llm_span(system, messages, model, tools, result, response, duration_ns)
         return result

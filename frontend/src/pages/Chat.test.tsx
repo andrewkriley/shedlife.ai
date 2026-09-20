@@ -35,6 +35,30 @@ describe('Chat', () => {
     expect(await screen.findByText(/Hello there/)).toBeInTheDocument()
   })
 
+  it('records debug events when a message is sent and the turn finishes', async () => {
+    const postDebugEvent = vi.spyOn(api, 'postDebugEvent').mockResolvedValue()
+    vi.spyOn(api, 'streamTurn').mockImplementation(async function* () {
+      yield { type: 'progress', data: { stage: 'classify:done' } }
+      yield { type: 'token', data: { text: 'ok' } }
+      yield { type: 'done', data: { turn_id: 't1', conversation_id: 'c1' } }
+    })
+
+    const user = userEvent.setup()
+    render(<Chat />)
+
+    await user.type(screen.getByLabelText('Message'), 'hi')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    expect(await screen.findByText('ok')).toBeInTheDocument()
+
+    expect(postDebugEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'submit', message: 'Sending 2 characters' }),
+    )
+    expect(postDebugEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'progress', message: 'classify:done' }),
+    )
+    expect(postDebugEvent).toHaveBeenCalledWith(expect.objectContaining({ event: 'done' }))
+  })
+
   it('lets the user verify a completed assistant turn and shows the result', async () => {
     vi.spyOn(api, 'streamTurn').mockImplementation(async function* () {
       yield { type: 'token', data: { text: 'Paris.' } }

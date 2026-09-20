@@ -35,7 +35,13 @@ export function Chat() {
   async function consumeEvents(iterator: AsyncGenerator<TurnEvent>, id: string) {
     for await (const event of iterator) {
       if (event.type === 'progress') {
-        setStatus(String(event.data.stage ?? ''))
+        const stage = String(event.data.stage ?? '')
+        setStatus(stage)
+        void postDebugEvent({
+          event: 'progress',
+          message: stage,
+          detail: { source: 'chat.sse' },
+        }).catch(() => undefined)
       } else if (event.type === 'token') {
         const chunk = String(event.data.text ?? '')
         updateMessage(id, (m) => ({ ...m, text: m.text + chunk }))
@@ -57,6 +63,12 @@ export function Chat() {
           ...m,
           text: m.text.trim() ? m.text : message,
         }))
+        void postDebugEvent({
+          event: 'error',
+          level: 'error',
+          message,
+          detail: { source: 'chat.sse' },
+        }).catch(() => undefined)
       } else if (event.type === 'done') {
         if (event.data.conversation_id) {
           setConversationId(String(event.data.conversation_id))
@@ -66,6 +78,15 @@ export function Chat() {
           updateMessage(id, (m) => ({ ...m, turnId }))
         }
         setStatus(null)
+        void postDebugEvent({
+          event: 'done',
+          message: 'Turn finished',
+          detail: {
+            source: 'chat.sse',
+            turn_id: event.data.turn_id,
+            conversation_id: event.data.conversation_id,
+          },
+        }).catch(() => undefined)
       }
     }
   }
@@ -84,6 +105,11 @@ export function Chat() {
     setInput('')
     setSending(true)
     setStatus(null)
+    void postDebugEvent({
+      event: 'submit',
+      message: `Sending ${userMessage.length} characters`,
+      detail: { source: 'chat.send', chars: userMessage.length },
+    }).catch(() => undefined)
 
     try {
       await consumeEvents(streamTurn(conversationId, userMessage), assistantId)

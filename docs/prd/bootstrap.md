@@ -85,8 +85,10 @@ has to exist before Git, Kubernetes, or a secrets backend do.
   Existing: update that CT in place (keep login and volumes). `--delete`:
   destroy the CT, then a fresh install.
 - `--debug` (or `THESHED_DEBUG=1`) starts the CT with the live debug
-  console on: HTTP requests, UI clicks, provider connection attempts, and
-  errors. The same log is on `GET /debug/logs`, on the app process
+  console on: HTTP requests (including start of a long SSE turn), UI
+  clicks, chat submit/SSE, provider connection attempts, model
+  assignments, turn and LLM `complete()` calls (vendor, model, duration),
+  and errors. The same log is on `GET /debug/logs`, on the app process
   stdout (Proxmox / container console, `docker compose logs`), on CT
   tty1, and can be toggled from the UI after the platform is up.
 - Optional static CT IP via an environment variable; otherwise DHCP. Either

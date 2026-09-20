@@ -11,6 +11,7 @@ import os
 import re
 import sys
 import threading
+import time
 from collections import deque
 from datetime import UTC, datetime
 from typing import Any
@@ -128,3 +129,55 @@ def _write_console(line: str) -> None:
 def snapshot() -> list[dict[str, Any]]:
     with _lock:
         return list(_events)
+
+
+def log_llm_start(vendor: str, model: str, *, tools: int = 0) -> float:
+    """Record that a model call is about to leave the process."""
+    record(
+        "llm",
+        "call",
+        f"Calling {vendor} {model}",
+        detail={"vendor": vendor, "model": model, "tools": tools},
+    )
+    return time.monotonic()
+
+
+def log_llm_done(
+    vendor: str,
+    model: str,
+    started: float,
+    *,
+    chars: int,
+    tools: int,
+    stop_reason: str,
+) -> None:
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+    record(
+        "llm",
+        "done",
+        f"{vendor} {model} returned {chars} chars in {elapsed_ms}ms",
+        detail={
+            "vendor": vendor,
+            "model": model,
+            "chars": chars,
+            "tools": tools,
+            "stop_reason": stop_reason,
+            "ms": elapsed_ms,
+        },
+    )
+
+
+def log_llm_error(vendor: str, model: str, started: float, exc: BaseException) -> None:
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+    record(
+        "llm",
+        "error",
+        f"{vendor} {model} failed after {elapsed_ms}ms: {exc}",
+        level="error",
+        detail={
+            "vendor": vendor,
+            "model": model,
+            "ms": elapsed_ms,
+            "type": type(exc).__name__,
+        },
+    )

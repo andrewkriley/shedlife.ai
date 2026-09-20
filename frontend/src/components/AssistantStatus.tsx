@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getConnection, getHealth, getSubAgentSettings } from '../lib/api'
+import { CONNECTION_CHANGED_EVENT, getConnection, getHealth, getSubAgentSettings } from '../lib/api'
 
 type ConnectionState = 'checking' | 'connected' | 'disconnected'
 
@@ -38,9 +38,11 @@ export function AssistantStatus() {
     const timer = window.setInterval(() => {
       void check()
     }, 30_000)
+    window.addEventListener(CONNECTION_CHANGED_EVENT, check)
     return () => {
       cancelled = true
       window.clearInterval(timer)
+      window.removeEventListener(CONNECTION_CHANGED_EVENT, check)
     }
   }, [])
 

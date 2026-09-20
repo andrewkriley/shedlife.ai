@@ -76,6 +76,24 @@ describe('Settings', () => {
     expect(await screen.findByText(/Custom model/)).toBeInTheDocument()
   })
 
+  it('notifies the header immediately after applying a model', async () => {
+    vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
+    vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue(baseSubAgents)
+    vi.spyOn(api, 'getLiveModels').mockResolvedValue({ anthropic: ['claude-sonnet-5'] })
+    vi.spyOn(api, 'setModelAssignments').mockResolvedValue([
+      { ...baseSubAgents[0], provider: 'anthropic', model: 'claude-sonnet-5', overridden: true },
+    ])
+    const notify = vi.spyOn(api, 'notifyConnectionChanged')
+
+    const user = userEvent.setup()
+    render(<Settings onClose={() => {}} />)
+
+    expect(await screen.findByRole('checkbox')).toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'Apply this model' }))
+
+    expect(notify).toHaveBeenCalled()
+  })
+
   it('clears an override for the selected sub-agents', async () => {
     vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
     vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue([

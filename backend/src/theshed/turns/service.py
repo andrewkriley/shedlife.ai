@@ -33,6 +33,7 @@ from theshed.db.models import (
     TurnSubAgentResult,
     TurnVerification,
 )
+from theshed.debug import log as debug_log
 from theshed.observability.galileo import TurnTracer
 
 RECENCY_CAP = 10  # tunable default, per docs/spec/core-agentic-loop.md
@@ -118,7 +119,15 @@ async def _run_matches(
     through untouched to `run_sub_agent`, which already knows its own
     default — this module doesn't need an opinion on what that is."""
     executor_kwargs = {} if tool_executor is None else {"tool_executor": tool_executor}
+    vendor = getattr(llm, "vendor", "unknown")
     for i, sub_agent in enumerate(matches):
+        model = await _model_for(db, sub_agent, llm)
+        debug_log.record(
+            "turn",
+            "model",
+            f"Using {vendor}/{model} for {sub_agent.id}",
+            detail={"vendor": vendor, "model": model, "sub_agent_id": sub_agent.id},
+        )
         yield _sse("progress", {"stage": f"agent:{sub_agent.id} started"})
         tracer.start_span(AgentType.default, sub_agent.id, message)
         outcome = await run_sub_agent(
@@ -126,7 +135,7 @@ async def _run_matches(
             message,
             context,
             llm,
-            model=await _model_for(db, sub_agent, llm),
+            model=model,
             **executor_kwargs,
         )
 
@@ -219,6 +228,12 @@ async def stream_turn(
     tool_executor: ToolExecutor | None = None,
 ) -> AsyncIterator[dict[str, str]]:
     is_new_conversation = conversation_id is None
+    debug_log.record(
+        "turn",
+        "start",
+        f"Turn started ({len(message)} chars)",
+        detail={"conversation_new": is_new_conversation, "chars": len(message)},
+    )
     if is_new_conversation:
         conversation = Conversation(user_id=user_id)
         db.add(conversation)
@@ -233,6 +248,12 @@ async def stream_turn(
     await db.flush()
 
     if llm is None:
+        debug_log.record(
+            "turn",
+            "error",
+            "No LLM client is configured",
+            level="error",
+        )
         yield _sse(
             "error",
             {
@@ -270,7 +291,20 @@ async def stream_turn(
                 db, turn, conversation_id, message, state, llm, classifier_model, tracer
             ):
                 yield event
+            debug_log.record(
+                "turn",
+                "done",
+                f"Turn {turn.id} finished",
+                detail={"turn_id": str(turn.id), "conversation_id": str(conversation_id)},
+            )
     except Exception as exc:  # noqa: BLE001 — SSE must report the failure, not drop the stream
+        debug_log.record(
+            "turn",
+            "error",
+            f"Turn failed: {exc}",
+            level="error",
+            detail={"type": type(exc).__name__},
+        )
         yield _sse("error", {"message": f"The assistant could not answer: {exc}"})
 
 
