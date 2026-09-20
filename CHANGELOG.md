@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.11](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.10...theshed-v0.4.11) (2026-09-20)
+
+
+### Bug Fixes
+
+* call the live vendor model so bootstrap chat works ([#32](https://github.com/andrewkriley/shedlife.ai/issues/32)) ([2ccaefc](https://github.com/andrewkriley/shedlife.ai/commit/2ccaefc4dc67d74e48a5c23b2afbe1e52028f521))
+
 ## [0.4.10](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.9...theshed-v0.4.10) (2026-09-20)
 
 
