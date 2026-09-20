@@ -191,8 +191,8 @@ when writable). Interfaces:
 - `GET /debug/logs` — `{enabled, events[]}`
 - `POST /debug/events` — UI clicks / client errors
 
-The UI shows a debug console when enabled and a header control to
-turn it on or off.
+The UI toggle is green when debug is on and muted when off. The log
+panel is shown only while debug is enabled.
 
 ## Security model
 

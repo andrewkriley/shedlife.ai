@@ -9,7 +9,6 @@ import {
 
 export function DebugDock() {
   const [enabled, setEnabled] = useState(false)
-  const [open, setOpen] = useState(false)
   const [events, setEvents] = useState<DebugEvent[]>([])
 
   async function refresh() {
@@ -24,6 +23,7 @@ export function DebugDock() {
       }
     } catch {
       setEnabled(false)
+      setEvents([])
     }
   }
 
@@ -68,29 +68,31 @@ export function DebugDock() {
     try {
       const status = await setDebugEnabled(next)
       setEnabled(status.enabled)
-      setOpen(status.enabled)
       if (status.enabled) {
         const logs = await getDebugLogs()
         setEvents(logs.events)
+      } else {
+        setEvents([])
       }
     } catch {
       setEnabled(false)
+      setEvents([])
     }
   }
 
   return (
     <div className="debug-dock">
       <div className="debug-dock__bar">
-        <button type="button" aria-pressed={enabled} onClick={() => void toggle()}>
+        <button
+          type="button"
+          className={`debug-dock__toggle ${enabled ? 'debug-dock__toggle--on' : 'debug-dock__toggle--off'}`}
+          aria-pressed={enabled}
+          onClick={() => void toggle()}
+        >
           {enabled ? 'Debug on' : 'Debug off'}
         </button>
-        {enabled && (
-          <button type="button" className="button-secondary" onClick={() => setOpen((value) => !value)}>
-            {open ? 'Hide logs' : 'Show logs'}
-          </button>
-        )}
       </div>
-      {enabled && open && (
+      {enabled && (
         <section className="debug-console" aria-label="debug console">
           {events.length === 0 ? (
             <p className="empty-hint">No debug events yet.</p>

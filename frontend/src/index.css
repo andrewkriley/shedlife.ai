@@ -548,6 +548,27 @@ fieldset > legend {
   padding: var(--space-sm) var(--space-md);
 }
 
+.debug-dock__toggle--off {
+  background: var(--bg-canvas);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.debug-dock__toggle--off:hover:not(:disabled) {
+  filter: none;
+  background: var(--bg-panel);
+  color: var(--text-primary);
+}
+
+.debug-dock__toggle--on {
+  background: var(--accent-success);
+  color: var(--on-accent);
+}
+
+.debug-dock__toggle--on:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
 .debug-console {
   max-height: 28svh;
   overflow: auto;

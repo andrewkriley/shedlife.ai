@@ -23,8 +23,14 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
       <label htmlFor="username">Username</label>
       <input
         id="username"
+        name="username"
         type="text"
+        inputMode="text"
         autoComplete="username"
+        autoCapitalize="none"
+        autoCorrect="off"
+        spellCheck={false}
+        placeholder="admin"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
         required
