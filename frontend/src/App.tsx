@@ -92,38 +92,38 @@ function App() {
           </button>
         )}
       </header>
-      {view === 'settings' ? (
-        <Settings onClose={() => setView('chat')} />
-      ) : (
-        <>
-          <Chat />
-          <aside className="sidebar">
-            <div className="sidebar-tabs" role="tablist" aria-label="review">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={reviewTab === 'foundations'}
-                className={reviewTab === 'foundations' ? 'is-active' : undefined}
-                onClick={() => setReviewTab('foundations')}
-              >
-                Foundations
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={reviewTab === 'issues'}
-                className={reviewTab === 'issues' ? 'is-active' : undefined}
-                onClick={() => setReviewTab('issues')}
-              >
-                Issues
-              </button>
-            </div>
-            <div className="sidebar-panel" role="tabpanel">
-              {reviewTab === 'foundations' ? <FoundationsPanel /> : <IssuesPanel />}
-            </div>
-          </aside>
-        </>
-      )}
+      <div
+        className={view === 'settings' ? 'workspace workspace--hidden' : 'workspace'}
+        aria-hidden={view === 'settings'}
+      >
+        <Chat />
+        <aside className="sidebar">
+          <div className="sidebar-tabs" role="tablist" aria-label="review">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={reviewTab === 'foundations'}
+              className={reviewTab === 'foundations' ? 'is-active' : undefined}
+              onClick={() => setReviewTab('foundations')}
+            >
+              Foundations
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={reviewTab === 'issues'}
+              className={reviewTab === 'issues' ? 'is-active' : undefined}
+              onClick={() => setReviewTab('issues')}
+            >
+              Issues
+            </button>
+          </div>
+          <div className="sidebar-panel" role="tabpanel">
+            {reviewTab === 'foundations' ? <FoundationsPanel /> : <IssuesPanel />}
+          </div>
+        </aside>
+      </div>
+      {view === 'settings' ? <Settings onClose={() => setView('chat')} /> : null}
       <DebugDock />
     </div>
   )

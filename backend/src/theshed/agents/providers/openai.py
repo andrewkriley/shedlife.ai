@@ -53,13 +53,20 @@ class OpenAIClient:
         model: str,
         tools: list[dict[str, Any]] | None = None,
     ) -> LLMResponse:
-        response = self._client.chat.completions.create(
-            **cast(Any, completion_kwargs(
-                model=model,
-                messages=_to_openai_messages(system, messages),
-                tools=tools,
-            )),
-        )
+        from theshed.debug import log as debug_log
+
+        started = debug_log.log_llm_start(self.vendor, model, tools=len(tools or []))
+        try:
+            response = self._client.chat.completions.create(
+                **cast(Any, completion_kwargs(
+                    model=model,
+                    messages=_to_openai_messages(system, messages),
+                    tools=tools,
+                )),
+            )
+        except Exception as exc:
+            debug_log.log_llm_error(self.vendor, model, started, exc)
+            raise
         choice = response.choices[0].message
         tool_calls = []
         for call in choice.tool_calls or []:
@@ -73,11 +80,20 @@ class OpenAIClient:
                     "arguments": _parse_arguments(function.arguments),
                 }
             )
-        return LLMResponse(
+        result = LLMResponse(
             text=choice.content or None,
             tool_calls=tool_calls,
             stop_reason=str(response.choices[0].finish_reason or ""),
         )
+        debug_log.log_llm_done(
+            self.vendor,
+            model,
+            started,
+            chars=len(result.text or ""),
+            tools=len(result.tool_calls),
+            stop_reason=result.stop_reason,
+        )
+        return result
 
 
 def _parse_arguments(raw: str | None) -> dict[str, Any]:

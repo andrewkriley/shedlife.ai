@@ -50,6 +50,19 @@ class SubAgentSetting:
     overridden: bool
 
 
+def pick_connection_setting(settings: list[SubAgentSetting]) -> SubAgentSetting | None:
+    """The agent whose provider/model the header and chat should show."""
+    if not settings:
+        return None
+    for setting in settings:
+        if setting.id == "bootstrap.intake":
+            return setting
+    for setting in settings:
+        if setting.overridden:
+            return setting
+    return settings[0]
+
+
 async def list_sub_agent_settings(db: AsyncSession) -> list[SubAgentSetting]:
     sub_agents = await list_sub_agents(db)
     overrides = {
@@ -124,6 +137,12 @@ async def set_model_assignments(
             if existing is not None:
                 await db.delete(existing)
         await db.commit()
+        debug_log.record(
+            "settings",
+            "assign",
+            f"Cleared model override for {', '.join(sub_agent_ids)}",
+            detail={"sub_agent_ids": sub_agent_ids},
+        )
         return
 
     for sub_agent_id in sub_agent_ids:
@@ -143,3 +162,9 @@ async def set_model_assignments(
                 )
             )
     await db.commit()
+    debug_log.record(
+        "settings",
+        "assign",
+        f"Assigned {provider}/{model} to {', '.join(sub_agent_ids)}",
+        detail={"provider": provider, "model": model, "sub_agent_ids": sub_agent_ids},
+    )

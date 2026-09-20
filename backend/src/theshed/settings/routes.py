@@ -14,6 +14,7 @@ from theshed.secrets.client import LocalSecretsClient
 from theshed.settings.service import (
     list_live_models,
     list_sub_agent_settings,
+    pick_connection_setting,
     set_model_assignments,
 )
 from theshed.setup.providers import ProviderRejected, validate_api_key
@@ -86,15 +87,15 @@ async def get_connection(
     settings = await list_sub_agent_settings(db)
     if llm is None:
         return ConnectionResponse(provider=None, model=None, configured=False)
-    if not settings:
+    chosen = pick_connection_setting(settings)
+    if chosen is None:
         return ConnectionResponse(provider=vendor, model=None, configured=True)
-    first = settings[0]
     provider, model = resolve_runtime_model(
         client_vendor=vendor,
-        default_provider=first.default_provider,
-        default_model=first.default_model,
-        override_provider=first.provider if first.overridden else None,
-        override_model=first.model if first.overridden else None,
+        default_provider=chosen.default_provider,
+        default_model=chosen.default_model,
+        override_provider=chosen.provider if chosen.overridden else None,
+        override_model=chosen.model if chosen.overridden else None,
     )
     return ConnectionResponse(provider=provider, model=model, configured=True)
 
@@ -119,6 +120,7 @@ async def post_provider_key(body: ProviderKeyRequest, request: Request) -> dict[
 @router.post("/model-assignments", dependencies=[Depends(require_csrf)])
 async def post_model_assignments(
     body: ModelAssignmentRequest,
+    request: Request,
     db: AsyncSession = Depends(get_session),
     user_id: str = Depends(get_current_user_id),
 ) -> list[SubAgentSettingResponse]:
@@ -129,5 +131,9 @@ async def post_model_assignments(
         model=body.model,
         set_by_user_id=uuid.UUID(user_id),
     )
+    if body.model and (
+        "bootstrap.intake" in body.sub_agent_ids or len(body.sub_agent_ids) == 1
+    ):
+        request.app.state.classifier_model = body.model
     settings = await list_sub_agent_settings(db)
     return [SubAgentSettingResponse(**vars(s)) for s in settings]

@@ -218,6 +218,15 @@ code {
   overflow: hidden;
 }
 
+.workspace {
+  display: contents;
+}
+
+.workspace--hidden > .chat-pane,
+.workspace--hidden > .sidebar {
+  display: none;
+}
+
 .app-header {
   grid-column: 1 / -1;
   display: flex;

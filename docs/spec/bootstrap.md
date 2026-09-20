@@ -185,18 +185,25 @@ New:
 Settings (`GET /settings/models`, `GET /settings/connection`,
 `POST /settings/provider`, model overrides) stay; they are how the
 operator changes provider after the gate. `GET /settings/connection`
-is the live vendor and model the header prints. The page always lists Anthropic / OpenAI / Gemini, can save a new
+is the live vendor and the model assigned to `bootstrap.intake` (or the
+first override). Apply / save-key refreshes the header immediately. The
+page always lists Anthropic / OpenAI / Gemini, can save a new
 API key, groups connection status, the assistant list (a lone agent is
 pre-selected), and a "Change the model" assignment block. Bootstrap
 wires an Anthropic or OpenAI client from `local://providers/llm/*` so
-chat and the live models list use the same key.
+chat and the live models list use the same key. Opening Settings keeps
+the chat transcript mounted (hidden), so Back to chat does not wipe it.
 
 ### Debug log
 
 In-memory ring (last 500 events). Enabled by `THESHED_DEBUG=1` or
 `local://debug/enabled`. Toggle wins over the env var. Events: HTTP
-(except `/health` and `/debug/logs`), UI clicks, provider connect
-attempts, unhandled errors. Secrets are redacted. Each recorded event
+start and completion (except `/health` and `/debug/logs` — start is
+logged immediately so a long SSE `/turns` stream is visible before it
+finishes), UI clicks, chat submit/SSE progress/error/done, provider
+connect attempts, settings assignments, turn start/model/done/error,
+every LLM `complete()` (vendor, model, duration, output size, errors),
+and unhandled errors. Secrets are redacted. Each recorded event
 is also printed to the app process stdout as one `[debug]` line
 and written to the CT `tty1` / `/dev/console` when writable (Proxmox
 console). `--debug` also tails compose logs onto `tty1`. Interfaces:

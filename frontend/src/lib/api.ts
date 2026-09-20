@@ -169,6 +169,12 @@ export async function getConnection(): Promise<ConnectionStatus> {
   return response.json()
 }
 
+export const CONNECTION_CHANGED_EVENT = 'shed:connection-changed'
+
+export function notifyConnectionChanged(): void {
+  window.dispatchEvent(new Event(CONNECTION_CHANGED_EVENT))
+}
+
 export async function getHealth(): Promise<{ status: string }> {
   const response = await fetch('/api/health', { credentials: 'include' })
   if (!response.ok) {

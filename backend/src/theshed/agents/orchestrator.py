@@ -37,6 +37,7 @@ from theshed.agents.tool_loop import (
     UnproductiveLoopDetected,
 )
 from theshed.db.models import SubAgent
+from theshed.debug import log as debug_log
 
 FALLBACK_SUB_AGENT_ID = "assist"
 
@@ -112,7 +113,14 @@ async def _run_loop(
     """The tool-calling loop's core, shared by a fresh start (`run_sub_agent`)
     and a resume after approval (`resume_sub_agent`) — both just differ in
     how `messages`/`guard` are seeded going in."""
+    vendor = getattr(llm, "vendor", "unknown")
     while True:
+        debug_log.record(
+            "turn",
+            "model",
+            f"Loop calling {vendor}/{model} for {sub_agent.id}",
+            detail={"vendor": vendor, "model": model, "sub_agent_id": sub_agent.id},
+        )
         response = llm.complete(
             system=sub_agent.system_prompt, messages=messages, model=model, tools=tools
         )

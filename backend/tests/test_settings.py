@@ -11,8 +11,10 @@ from theshed.db.session import get_session
 from theshed.main import app
 from theshed.secrets.client import LocalSecretsClient
 from theshed.settings.service import (
+    SubAgentSetting,
     list_live_models,
     list_sub_agent_settings,
+    pick_connection_setting,
     set_model_assignments,
 )
 
@@ -145,6 +147,57 @@ class TestListLiveModels:
         assert result["openai"] == ["gpt-5.4", "gpt-5.4-mini", "gpt-4.1"]
 
 
+class TestPickConnectionSetting:
+    def test_prefers_bootstrap_intake(self) -> None:
+        other = SubAgentSetting(
+            id="assist",
+            macro_category="assist",
+            description="",
+            default_provider="anthropic",
+            default_model="claude-haiku-4-5",
+            provider="openai",
+            model="gpt-4.1",
+            overridden=True,
+        )
+        intake = SubAgentSetting(
+            id="bootstrap.intake",
+            macro_category="assist",
+            description="",
+            default_provider="openai",
+            default_model="gpt-5.4",
+            provider="openai",
+            model="gpt-5.4-mini",
+            overridden=True,
+        )
+        assert pick_connection_setting([other, intake]) is intake
+
+    def test_falls_back_to_the_first_override(self) -> None:
+        defaulted = SubAgentSetting(
+            id="assist",
+            macro_category="assist",
+            description="",
+            default_provider="anthropic",
+            default_model="claude-haiku-4-5",
+            provider="anthropic",
+            model="claude-haiku-4-5",
+            overridden=False,
+        )
+        overridden = SubAgentSetting(
+            id="run.network",
+            macro_category="run",
+            description="",
+            default_provider="anthropic",
+            default_model="claude-haiku-4-5",
+            provider="openai",
+            model="gpt-5.4",
+            overridden=True,
+        )
+        assert pick_connection_setting([defaulted, overridden]) is overridden
+
+    def test_empty_list_is_none(self) -> None:
+        assert pick_connection_setting([]) is None
+
+
 @pytest.mark.asyncio
 class TestSetModelAssignments:
     async def test_creates_an_override_for_each_selected_sub_agent(
@@ -253,6 +306,40 @@ class TestSettingsRoutes:
             "configured": True,
         }
 
+    async def test_get_connection_uses_the_bootstrap_intake_override(
+        self, client: AsyncClient, db_session: AsyncSession, user: User
+    ) -> None:
+        db_session.add(
+            SubAgent(
+                id="assist.other",
+                macro_category="assist",
+                description="Other",
+                system_prompt="You help.",
+                default_provider="anthropic",
+                default_model="claude-haiku-4-5",
+            )
+        )
+        await db_session.flush()
+        await set_model_assignments(
+            db=db_session,
+            sub_agent_ids=["bootstrap.intake"],
+            provider="openai",
+            model="gpt-5.4-mini",
+            set_by_user_id=user.id,
+        )
+        app.state.llm_client = FakeProviderClient(
+            FakeModelsList([FakeModel("gpt-5.4-mini")]), vendor="openai"
+        )
+
+        response = await client.get("/settings/connection")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "provider": "openai",
+            "model": "gpt-5.4-mini",
+            "configured": True,
+        }
+
     async def test_get_connection_is_unconfigured_without_a_client(
         self, client: AsyncClient
     ) -> None:
@@ -287,6 +374,7 @@ class TestSettingsRoutes:
     async def test_post_model_assignments_applies_and_returns_updated_settings(
         self, client: AsyncClient, sub_agent: SubAgent
     ) -> None:
+        app.state.classifier_model = "gpt-5.4"
         response = await client.post(
             "/settings/model-assignments",
             json={"sub_agent_ids": [sub_agent.id], "provider": "openai", "model": "gpt-5"},
@@ -296,6 +384,7 @@ class TestSettingsRoutes:
         setting = next(row for row in response.json() if row["id"] == sub_agent.id)
         assert setting["provider"] == "openai"
         assert setting["overridden"] is True
+        assert app.state.classifier_model == "gpt-5"
 
     async def test_post_provider_key_configures_the_openai_client(
         self, client: AsyncClient

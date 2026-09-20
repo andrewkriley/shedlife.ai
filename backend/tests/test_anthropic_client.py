@@ -76,3 +76,22 @@ class TestCompleteWithoutGalileoConfigured:
 
         assert result.text == "hi there"
         assert result.tool_calls == []
+
+    def test_records_debug_events_when_debug_is_on(self, monkeypatch) -> None:
+        from theshed.debug import log as debug_log
+
+        monkeypatch.setenv("THESHED_DEBUG", "1")
+        debug_log.reset_for_tests()
+        client = AnthropicClient(api_key="sk-ant-fake")
+        client._client = _FakeAnthropicSDKClient()  # type: ignore[assignment]
+
+        result = client.complete(
+            system="be helpful", messages=[{"role": "user", "content": "hi"}], model="claude-haiku-4-5"
+        )
+
+        assert result.text == "hi there"
+        events = debug_log.snapshot()
+        assert events[0]["source"] == "llm"
+        assert events[0]["event"] == "call"
+        assert "claude-haiku-4-5" in events[0]["message"]
+        assert events[-1]["event"] == "done"

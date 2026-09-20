@@ -56,14 +56,23 @@ def _configure_llm(app: FastAPI, provider: str, api_key: str) -> None:
     if provider == "anthropic":
         app.state.llm_client = AnthropicClient(api_key=api_key)
         app.state.classifier_model = VENDOR_DEFAULT_MODELS["anthropic"]
+        debug_log.record("llm", "configure", "Configured anthropic client")
         return
     if provider == "openai":
         client = OpenAIClient(api_key=api_key)
         app.state.llm_client = client
         app.state.openai_client = client
         app.state.classifier_model = VENDOR_DEFAULT_MODELS["openai"]
+        debug_log.record("llm", "configure", "Configured openai client")
         return
     # Gemini is listed in Settings; chat still needs a native client.
+    debug_log.record(
+        "llm",
+        "configure",
+        f"No chat client for {provider}",
+        level="error",
+        detail={"provider": provider},
+    )
 
 
 @asynccontextmanager

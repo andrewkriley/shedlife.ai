@@ -52,6 +52,45 @@ describe('AssistantStatus', () => {
     ).toBeInTheDocument()
   })
 
+  it('refreshes the named model when the connection changes', async () => {
+    vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
+    vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue([
+      {
+        id: 'bootstrap.intake',
+        macro_category: 'assist',
+        description: 'Bootstrap intake',
+        default_provider: 'openai',
+        default_model: 'gpt-5.4',
+        provider: 'openai',
+        model: 'gpt-5.4',
+        overridden: false,
+      },
+    ])
+    const getConnection = vi.spyOn(api, 'getConnection')
+    getConnection.mockResolvedValueOnce({
+      provider: 'openai',
+      model: 'gpt-5.4',
+      configured: true,
+    })
+    getConnection.mockResolvedValue({
+      provider: 'openai',
+      model: 'gpt-5.4-mini',
+      configured: true,
+    })
+
+    render(<AssistantStatus />)
+
+    expect(
+      await screen.findByText('AI Assistant is Connected · openai · gpt-5.4'),
+    ).toBeInTheDocument()
+
+    window.dispatchEvent(new Event(api.CONNECTION_CHANGED_EVENT))
+
+    expect(
+      await screen.findByText('AI Assistant is Connected · openai · gpt-5.4-mini'),
+    ).toBeInTheDocument()
+  })
+
   it('shows disconnected when the health check fails', async () => {
     vi.spyOn(api, 'getHealth').mockRejectedValue(new Error('down'))
     vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue([])

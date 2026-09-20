@@ -12,6 +12,7 @@ from theshed.agents.providers.anthropic import LLMResponse
 from theshed.auth.dependencies import get_current_user_id, require_csrf
 from theshed.db.models import Conversation, Turn, User
 from theshed.db.session import get_session
+from theshed.debug import log as debug_log
 from theshed.main import app
 from theshed.observability.galileo import TurnTracer
 from theshed.turns.service import stream_turn, verify_turn
@@ -206,3 +207,27 @@ async def test_stream_turn_reports_a_missing_llm_client(
         )
     ]
     assert any("No LLM client" in event.get("data", "") for event in events)
+
+
+@pytest.mark.asyncio
+async def test_stream_turn_records_debug_events_when_debug_is_on(
+    db_session: AsyncSession, route_user: User, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("THESHED_DEBUG", "1")
+    debug_log.reset_for_tests()
+    events = [
+        event
+        async for event in stream_turn(
+            db=db_session,
+            user_id=route_user.id,
+            conversation_id=None,
+            message="hello",
+            llm=None,
+            classifier_model="claude-haiku-4-5",
+            tracer=TurnTracer(None),
+        )
+    ]
+    assert any("No LLM client" in event.get("data", "") for event in events)
+    logged = debug_log.snapshot()
+    assert any(item["source"] == "turn" and item["event"] == "start" for item in logged)
+    assert any(item["source"] == "turn" and item["event"] == "error" for item in logged)

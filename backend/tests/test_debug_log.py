@@ -1,6 +1,10 @@
 from pathlib import Path
 
+import pytest
+from starlette.responses import PlainTextResponse
+
 from theshed.debug import log as debug_log
+from theshed.debug.middleware import DebugHttpMiddleware
 from theshed.secrets.client import LocalSecretsClient
 
 
@@ -86,6 +90,72 @@ def test_compose_bind_mounts_ct_tty1() -> None:
     assert "/dev/tty1:/host/tty1" in text
 
 
+def test_log_llm_helpers_record_call_and_done(monkeypatch) -> None:
+    monkeypatch.setenv("THESHED_DEBUG", "1")
+    started = debug_log.log_llm_start("openai", "gpt-5.4", tools=1)
+    debug_log.log_llm_done(
+        "openai", "gpt-5.4", started, chars=12, tools=0, stop_reason="stop"
+    )
+    events = debug_log.snapshot()
+    assert [item["source"] for item in events] == ["llm", "llm"]
+    assert events[0]["event"] == "call"
+    assert "gpt-5.4" in events[0]["message"]
+    assert events[1]["event"] == "done"
+    assert events[1]["detail"]["chars"] == 12
+
+
+@pytest.mark.asyncio
+async def test_http_middleware_records_start_before_the_response(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("THESHED_DEBUG", "1")
+    seen_start = False
+
+    async def app(scope, receive, send):
+        nonlocal seen_start
+        events = debug_log.snapshot()
+        seen_start = any(item["event"] == "start" and "/turns" in item["message"] for item in events)
+        response = PlainTextResponse("ok")
+        await response(scope, receive, send)
+
+    middleware = DebugHttpMiddleware(app)
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/turns",
+        "raw_path": b"/turns",
+        "query_string": b"",
+        "headers": [],
+        "client": ("test", 123),
+        "server": ("test", 80),
+    }
+
+    async def receive() -> dict:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    sent: list[dict] = []
+
+    async def send(message: dict) -> None:
+        sent.append(message)
+
+    await middleware(scope, receive, send)
+    assert seen_start is True
+    assert any(item["event"] == "request" for item in debug_log.snapshot())
+
+
+def test_log_llm_error_records_the_failure(monkeypatch) -> None:
+    monkeypatch.setenv("THESHED_DEBUG", "1")
+    started = debug_log.log_llm_start("openai", "gpt-5.4")
+    debug_log.log_llm_error("openai", "gpt-5.4", started, RuntimeError("timeout"))
+    events = debug_log.snapshot()
+    assert events[-1]["event"] == "error"
+    assert events[-1]["level"] == "error"
+    assert "timeout" in events[-1]["message"]
+
+
 def test_debug_dock_css_is_in_page_flow_not_fixed() -> None:
     css_path = Path(__file__).resolve().parents[2] / "frontend" / "src" / "index.css"
     css = css_path.read_text()
@@ -95,4 +165,6 @@ def test_debug_dock_css_is_in_page_flow_not_fixed() -> None:
     assert "grid-column: 1 / -1" in dock
     assert "position: fixed" not in dock
     assert "grid-template-rows: auto minmax(0, 1fr) auto" in shell
+    assert "display: contents" in shell
+    assert ".workspace--hidden" in shell
     assert "padding-bottom: 56px" not in css

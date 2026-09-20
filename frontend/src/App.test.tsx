@@ -81,4 +81,54 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Back to chat' }))
     expect(screen.getByLabelText('Message')).toBeInTheDocument()
   })
+
+  it('keeps the chat transcript after opening and leaving Settings', async () => {
+    vi.spyOn(api, 'getSetupStatus').mockResolvedValue({ needed: false })
+    vi.spyOn(api, 'login').mockResolvedValue()
+    vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
+    vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue([
+      {
+        id: 'bootstrap.intake',
+        macro_category: 'assist',
+        description: 'Bootstrap intake',
+        default_provider: 'openai',
+        default_model: 'gpt-5.4',
+        provider: 'openai',
+        model: 'gpt-5.4',
+        overridden: false,
+      },
+    ])
+    vi.spyOn(api, 'getFoundations').mockResolvedValue(foundations)
+    vi.spyOn(api, 'getIssues').mockResolvedValue([])
+    vi.spyOn(api, 'getLiveModels').mockResolvedValue({ openai: ['gpt-5.4'] })
+    vi.spyOn(api, 'getDebugStatus').mockResolvedValue({ enabled: false })
+    vi.spyOn(api, 'getConnection').mockResolvedValue({
+      provider: 'openai',
+      model: 'gpt-5.4',
+      configured: true,
+    })
+    vi.spyOn(api, 'postDebugEvent').mockResolvedValue()
+    vi.spyOn(api, 'streamTurn').mockImplementation(async function* () {
+      yield { type: 'token', data: { text: 'Hello there' } }
+      yield { type: 'done', data: { turn_id: 't1', conversation_id: 'c1' } }
+    })
+
+    const user = userEvent.setup()
+    render(<App />)
+    await user.type(await screen.findByLabelText('Username'), 'admin')
+    await user.type(screen.getByLabelText('Password'), 'secret')
+    await user.click(screen.getByRole('button', { name: 'Log in' }))
+
+    await user.type(await screen.findByLabelText('Message'), 'keep me')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+    expect(await screen.findByText('keep me')).toBeInTheDocument()
+    expect(await screen.findByText('Hello there')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }))
+    expect(await screen.findByRole('group', { name: 'Change the model' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Back to chat' }))
+    expect(screen.getByText('keep me')).toBeInTheDocument()
+    expect(screen.getByText('Hello there')).toBeInTheDocument()
+  })
 })
