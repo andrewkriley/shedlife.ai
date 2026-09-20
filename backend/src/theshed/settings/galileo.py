@@ -54,7 +54,10 @@ def read_galileo_settings(secrets: Any) -> GalileoSettings:
     api_key = _secret_or_env(secrets, GALILEO_API_KEY_REF, ("GALILEO_API_KEY",))
     return GalileoSettings(
         project=_secret_or_env(
-            secrets, GALILEO_PROJECT_REF, ("GALILEO_PROJECT", "GALILEO_PROJECT_NAME"), DEFAULT_PROJECT
+            secrets,
+            GALILEO_PROJECT_REF,
+            ("GALILEO_PROJECT", "GALILEO_PROJECT_NAME"),
+            DEFAULT_PROJECT,
         ),
         host=_secret_or_env(secrets, GALILEO_HOST_REF, ("GALILEO_CONSOLE_URL",)),
         log_stream=_secret_or_env(

@@ -66,9 +66,7 @@ def test_apply_galileo_runtime_enables_the_tracer_when_a_key_is_set(
     monkeypatch.setenv("GALILEO_PROJECT", "")
     monkeypatch.setenv("GALILEO_LOG_STREAM", "")
     secrets = LocalSecretsClient()
-    write_galileo_settings(
-        secrets, project="shed-lab", log_stream="live", api_key="galileo-secret"
-    )
+    write_galileo_settings(secrets, project="shed-lab", log_stream="live", api_key="galileo-secret")
     state = SimpleNamespace()
     settings = apply_galileo_runtime(state, secrets)
     assert settings.configured is True
