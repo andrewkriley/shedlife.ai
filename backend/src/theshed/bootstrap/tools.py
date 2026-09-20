@@ -8,6 +8,7 @@ from typing import Any
 
 from theshed.agents.tool_loop import ToolCall
 from theshed.bootstrap.discovery import DISCOVERY_TOOLS, host_for, run_discovery
+from theshed.bootstrap.hostnames import DEFAULT_COUNT, propose_hostnames
 from theshed.foundations.store import load_foundations, patch_foundations, record_probe_result
 from theshed.foundations.validate import validate_foundations
 from theshed.foundations.yamlutil import dump_yaml
@@ -69,6 +70,33 @@ def make_bootstrap_tool_executor(db: Any, probe_host: Any) -> ToolExecutor:
                 )
                 await db.commit()
             return json.dumps(result.as_dict())
+        if name == "propose_hostnames":
+            doc = await load_foundations(db)
+            used = (doc.get("domains") or {}).get("intended") or []
+            try:
+                count = int(args["count"]) if args.get("count") is not None else DEFAULT_COUNT
+            except (TypeError, ValueError):
+                count = DEFAULT_COUNT
+            base = args.get("base") or None
+            try:
+                hostnames = propose_hostnames(count=count, used=used, base=base)
+            except ValueError as exc:
+                return json.dumps(
+                    {
+                        "status": "fail",
+                        "values": {},
+                        "detail": str(exc),
+                        "provenance": "proposed",
+                    }
+                )
+            return json.dumps(
+                {
+                    "status": "found",
+                    "values": {"hostnames": hostnames},
+                    "detail": "workshop device labels (tools, electronics)",
+                    "provenance": "proposed",
+                }
+            )
         if name == "export_state":
             return dump_yaml(await load_foundations(db))
         if name == "install_ssh_key":

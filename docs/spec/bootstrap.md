@@ -140,7 +140,7 @@ document plus those references.
 | `id` | `bootstrap.intake` |
 | `macro_category` | `assist` |
 | `description` | Collect, validate, and probe tenant foundations so Deploy can start |
-| `tools` | playbook tools + `foundations.write` / `foundations.read` + probes + discovery |
+| `tools` | playbook tools + `foundations.write` / `foundations.read` + probes + discovery + `propose_hostnames` |
 | `default_provider` / `default_model` | `openai` / `gpt-5.4` |
 
 `assist`, `run.network`, and `build` are **not** registered in this profile.
@@ -258,6 +258,17 @@ as `adopted_endpoint`. Mode not adopt/brownfield → `skip`. k3s with
 `kubeconfig_ref` and no URL → `skip`. HTTP ≥500 or transport error →
 `fail`. HTTP <500 → `found` with `{url, http_status, reachable}`. A
 crash (`error`) writes a local issue, same as a probe crash.
+
+`propose_hostnames` is the same shape (`has_side_effects: false`, does
+not write the store). Arguments: optional `count` (default 3, max 8)
+and optional `base` zone. Returns `{status, values.hostnames, detail,
+provenance}` with `provenance: proposed`. Labels are a predetermined
+list of workshop devices (tools, electronics, test gear) — `bench`,
+`vise`, `lathe`, `solder`, `scope`, `meter`, and the rest of the
+implementation constant. Already-used first labels in
+`domains.intended` are skipped. `shedlife.ai` is never a default
+`base`. Invalid `base` → `fail`. The assistant offers the names; the
+operator confirms via `foundations_write`.
 
 ## Playbook engine
 

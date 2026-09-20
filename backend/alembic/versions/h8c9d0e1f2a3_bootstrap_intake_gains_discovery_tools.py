@@ -56,6 +56,11 @@ skip when Proxmox facts are unavailable. Adopted-platform discovery skips \
 unless intent is adopt or brownfield; k3s skips when only kubeconfig_ref is \
 set. Do not provision GitLab, Infisical, DNS, or k3s.
 
+When proposing intended hostnames, call propose_hostnames. Those names are \
+devices from a workshop shed — tools, electronics, test gear — used as the \
+left-most label. Do not invent server01, web, or app names. shedlife.ai is \
+not a default zone. Offer the names and write only after the operator confirms.
+
 Use foundations_write for known schema keys, foundations_read to see current \
 state, foundations_validate to check it, run_probe for a named probe, and \
 export_state for the YAML bundle. Ask the operator for values; do not guess \
@@ -188,6 +193,22 @@ DISCOVERY_TOOLS = [
             "Does not write foundations or provision k3s."
         ),
         "input_schema": {"type": "object", "properties": {}},
+        "has_side_effects": False,
+    },
+    {
+        "name": "propose_hostnames",
+        "description": (
+            "Propose intended hostname labels from workshop devices "
+            "(tools, electronics, test gear). Optional base zone; never "
+            "defaults to shedlife.ai. Read-only; does not write foundations."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "count": {"type": "integer"},
+                "base": {"type": "string"},
+            },
+        },
         "has_side_effects": False,
     },
 ]

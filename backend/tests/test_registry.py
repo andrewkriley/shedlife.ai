@@ -45,10 +45,13 @@ class TestRegistry:
             "discover_infisical",
             "discover_dns",
             "discover_k3s",
+            "propose_hostnames",
         } <= tool_names
         discovery = [t for t in sub_agent.tools if t["name"].startswith("discover_")]
         assert discovery
         assert all(t["has_side_effects"] is False for t in discovery)
+        propose = next(t for t in sub_agent.tools if t["name"] == "propose_hostnames")
+        assert propose["has_side_effects"] is False
 
     async def test_bootstrap_profile_lists_only_intake(
         self, db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch

@@ -147,7 +147,10 @@ Field groups:
   (`inherit` from the Proxmox host by default).
 - **Storage**: a storage pool name for later VM disks. Single-host only.
 - **Domains**: intended hostname(s) for later ingress. May not resolve yet.
-  `shedlife.ai` is not a default.
+  `shedlife.ai` is not a default. When proposing names, use devices you
+  would find in a workshop shed — tools, electronics, test gear — as the
+  left-most label (`scope`, `bench`, `solder`, …), never generic
+  `server01` / `web` / `app` names.
 - **Build-vs-Adopt intent** (uniform question per dependency, no aggregate
   shortcut): GitLab, Infisical, DNS, k3s. Adopt collects URL + how the
   token will be supplied; Build records "create later." Nothing is created
@@ -190,6 +193,11 @@ brownfield; k3s skips when only `kubeconfig_ref` is set):
 These are not generic exec / SSH / web-search, and they do not
 provision GitLab, Infisical, DNS, or k3s. HTTP bodies are never
 returned.
+
+`propose_hostnames` is the same kind of helper: read-only, not a
+playbook step, provenance `proposed`. It returns workshop-device
+labels (optionally under an operator-supplied zone) and skips names
+already in `domains.intended`.
 
 ### Pre-deploy probes
 

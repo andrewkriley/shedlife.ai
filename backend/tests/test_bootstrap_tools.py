@@ -131,3 +131,30 @@ async def test_discover_gitlab_reads_intent_and_skips_bodies(db_session: AsyncSe
     stored = await load_foundations(db_session)
     assert stored["intent"]["gitlab"]["url"] == "https://git.example.test"
     assert "discover_gitlab" not in (stored.get("probes") or {})
+
+
+@pytest.mark.asyncio
+async def test_propose_hostnames_skips_used_and_does_not_write(
+    db_session: AsyncSession,
+) -> None:
+    execute = make_bootstrap_tool_executor(db_session, DefaultProbeHost())
+    doc = empty_foundations()
+    doc["domains"] = {"intended": ["bench.lab.test"]}
+    await save_foundations(db_session, doc)
+    await db_session.commit()
+
+    raw = await execute(
+        ToolCall(
+            tool_name="propose_hostnames",
+            arguments={"count": 2, "base": "lab.test"},
+            has_side_effects=False,
+        )
+    )
+    payload = json.loads(raw)
+    assert payload["status"] == "found"
+    assert payload["provenance"] == "proposed"
+    assert payload["values"]["hostnames"] == ["vise.lab.test", "lathe.lab.test"]
+    assert all("shedlife.ai" not in name for name in payload["values"]["hostnames"])
+
+    stored = await load_foundations(db_session)
+    assert stored["domains"]["intended"] == ["bench.lab.test"]
