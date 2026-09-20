@@ -104,4 +104,21 @@ describe('Chat', () => {
 
     expect(await screen.findByRole('status')).toHaveTextContent('something broke')
   })
+
+  it('keeps the user message and shows a send failure on the assistant bubble', async () => {
+    vi.spyOn(api, 'streamTurn').mockImplementation(async function* () {
+      throw new Error('CSRF token missing')
+    })
+    vi.spyOn(api, 'postDebugEvent').mockResolvedValue()
+
+    const user = userEvent.setup()
+    render(<Chat />)
+
+    await user.type(screen.getByLabelText('Message'), 'hi')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(document.querySelector('.message--user')).toHaveTextContent('hi')
+    expect(await screen.findByRole('status')).toHaveTextContent('CSRF token missing')
+    expect(document.querySelector('.message--assistant')).toHaveTextContent('CSRF token missing')
+  })
 })

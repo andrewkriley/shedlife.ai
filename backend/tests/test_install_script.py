@@ -167,6 +167,16 @@ def test_install_script_accepts_debug_flag() -> None:
     assert "bash -s -- --debug" in text
 
 
+def test_install_script_follows_debug_logs_to_tty1() -> None:
+    text = SCRIPT.read_text()
+    assert "follow_debug_to_tty" in text
+    assert "/dev/tty1" in text
+    assert "logs -f" in text
+    assert "theshed-debug-tty.pid" in text
+    compose = text.split("compose_up() {", 1)[1].split("write_fresh_env() {", 1)[0]
+    assert "follow_debug_to_tty" in compose
+
+
 def test_install_script_prints_banner_first() -> None:
     text = SCRIPT.read_text()
     assert "Your digital shed -- the place you" in text

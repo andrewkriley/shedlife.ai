@@ -86,8 +86,8 @@ has to exist before Git, Kubernetes, or a secrets backend do.
 - `--debug` (or `THESHED_DEBUG=1`) starts the CT with the live debug
   console on: HTTP requests, UI clicks, provider connection attempts, and
   errors. The same log is on `GET /debug/logs`, on the app process
-  stdout (Proxmox / container console, `docker compose logs`), and can
-  be toggled from the UI after the platform is up.
+  stdout (Proxmox / container console, `docker compose logs`), on CT
+  tty1, and can be toggled from the UI after the platform is up.
 - Optional static CT IP via an environment variable; otherwise DHCP. Either
   way the printed URL is the address the operator's browser will use — not
   localhost on the CT.
@@ -125,7 +125,8 @@ has to exist before Git, Kubernetes, or a secrets backend do.
 Driven by chat, stored as a schema (see SPEC). The UI shows schema state
 next to the conversation, grouped the same way as the field list below.
 The working chrome fits one browser window: the transcript scrolls inside
-the chat pane, and Foundations / Issues share a tabbed review column.
+the chat pane, Foundations / Issues share a tabbed review column, and
+the debug log (when on) sits under those panes instead of covering them.
 Buttons depress and show a busy label while work is in flight. The header
 shows **AI Assistant is Connected** once `/health` is ok and a sub-agent
 is registered — so the operator can tell the assistant is live before

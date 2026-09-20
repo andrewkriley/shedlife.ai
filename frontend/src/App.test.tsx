@@ -32,9 +32,11 @@ describe('App', () => {
 
   it('shows login once setup is complete', async () => {
     vi.spyOn(api, 'getSetupStatus').mockResolvedValue({ needed: false })
+    vi.spyOn(api, 'getDebugStatus').mockResolvedValue({ enabled: false })
     render(<App />)
     expect(await screen.findByRole('button', { name: 'Log in' })).toBeInTheDocument()
     expect(screen.queryByLabelText('API key')).not.toBeInTheDocument()
+    expect(document.querySelector('.app-frame')?.contains(document.querySelector('.debug-dock'))).toBe(true)
   })
 
   it('opens a single-window shell with a connected indicator and grouped review tabs', async () => {
@@ -65,6 +67,7 @@ describe('App', () => {
     await user.click(screen.getByRole('button', { name: 'Log in' }))
 
     expect(document.querySelector('.app-shell')).toHaveAttribute('data-layout', 'single-window')
+    expect(document.querySelector('.app-shell')?.contains(document.querySelector('.debug-dock'))).toBe(true)
     expect(await screen.findByText('AI Assistant is Connected')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Foundations' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Issues' })).toBeInTheDocument()

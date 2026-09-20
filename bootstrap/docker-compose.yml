@@ -47,6 +47,7 @@ services:
       - secrets:/var/lib/theshed
       # Best-effort: LXC/Proxmox console so [debug] lines show on pct console.
       - /dev/console:/host/console
+      - /dev/tty1:/host/tty1
     depends_on:
       postgres:
         condition: service_healthy

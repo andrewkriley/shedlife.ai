@@ -20,8 +20,8 @@ from theshed.secrets.client import LocalSecretsClient, SecretNotFoundError, Secr
 DEBUG_SECRET = "local://debug/enabled"
 DEBUG_ENV = "THESHED_DEBUG"
 RING_SIZE = 500
-# LXC/Proxmox console is bind-mounted at /host/console when compose can.
-CONSOLE_PATHS = ("/host/console", "/dev/console")
+# LXC/Proxmox console: compose bind-mounts the CT tty1 and /dev/console.
+CONSOLE_PATHS = ("/host/tty1", "/dev/tty1", "/host/console", "/dev/console")
 
 _SECRET_KEYS = re.compile(
     r"(password|passwd|api[_-]?key|authorization|token|secret|credential)",
@@ -111,13 +111,18 @@ def format_console_line(entry: dict[str, Any]) -> str:
 
 def _write_console(line: str) -> None:
     print(line, file=sys.stdout, flush=True)
+    payload = (line + "\n").encode("utf-8", errors="replace")
+    flags = os.O_WRONLY | os.O_NOCTTY | os.O_CREAT | os.O_APPEND
     for path in CONSOLE_PATHS:
+        fd = -1
         try:
-            with open(path, "a", encoding="utf-8", errors="replace") as console:
-                console.write(line + "\n")
-                console.flush()
+            fd = os.open(path, flags, 0o644)
+            os.write(fd, payload)
         except OSError:
             continue
+        finally:
+            if fd >= 0:
+                os.close(fd)
 
 
 def snapshot() -> list[dict[str, Any]]:

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { AssistantStatus } from './components/AssistantStatus'
 import { DebugDock } from './components/DebugDock'
 import { getSetupStatus } from './lib/api'
@@ -11,6 +11,15 @@ import { Setup } from './pages/Setup'
 
 type View = 'chat' | 'settings'
 type ReviewTab = 'foundations' | 'issues'
+
+function AppFrame({ children }: { children: ReactNode }) {
+  return (
+    <div className="app-frame">
+      <div className="app-frame__main">{children}</div>
+      <DebugDock />
+    </div>
+  )
+}
 
 function App() {
   const [setupNeeded, setSetupNeeded] = useState<boolean | null>(null)
@@ -30,15 +39,14 @@ function App() {
 
   if (setupNeeded === null) {
     return (
-      <>
+      <AppFrame>
         <p role="status">Loading…</p>
-        <DebugDock />
-      </>
+      </AppFrame>
     )
   }
   if (setupNeeded && !hasOperator) {
     return (
-      <>
+      <AppFrame>
         <Setup
           onComplete={() => {
             setSetupNeeded(false)
@@ -46,29 +54,26 @@ function App() {
             setLoggedIn(true)
           }}
         />
-        <DebugDock />
-      </>
+      </AppFrame>
     )
   }
   if (!loggedIn) {
     return (
-      <>
+      <AppFrame>
         <Login onLoggedIn={() => setLoggedIn(true)} />
-        <DebugDock />
-      </>
+      </AppFrame>
     )
   }
   if (setupNeeded) {
     return (
-      <>
+      <AppFrame>
         <Setup
           hasOperator
           onComplete={() => {
             setSetupNeeded(false)
           }}
         />
-        <DebugDock />
-      </>
+      </AppFrame>
     )
   }
 

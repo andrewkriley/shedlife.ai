@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { respondToApproval, streamTurn, verifyTurn, type TurnEvent } from '../lib/api'
+import { postDebugEvent, respondToApproval, streamTurn, verifyTurn, type TurnEvent } from '../lib/api'
 
 interface PendingApproval {
   toolName: string
@@ -82,6 +82,19 @@ export function Chat() {
 
     try {
       await consumeEvents(streamTurn(conversationId, userMessage), assistantId)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send message'
+      setStatus(`Error: ${message}`)
+      updateMessage(assistantId, (m) => ({
+        ...m,
+        text: m.text.trim() ? m.text : message,
+      }))
+      void postDebugEvent({
+        event: 'error',
+        level: 'error',
+        message,
+        detail: { source: 'chat.send' },
+      }).catch(() => undefined)
     } finally {
       setSending(false)
     }
@@ -96,6 +109,13 @@ export function Chat() {
     setStatus(null)
     try {
       await consumeEvents(respondToApproval(message.turnId, approved), id)
+    } catch (err) {
+      const text = err instanceof Error ? err.message : 'Failed to continue the turn'
+      setStatus(`Error: ${text}`)
+      updateMessage(id, (m) => ({
+        ...m,
+        text: m.text.trim() ? m.text : text,
+      }))
     } finally {
       updateMessage(id, (m) => ({ ...m, responding: false }))
       setSending(false)

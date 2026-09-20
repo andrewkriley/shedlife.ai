@@ -24,7 +24,7 @@
 #   THESHED_STATE_FILE   host-side state (default: /var/lib/theshed/install-state.yaml)
 #   THESHED_PORT         published app port (default: 8080)
 #   THESHED_DELETE=1     same as --delete: destroy the bootstrap CT, then install
-#   THESHED_DEBUG=1      same as --debug: live debug console, CT stdout, GET /debug/logs
+#   THESHED_DEBUG=1      same as --debug: live debug console, CT stdout, tty1, GET /debug/logs
 #   THESHED_YES=1        same as --yes: skip the confirmation prompt
 #
 #   curl -fsSL .../install.sh | bash -s -- --delete
@@ -96,7 +96,7 @@ parse_args() {
       --help|-h)
         echo "Usage: install.sh [--delete] [--debug] [--yes]"
         echo "  --delete   destroy the bootstrap CT, then install"
-        echo "  --debug    enable the live debug console, container stdout, and GET /debug/logs"
+        echo "  --debug    enable the live debug console, container stdout, CT tty1, and GET /debug/logs"
         echo "  --yes      skip the confirmation prompt"
         exit 0
         ;;
@@ -364,7 +364,7 @@ print_summary() {
   echo "  CT:       ${CTID} (${CT_HOSTNAME})"
   echo "  Ref:      ${THESHED_REF}"
   if wants_debug; then
-    echo "  Debug:    on  (http://${ip}:${PORT}/api/debug/logs)"
+    echo "  Debug:    on  (http://${ip}:${PORT}/api/debug/logs, CT tty1)"
   fi
   echo
   echo "Open that URL from a browser on this LAN."
@@ -385,12 +385,29 @@ fi
 INNER
 }
 
+follow_debug_to_tty() {
+  if ! wants_debug; then
+    return 0
+  fi
+  echo "Tailing app logs onto CT tty1"
+  pct exec "${CTID}" -- bash -c "
+    set +e
+    if [[ -f /var/run/theshed-debug-tty.pid ]]; then
+      kill \"\$(cat /var/run/theshed-debug-tty.pid)\" 2>/dev/null
+    fi
+    cd ${APP_DIR} || exit 0
+    nohup docker compose --env-file .env -f bootstrap/docker-compose.yml logs -f --no-color app >/dev/tty1 2>&1 &
+    echo \$! > /var/run/theshed-debug-tty.pid
+  " || true
+}
+
 compose_up() {
   if [[ -n "${THESHED_IMAGE:-}" ]]; then
     pct exec "${CTID}" -- bash -c "cd ${APP_DIR} && docker compose --env-file .env -f bootstrap/docker-compose.yml up -d"
   else
     pct exec "${CTID}" -- bash -c "cd ${APP_DIR} && docker compose --env-file .env -f bootstrap/docker-compose.yml up -d --build"
   fi
+  follow_debug_to_tty
 }
 
 write_fresh_env() {

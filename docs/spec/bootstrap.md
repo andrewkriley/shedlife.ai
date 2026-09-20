@@ -186,8 +186,8 @@ In-memory ring (last 500 events). Enabled by `THESHED_DEBUG=1` or
 (except `/health` and `/debug/logs`), UI clicks, provider connect
 attempts, unhandled errors. Secrets are redacted. Each recorded event
 is also printed to the app process stdout as one `[debug]` line
-(container console / `docker compose logs -f app`, and `/dev/console`
-when writable). Interfaces:
+and written to the CT `tty1` / `/dev/console` when writable (Proxmox
+console). `--debug` also tails compose logs onto `tty1`. Interfaces:
 
 - `GET /debug/status` — `{enabled}`
 - `POST /debug/enabled` — `{enabled}` persists the toggle
@@ -195,7 +195,8 @@ when writable). Interfaces:
 - `POST /debug/events` — UI clicks / client errors
 
 The UI toggle is green when debug is on and muted when off. The log
-panel is shown only while debug is enabled.
+panel is shown only while debug is enabled, in the page flow under the
+chat — not as a fixed overlay.
 
 ## Security model
 
