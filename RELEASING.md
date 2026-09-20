@@ -1,5 +1,10 @@
 # Releasing The Shed
 
+**Automatic versioning is off** while Bootstrap is still in development:
+`.github/workflows/release-please.yml` no longer runs on push to `main`.
+Re-enable `on.push.branches: [main]` on that workflow when we want
+release-please to open version PRs again.
+
 Releases are automatic in mechanism, deliberate in timing — versioning and the
 changelog are generated for you; *when* a release actually ships is still a maintainer
 decision, made by merging one specific PR.

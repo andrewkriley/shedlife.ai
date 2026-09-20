@@ -1,8 +1,9 @@
 name: release-please
 
 on:
-  push:
-    branches: [main]
+  # Automatic versioning is off while Bootstrap is still in development.
+  # Re-enable `push: branches: [main]` when we want release PRs again.
+  workflow_dispatch:
 
 permissions:
   contents: write

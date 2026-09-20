@@ -129,9 +129,10 @@ The working chrome fits one browser window: the transcript scrolls inside
 the chat pane, Foundations / Issues share a tabbed review column, and
 the debug log (when on) sits under those panes instead of covering them.
 Buttons depress and show a busy label while work is in flight. The header
-shows **AI Assistant is Connected** once `/health` is ok and a sub-agent
-is registered — so the operator can tell the assistant is live before
-sending a message. The assistant fills records; it does not invent keys.
+shows **AI Assistant is Connected · provider · model**
+once `/health` is ok and a sub-agent is registered, naming the live
+provider and model chat will call — so the operator can tell the
+assistant is live before sending a message. The assistant fills records; it does not invent keys.
 
 Field groups:
 

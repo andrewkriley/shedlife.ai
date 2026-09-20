@@ -155,6 +155,20 @@ export async function getLiveModels(): Promise<Record<string, string[]>> {
   return response.json()
 }
 
+export interface ConnectionStatus {
+  provider: string | null
+  model: string | null
+  configured: boolean
+}
+
+export async function getConnection(): Promise<ConnectionStatus> {
+  const response = await fetch('/api/settings/connection', { credentials: 'include' })
+  if (!response.ok) {
+    throw new Error('Failed to load connection')
+  }
+  return response.json()
+}
+
 export async function getHealth(): Promise<{ status: string }> {
   const response = await fetch('/api/health', { credentials: 'include' })
   if (!response.ok) {

@@ -12,6 +12,7 @@ from galileo_core.schemas.logging.agent import AgentType
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from theshed.agents.models import resolve_runtime_model
 from theshed.agents.orchestrator import (
     SubAgentPaused,
     ToolExecutor,
@@ -27,6 +28,7 @@ from theshed.db.models import (
     Conversation,
     PendingTurnApproval,
     SubAgent,
+    SubAgentModelOverride,
     Turn,
     TurnSubAgentResult,
     TurnVerification,
@@ -35,6 +37,18 @@ from theshed.observability.galileo import TurnTracer
 
 RECENCY_CAP = 10  # tunable default, per docs/spec/core-agentic-loop.md
 TOKEN_CHUNK_SIZE = 40
+
+
+async def _model_for(db: AsyncSession, sub_agent: SubAgent, llm: LLMClient) -> str:
+    override = await db.get(SubAgentModelOverride, sub_agent.id)
+    _provider, model = resolve_runtime_model(
+        client_vendor=getattr(llm, "vendor", None),
+        default_provider=sub_agent.default_provider,
+        default_model=sub_agent.default_model,
+        override_provider=override.provider if override is not None else None,
+        override_model=override.model if override is not None else None,
+    )
+    return model
 
 
 def _sse(event_type: str, data: dict[str, Any]) -> dict[str, str]:
@@ -107,7 +121,14 @@ async def _run_matches(
     for i, sub_agent in enumerate(matches):
         yield _sse("progress", {"stage": f"agent:{sub_agent.id} started"})
         tracer.start_span(AgentType.default, sub_agent.id, message)
-        outcome = await run_sub_agent(sub_agent, message, context, llm, **executor_kwargs)
+        outcome = await run_sub_agent(
+            sub_agent,
+            message,
+            context,
+            llm,
+            model=await _model_for(db, sub_agent, llm),
+            **executor_kwargs,
+        )
 
         if isinstance(outcome, SubAgentPaused):
             state.paused = outcome
@@ -293,6 +314,7 @@ async def resume_turn(
             pending.guard_snapshot,
             llm,
             approved,
+            model=await _model_for(db, sub_agent, llm),
             **executor_kwargs,
         )
 

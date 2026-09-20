@@ -29,8 +29,8 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
     getLiveModels()
       .then((models) => {
         setLiveModels(models)
-        const firstProvider = Object.keys(models).includes('anthropic')
-          ? 'anthropic'
+        const firstProvider = Object.keys(models).includes('openai')
+          ? 'openai'
           : Object.keys(models)[0]
         if (firstProvider) {
           setProvider(firstProvider)

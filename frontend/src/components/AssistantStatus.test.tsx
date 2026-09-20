@@ -25,6 +25,33 @@ describe('AssistantStatus', () => {
     expect(screen.getByLabelText('assistant connection')).toHaveAttribute('data-state', 'connected')
   })
 
+  it('names the active provider and model when a key is configured', async () => {
+    vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
+    vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue([
+      {
+        id: 'bootstrap.intake',
+        macro_category: 'assist',
+        description: 'Bootstrap intake',
+        default_provider: 'openai',
+        default_model: 'gpt-5.4',
+        provider: 'openai',
+        model: 'gpt-5.4',
+        overridden: false,
+      },
+    ])
+    vi.spyOn(api, 'getConnection').mockResolvedValue({
+      provider: 'openai',
+      model: 'gpt-5.4',
+      configured: true,
+    })
+
+    render(<AssistantStatus />)
+
+    expect(
+      await screen.findByText('AI Assistant is Connected · openai · gpt-5.4'),
+    ).toBeInTheDocument()
+  })
+
   it('shows disconnected when the health check fails', async () => {
     vi.spyOn(api, 'getHealth').mockRejectedValue(new Error('down'))
     vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue([])

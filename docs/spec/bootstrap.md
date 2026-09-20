@@ -50,9 +50,14 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    (`Secure` off).
 5. Chat UI loads in a single-window shell (header + chat + tabbed review).
    The header polls `GET /health` and `GET /settings/sub-agents` and shows
-   **AI Assistant is Connected** when both succeed and at least one agent
-   is registered. Registry has one row (`bootstrap.intake`); the turn
-   path short-circuits classification and opens that agent.
+   **AI Assistant is Connected · provider · model** when both succeed
+   and at least one agent is registered, using `GET /settings/connection`
+   for the live vendor and the model chat will actually call. Registry
+   has one row (`bootstrap.intake`); the turn path short-circuits
+   classification and opens that agent. The registry default is OpenAI
+   `gpt-5.4`. If the configured key is a different vendor, chat uses
+   that vendor's default model rather than sending a Claude id to
+   OpenAI (or the reverse).
 6. `collect-foundations`: the agent asks for schema fields, writes them
    through a `foundations.write` tool (no side effects beyond the store).
    The review panel reflects the schema after each write.
@@ -133,7 +138,7 @@ document plus those references.
 | `macro_category` | `assist` |
 | `description` | Collect, validate, and probe tenant foundations so Deploy can start |
 | `tools` | playbook tools + `foundations.write` / `foundations.read` + probes |
-| `default_provider` / `default_model` | whatever the setup gate configured |
+| `default_provider` / `default_model` | `openai` / `gpt-5.4` |
 
 `assist`, `run.network`, and `build` are **not** registered in this profile.
 They remain in the product; they are not seeded here.
@@ -177,9 +182,10 @@ New:
 - Setup-gate endpoints: `POST /setup` (first user + provider key) —
   refused once an identity exists.
 
-Settings (`GET /settings/models`, `POST /settings/provider`, model
-overrides) stay; they are how the operator changes provider after the
-gate. The page always lists Anthropic / OpenAI / Gemini, can save a new
+Settings (`GET /settings/models`, `GET /settings/connection`,
+`POST /settings/provider`, model overrides) stay; they are how the
+operator changes provider after the gate. `GET /settings/connection`
+is the live vendor and model the header prints. The page always lists Anthropic / OpenAI / Gemini, can save a new
 API key, groups connection status, the assistant list (a lone agent is
 pre-selected), and a "Change the model" assignment block. Bootstrap
 wires an Anthropic or OpenAI client from `local://providers/llm/*` so
