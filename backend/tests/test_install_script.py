@@ -10,7 +10,7 @@ def test_install_script_exists_and_is_thin() -> None:
     assert SCRIPT.is_file()
     assert text.startswith("#!/usr/bin/env bash")
     assert "THESHED_REF" in text
-    assert "/health" in text
+    assert "/api/setup/status" in text
     assert "install-state.yaml" in text
     assert "pct create" in text
 
@@ -85,7 +85,7 @@ def test_install_script_prints_connect_url_before_health_wait() -> None:
     text = SCRIPT.read_text()
     assert 'The Shed is at: http://${1}:${PORT}' in text
     main = text.split("main() {", 1)[1]
-    assert main.index("print_url") < main.index("wait_health")
+    assert main.index("print_url") < main.index("wait_ready")
     print_url = text.split("print_url() {", 1)[1].split("print_summary() {", 1)[0]
     assert "Username:" in print_url
     assert "Password:" in print_url
@@ -108,7 +108,7 @@ def test_install_script_prints_completion_summary() -> None:
     assert "THESHED_OPERATOR_PASSWORD" in text
     assert "THESHED_CT_ROOT_PASSWORD" in text
     main = text.split("main() {", 1)[1]
-    assert main.index("wait_health") < main.index("print_summary")
+    assert main.index("wait_ready") < main.index("print_summary")
 
 
 def test_install_script_sets_generated_ct_root_password() -> None:
@@ -122,6 +122,16 @@ def test_install_script_sets_generated_ct_root_password() -> None:
     assert '--password "${CT_ROOT_PASSWORD}"' in create
     main = text.split("main() {", 1)[1]
     assert main.index("ensure_ct_root_password") < main.index("create_ct")
+
+
+def test_install_script_waits_on_setup_status_not_health() -> None:
+    text = SCRIPT.read_text()
+    assert "/api/setup/status" in text
+    assert "wait_ready" in text
+    assert "ct_ready_ok" in text
+    wait = text.split("wait_ready() {", 1)[1].split("main() {", 1)[0]
+    assert "/health" not in wait
+    assert "pct exec" in text.split("ct_ready_ok() {", 1)[1].split("read_state_ip() {", 1)[0]
 
 
 def test_install_script_defaults_web_user_to_admin() -> None:

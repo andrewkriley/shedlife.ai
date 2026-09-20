@@ -73,9 +73,10 @@ has to exist before Git, Kubernetes, or a secrets backend do.
 - Does not collect the LLM API key, the Proxmox *host* root password, or
   tenant facts. Those belong to the web app. It *does* generate the first
   operator username (`admin`) + password and a CT `root` password, print
-  them next to the URL (including the early "The Shed is at" line, before
-  `/health` returns), set the CT password so the Proxmox console can log
-  in, and seed the operator identity so the web UI accepts `admin`.
+  them next to   the URL (including the early "The Shed is at" line, before
+  `/api/setup/status` returns), set the CT password so the Proxmox
+  console can log in, and seed the operator identity so the web UI
+  accepts `admin`.
 - `--debug` (or `THESHED_DEBUG=1`) starts the CT with the live debug
   console on: HTTP requests, UI clicks, provider connection attempts, and
   errors. The same log is on `GET /debug/logs`, on the app process
@@ -200,7 +201,7 @@ Probes are rerunnable. Results hang off the schema, not the chat transcript.
 ### Idempotency / failure recovery
 
 - Re-run the install script: if the CT exists and the app answers
-  `/health`, print the URL and stop.
+  `/api/setup/status`, print the URL and stop.
 - Re-run a playbook or probe: completed work is skipped after live
   verification, same hybrid model as before (local state + live check).
 - Abandoned-CT cleanup is still manual this phase. The installer's state

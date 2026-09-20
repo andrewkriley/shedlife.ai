@@ -30,8 +30,10 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    `root` password (`pct create --password`), writes them into the CT
    `.env`, starts The Shed image, prints `http://<ct-ip>:<port>` plus
    Username / Password / CT user / CT pass immediately, then waits until
-   `GET /health` succeeds and reprints the same block. `--debug` also
-   writes `THESHED_DEBUG=1`.
+   `GET /api/setup/status` succeeds (from the host, or `pct exec` to
+   localhost if the host cannot reach the CT IP) and reprints the same
+   block. Do not wait on `GET /health` — the static UI mount can swallow
+   that path. `--debug` also writes `THESHED_DEBUG=1`.
 3. Operator opens the URL. Seeded identity exists → login with username
    `admin` and the printed password, then setup if no LLM key yet. No
    identity → setup gate.
@@ -149,7 +151,9 @@ Reused from the living harness:
 - `POST /auth/login`, `POST /auth/logout` — Auth SPEC, with `Secure` off.
 - `POST /turns`, `POST /turns/{id}/approvals`, `POST /turns/{id}/verify` —
   Core Agentic Loop SPEC.
-- `GET /health` — installer wait loop.
+- `GET /health` — UI connected indicator. Registered before the static
+  mount so it is not swallowed.
+- `GET /api/setup/status` — installer wait loop and reuse check.
 
 New:
 

@@ -191,9 +191,16 @@ resolve_ref() {
   fi
 }
 
-ct_health_ok() {
+READY_PATH="/api/setup/status"
+
+ct_ready_ok() {
   local ip="$1"
-  curl -fsS --max-time 3 "http://${ip}:${PORT}/health" >/dev/null 2>&1
+  # The first-run API. GET /health is registered after the static UI mount
+  # on older images and 404s from the Proxmox host.
+  if curl -fsS --max-time 3 "http://${ip}:${PORT}${READY_PATH}" >/dev/null 2>&1; then
+    return 0
+  fi
+  pct exec "${CTID}" -- curl -fsS --max-time 3 "http://127.0.0.1:${PORT}${READY_PATH}" >/dev/null 2>&1
 }
 
 read_state_ip() {
@@ -263,7 +270,7 @@ maybe_reuse() {
   if [[ -n "${ctid_recorded}" ]]; then
     CTID="${ctid_recorded}"
   fi
-  if ct_health_ok "${ip}"; then
+  if ct_ready_ok "${ip}"; then
     load_operator_from_ct
     if [[ -z "${CT_ROOT_PASSWORD}" ]]; then
       apply_ct_root_password
@@ -429,15 +436,15 @@ EOF"
   fi
 }
 
-wait_health() {
+wait_ready() {
   local ip="$1" i
   for i in $(seq 1 60); do
-    if ct_health_ok "${ip}"; then
+    if ct_ready_ok "${ip}"; then
       return 0
     fi
     sleep 5
   done
-  echo "Timed out waiting for GET /health on http://${ip}:${PORT}/health" >&2
+  echo "Timed out waiting for GET ${READY_PATH} on http://${ip}:${PORT}${READY_PATH}" >&2
   exit 1
 }
 
@@ -467,8 +474,8 @@ main() {
     exit 1
   fi
   print_url "${ip}"
-  echo "Waiting for GET /health ..."
-  wait_health "${ip}"
+  echo "Waiting for GET ${READY_PATH} ..."
+  wait_ready "${ip}"
   write_state "${ip}" "${THESHED_REF}"
   print_summary "${ip}"
 }
