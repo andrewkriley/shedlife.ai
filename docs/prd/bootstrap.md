@@ -129,7 +129,8 @@ Driven by chat, stored as a schema (see SPEC). The UI shows schema state
 next to the conversation, grouped the same way as the field list below.
 The working chrome fits one browser window: the transcript scrolls inside
 the chat pane, Foundations / Issues share a tabbed review column, and
-the debug log (when on) sits under those panes instead of covering them.
+the debug log (when on) sits under those panes instead of covering them,
+newest events first.
 Buttons depress and show a busy label while work is in flight. The header
 shows **AI Assistant is Connected · provider · model**
 once `/health` is ok and a sub-agent is registered, naming the live
