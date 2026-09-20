@@ -1,8 +1,12 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Chat } from './Chat'
 import * as api from '../lib/api'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 describe('Chat', () => {
   it('renders the message input and send button', () => {
@@ -127,6 +131,28 @@ describe('Chat', () => {
     await user.click(screen.getByRole('button', { name: 'Send' }))
 
     expect(await screen.findByRole('status')).toHaveTextContent('something broke')
+  })
+
+  it('still sends when crypto.randomUUID is missing (LAN HTTP is not a secure context)', async () => {
+    vi.spyOn(api, 'streamTurn').mockImplementation(async function* () {
+      yield { type: 'token', data: { text: 'ok' } }
+      yield { type: 'done', data: { turn_id: 't1', conversation_id: 'c1' } }
+    })
+    vi.stubGlobal('crypto', {
+      getRandomValues(bytes: Uint8Array) {
+        bytes.fill(3)
+        return bytes
+      },
+    })
+
+    const user = userEvent.setup()
+    render(<Chat />)
+
+    await user.type(screen.getByLabelText('Message'), 'hi')
+    await user.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(document.querySelector('.message--user')).toHaveTextContent('hi')
+    expect(await screen.findByText('ok')).toBeInTheDocument()
   })
 
   it('keeps the user message and shows a send failure on the assistant bubble', async () => {
