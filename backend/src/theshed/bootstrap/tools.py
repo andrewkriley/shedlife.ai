@@ -7,6 +7,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from theshed.agents.tool_loop import ToolCall
+from theshed.bootstrap.discovery import DISCOVERY_TOOLS, host_for, run_discovery
+from theshed.bootstrap.hostnames import DEFAULT_COUNT, propose_hostnames
 from theshed.foundations.store import load_foundations, patch_foundations, record_probe_result
 from theshed.foundations.validate import validate_foundations
 from theshed.foundations.yamlutil import dump_yaml
@@ -55,6 +57,45 @@ def make_bootstrap_tool_executor(db: Any, probe_host: Any) -> ToolExecutor:
             await _persist_probe(db, probe_id, probe)
             return json.dumps(
                 {"probe_id": probe_id, "status": probe.status, "detail": probe.detail}
+            )
+        if name in DISCOVERY_TOOLS:
+            doc = await load_foundations(db)
+            result = run_discovery(name, host_for(probe_host, doc))
+            if result.status == "error":
+                await record_issue(
+                    db,
+                    summary=f"discovery {name} crashed",
+                    detail=result.detail,
+                    source="automatic",
+                )
+                await db.commit()
+            return json.dumps(result.as_dict())
+        if name == "propose_hostnames":
+            doc = await load_foundations(db)
+            used = (doc.get("domains") or {}).get("intended") or []
+            try:
+                count = int(args["count"]) if args.get("count") is not None else DEFAULT_COUNT
+            except (TypeError, ValueError):
+                count = DEFAULT_COUNT
+            base = args.get("base") or None
+            try:
+                hostnames = propose_hostnames(count=count, used=used, base=base)
+            except ValueError as exc:
+                return json.dumps(
+                    {
+                        "status": "fail",
+                        "values": {},
+                        "detail": str(exc),
+                        "provenance": "proposed",
+                    }
+                )
+            return json.dumps(
+                {
+                    "status": "found",
+                    "values": {"hostnames": hostnames},
+                    "detail": "workshop device labels (tools, electronics)",
+                    "provenance": "proposed",
+                }
             )
         if name == "export_state":
             return dump_yaml(await load_foundations(db))

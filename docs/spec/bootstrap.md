@@ -60,13 +60,16 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    OpenAI (or the reverse).
 6. `collect-foundations`: the agent asks for schema fields, writes them
    through a `foundations.write` tool (no side effects beyond the store).
-   The review panel reflects the schema after each write.
+   It may first enumerate the host and adopted URLs with the discovery
+   tools below; those calls do not write the schema. The review panel
+   reflects the schema after each write.
 7. `validate-foundations`: runs without the model inventing rules; failures
    attach to fields.
 8. `predeploy-probe`: each probe is its own tool. `ssh_key_installed`
    pauses for approval, generates the dedicated key in the CT, installs it
    via the still-held root password, discards the password, stores only the
-   fingerprint. Other probes are read-only.
+   fingerprint. Other probes are read-only. Discovery tools are not
+   probes and are not a fifth playbook.
 9. `export-state`: produces the YAML bundle (references, not values). The
    operator can download it. It is also kept on the CT.
 10. The LXC stays up. Handoff to Deploy is "foundations valid + probes
@@ -137,7 +140,7 @@ document plus those references.
 | `id` | `bootstrap.intake` |
 | `macro_category` | `assist` |
 | `description` | Collect, validate, and probe tenant foundations so Deploy can start |
-| `tools` | playbook tools + `foundations.write` / `foundations.read` + probes |
+| `tools` | playbook tools + `foundations.write` / `foundations.read` + probes + discovery + `propose_hostnames` |
 | `default_provider` / `default_model` | `openai` / `gpt-5.4` |
 
 `assist`, `run.network`, and `build` are **not** registered in this profile.
@@ -234,6 +237,38 @@ chat — not as a fixed overlay.
   YAML, never in issues, never in Galileo payloads.
 - LLM API key: local secrets store, same rules.
 - LAN HTTP only. No Cloudflared, no public DNS requirement.
+
+## Discovery tools
+
+Read-only (`has_side_effects: false`). Invoked from the turn tool loop,
+not via `POST /probes/{id}`. Return `{status, values, detail, provenance}`
+where `provenance` is always `discovered`. Statuses: `found` | `skip` |
+`fail` | `error`. Never include HTTP response bodies. Never write the
+foundations store — the assistant proposes known keys and the operator
+confirms via `foundations_write`.
+
+Host inventory (`list_proxmox_nodes`, `list_bridges`, `list_storage_pools`,
+`proxmox_version`) reads injected Proxmox facts (`nodes`, `bridges`,
+`pools`, `version`) — the same injector capacity / bridge / pool probes
+use. Missing injector → `skip`. Empty lists are still `found`.
+
+Adopted discovery (`discover_gitlab`, `discover_infisical`, `discover_dns`,
+`discover_k3s`) GETs `intent.<name>.url` with the same injected `http_get`
+as `adopted_endpoint`. Mode not adopt/brownfield → `skip`. k3s with
+`kubeconfig_ref` and no URL → `skip`. HTTP ≥500 or transport error →
+`fail`. HTTP <500 → `found` with `{url, http_status, reachable}`. A
+crash (`error`) writes a local issue, same as a probe crash.
+
+`propose_hostnames` is the same shape (`has_side_effects: false`, does
+not write the store). Arguments: optional `count` (default 3, max 8)
+and optional `base` zone. Returns `{status, values.hostnames, detail,
+provenance}` with `provenance: proposed`. Labels are a predetermined
+list of workshop devices (tools, electronics, test gear) — `bench`,
+`vise`, `lathe`, `solder`, `scope`, `meter`, and the rest of the
+implementation constant. Already-used first labels in
+`domains.intended` are skipped. `shedlife.ai` is never a default
+`base`. Invalid `base` → `fail`. The assistant offers the names; the
+operator confirms via `foundations_write`.
 
 ## Playbook engine
 
