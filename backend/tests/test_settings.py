@@ -33,6 +33,7 @@ class FakeModelsList:
 @dataclass
 class FakeProviderClient:
     models: FakeModelsList
+    vendor: str = "anthropic"
 
 
 @pytest_asyncio.fixture
@@ -141,7 +142,7 @@ class TestListLiveModels:
         result = list_live_models(clients)
 
         assert result["anthropic"] == ["claude-sonnet-5"]
-        assert result["openai"] == ["gpt-4.1", "gpt-4o", "o4-mini"]
+        assert result["openai"] == ["gpt-5.4", "gpt-5.4-mini", "gpt-4.1"]
 
 
 @pytest.mark.asyncio
@@ -236,6 +237,32 @@ class TestSettingsRoutes:
         ids = [row["id"] for row in response.json()]
         assert sub_agent.id in ids
 
+    async def test_get_connection_reports_the_live_vendor_and_resolved_model(
+        self, client: AsyncClient, sub_agent: SubAgent
+    ) -> None:
+        app.state.llm_client = FakeProviderClient(
+            FakeModelsList([FakeModel("gpt-5.4")]), vendor="openai"
+        )
+
+        response = await client.get("/settings/connection")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "provider": "openai",
+            "model": "gpt-5.4",
+            "configured": True,
+        }
+
+    async def test_get_connection_is_unconfigured_without_a_client(
+        self, client: AsyncClient
+    ) -> None:
+        app.state.llm_client = None
+
+        response = await client.get("/settings/connection")
+
+        assert response.status_code == 200
+        assert response.json() == {"provider": None, "model": None, "configured": False}
+
     async def test_get_models_returns_live_options_per_provider(self, client: AsyncClient) -> None:
         response = await client.get("/settings/models")
 
@@ -254,7 +281,7 @@ class TestSettingsRoutes:
         assert response.status_code == 200
         body = response.json()
         assert body["anthropic"] == ["claude-sonnet-5"]
-        assert body["openai"] == ["gpt-4.1", "gpt-4o", "o4-mini"]
+        assert body["openai"] == ["gpt-5.4", "gpt-5.4-mini", "gpt-4.1"]
         assert body["gemini"] == ["gemini-2.5-flash", "gemini-2.5-pro"]
 
     async def test_post_model_assignments_applies_and_returns_updated_settings(

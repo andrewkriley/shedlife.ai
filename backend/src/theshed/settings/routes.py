@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from theshed.agents.models import resolve_runtime_model
 from theshed.auth.dependencies import get_current_user_id, require_csrf
 from theshed.db.session import get_session
 from theshed.secrets.client import LocalSecretsClient
@@ -42,6 +43,12 @@ class ProviderKeyRequest(BaseModel):
     api_key: str
 
 
+class ConnectionResponse(BaseModel):
+    provider: str | None
+    model: str | None
+    configured: bool
+
+
 def listing_clients(app_state: Any) -> dict[str, Any]:
     clients: dict[str, Any] = {}
     llm = getattr(app_state, "llm_client", None)
@@ -67,6 +74,29 @@ async def get_sub_agent_settings(
 @router.get("/models", dependencies=[Depends(get_current_user_id)])
 async def get_live_models(request: Request) -> dict[str, list[str]]:
     return list_live_models(listing_clients(request.app.state))
+
+
+@router.get("/connection", dependencies=[Depends(get_current_user_id)])
+async def get_connection(
+    request: Request,
+    db: AsyncSession = Depends(get_session),
+) -> ConnectionResponse:
+    llm = getattr(request.app.state, "llm_client", None)
+    vendor = getattr(llm, "vendor", None) if llm is not None else None
+    settings = await list_sub_agent_settings(db)
+    if llm is None:
+        return ConnectionResponse(provider=None, model=None, configured=False)
+    if not settings:
+        return ConnectionResponse(provider=vendor, model=None, configured=True)
+    first = settings[0]
+    provider, model = resolve_runtime_model(
+        client_vendor=vendor,
+        default_provider=first.default_provider,
+        default_model=first.default_model,
+        override_provider=first.provider if first.overridden else None,
+        override_model=first.model if first.overridden else None,
+    )
+    return ConnectionResponse(provider=provider, model=model, configured=True)
 
 
 @router.post("/provider", dependencies=[Depends(require_csrf)])

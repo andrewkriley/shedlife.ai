@@ -107,13 +107,14 @@ async def _run_loop(
     tools: list[dict[str, Any]],
     side_effect_by_name: dict[str, bool],
     tool_executor: ToolExecutor,
+    model: str,
 ) -> SubAgentRunResult:
     """The tool-calling loop's core, shared by a fresh start (`run_sub_agent`)
     and a resume after approval (`resume_sub_agent`) — both just differ in
     how `messages`/`guard` are seeded going in."""
     while True:
         response = llm.complete(
-            system=sub_agent.system_prompt, messages=messages, model=sub_agent.default_model, tools=tools
+            system=sub_agent.system_prompt, messages=messages, model=model, tools=tools
         )
 
         if not response.tool_calls:
@@ -174,12 +175,16 @@ async def run_sub_agent(
     context_messages: list[dict[str, Any]],
     llm: LLMClient,
     tool_executor: ToolExecutor = _execute_tool,
+    model: str | None = None,
 ) -> SubAgentRunResult:
     guard = LoopGuard()
     messages: list[dict[str, Any]] = [*context_messages, {"role": "user", "content": user_message}]
     tools = [_to_anthropic_tool_spec(t) for t in sub_agent.tools]
     side_effect_by_name = {t["name"]: t.get("has_side_effects", False) for t in sub_agent.tools}
-    return await _run_loop(sub_agent, messages, guard, llm, tools, side_effect_by_name, tool_executor)
+    chosen = model or sub_agent.default_model
+    return await _run_loop(
+        sub_agent, messages, guard, llm, tools, side_effect_by_name, tool_executor, chosen
+    )
 
 
 async def resume_sub_agent(
@@ -192,6 +197,7 @@ async def resume_sub_agent(
     llm: LLMClient,
     approved: bool,
     tool_executor: ToolExecutor = _execute_tool,
+    model: str | None = None,
 ) -> SubAgentRunResult:
     """Continues a sub-agent's tool loop from the point `SubAgentPaused` was
     returned, per docs/spec/core-agentic-loop.md step 6d: approved resumes
@@ -222,4 +228,13 @@ async def resume_sub_agent(
             "content": [{"type": "tool_result", "tool_use_id": tool_use_id, "content": result}],
         },
     ]
-    return await _run_loop(sub_agent, messages, guard, llm, tools, side_effect_by_name, tool_executor)
+    return await _run_loop(
+        sub_agent,
+        messages,
+        guard,
+        llm,
+        tools,
+        side_effect_by_name,
+        tool_executor,
+        model or sub_agent.default_model,
+    )

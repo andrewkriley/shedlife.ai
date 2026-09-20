@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { getHealth, getSubAgentSettings } from '../lib/api'
+import { getConnection, getHealth, getSubAgentSettings } from '../lib/api'
 
 type ConnectionState = 'checking' | 'connected' | 'disconnected'
 
 export function AssistantStatus() {
   const [state, setState] = useState<ConnectionState>('checking')
+  const [detail, setDetail] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -13,11 +14,23 @@ export function AssistantStatus() {
       try {
         const health = await getHealth()
         const agents = await getSubAgentSettings()
+        const connection = await getConnection().catch(() => null)
         if (!cancelled) {
-          setState(health.status === 'ok' && agents.length > 0 ? 'connected' : 'disconnected')
+          const connected = health.status === 'ok' && agents.length > 0
+          setState(connected ? 'connected' : 'disconnected')
+          if (connected && connection?.configured && connection.provider && connection.model) {
+            setDetail(`${connection.provider} · ${connection.model}`)
+          } else if (connected) {
+            setDetail(connection?.configured === false ? 'no provider key' : null)
+          } else {
+            setDetail(null)
+          }
         }
       } catch {
-        if (!cancelled) setState('disconnected')
+        if (!cancelled) {
+          setState('disconnected')
+          setDetail(null)
+        }
       }
     }
 
@@ -35,7 +48,9 @@ export function AssistantStatus() {
     state === 'checking'
       ? 'Checking assistant…'
       : state === 'connected'
-        ? 'AI Assistant is Connected'
+        ? detail
+          ? `AI Assistant is Connected · ${detail}`
+          : 'AI Assistant is Connected'
         : 'AI Assistant is disconnected'
 
   return (

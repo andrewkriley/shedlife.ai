@@ -9,12 +9,40 @@ from openai import OpenAI
 
 from theshed.agents.providers.anthropic import LLMResponse
 
+_REASONING_PREFIXES = ("gpt-5", "o1", "o3", "o4")
+
+
+def _is_reasoning_model(model: str) -> bool:
+    return model.startswith(_REASONING_PREFIXES)
+
+
+def completion_kwargs(
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Chat Completions payload. GPT-5.x needs max_completion_tokens and a
+    reasoning_effort; sending tools without that can return empty content
+    or hang — which looked like chat Send doing nothing."""
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+    }
+    converted = _to_openai_tools(tools)
+    if converted:
+        kwargs["tools"] = converted
+    if _is_reasoning_model(model):
+        kwargs["max_completion_tokens"] = 4096
+        kwargs["reasoning_effort"] = "none"
+    return kwargs
+
 
 class OpenAIClient:
     vendor = "openai"
 
     def __init__(self, api_key: str) -> None:
-        self._client = OpenAI(api_key=api_key)
+        self._client = OpenAI(api_key=api_key, timeout=60.0)
         self.models = self._client.models
 
     def complete(
@@ -26,9 +54,11 @@ class OpenAIClient:
         tools: list[dict[str, Any]] | None = None,
     ) -> LLMResponse:
         response = self._client.chat.completions.create(
-            model=model,
-            messages=cast(Any, _to_openai_messages(system, messages)),
-            tools=cast(Any, _to_openai_tools(tools) or None),
+            **cast(Any, completion_kwargs(
+                model=model,
+                messages=_to_openai_messages(system, messages),
+                tools=tools,
+            )),
         )
         choice = response.choices[0].message
         tool_calls = []

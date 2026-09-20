@@ -95,6 +95,17 @@ class TestRunSubAgent:
 
         assert outcome.result == "The weather is sunny."
         assert outcome.status_code == 0
+        assert llm.calls[0]["model"] == "claude-haiku-4-5"
+
+    async def test_uses_the_model_the_turn_resolved_not_the_registry_default(self) -> None:
+        assist = make_sub_agent()
+        llm = ScriptedLLM(
+            [LLMResponse(text="ok", tool_calls=[], stop_reason="end_turn")]
+        )
+
+        await run_sub_agent(assist, "hello", [], llm, model="gpt-5.4")
+
+        assert llm.calls[0]["model"] == "gpt-5.4"
 
     async def test_side_effect_tool_call_returns_paused_instead_of_executing(self) -> None:
         risky = make_sub_agent(

@@ -9,6 +9,7 @@ from redis.asyncio import Redis
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from theshed.agents.mcp_tools import call_mcp_tool
+from theshed.agents.models import BOOTSTRAP_DEFAULT_MODEL, VENDOR_DEFAULT_MODELS
 from theshed.agents.providers.anthropic import AnthropicClient
 from theshed.agents.providers.openai import OpenAIClient
 from theshed.agents.tool_loop import ToolCall
@@ -42,7 +43,7 @@ from theshed.turns.routes import router as turns_router
 load_dotenv(os.environ.get("THESHED_ENV_FILE"))
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-CLASSIFIER_MODEL = os.environ.get("CLASSIFIER_MODEL", "claude-haiku-4-5")
+CLASSIFIER_MODEL = os.environ.get("CLASSIFIER_MODEL", BOOTSTRAP_DEFAULT_MODEL)
 # GALILEO_PROJECT_NAME, not GALILEO_PROJECT — matches this tenant's .env,
 # not the Galileo SDK's own env var name (which is bridged separately
 # below, same reasoning as the API key bridge).
@@ -54,11 +55,13 @@ def _configure_llm(app: FastAPI, provider: str, api_key: str) -> None:
     app.state.llm_client = None
     if provider == "anthropic":
         app.state.llm_client = AnthropicClient(api_key=api_key)
+        app.state.classifier_model = VENDOR_DEFAULT_MODELS["anthropic"]
         return
     if provider == "openai":
         client = OpenAIClient(api_key=api_key)
         app.state.llm_client = client
         app.state.openai_client = client
+        app.state.classifier_model = VENDOR_DEFAULT_MODELS["openai"]
         return
     # Gemini is listed in Settings; chat still needs a native client.
 
