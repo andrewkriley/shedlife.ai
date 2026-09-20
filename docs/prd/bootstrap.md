@@ -149,9 +149,11 @@ Field groups:
 
 - **Tenant**: display name and slug.
 - **Proxmox**: API/URL or host address, node name if more than one node is
-  already there (intent only). Root password is collected once, used to
-  install a dedicated SSH key, then discarded — never persisted, never
-  logged, never written into the YAML bundle.
+  already there (intent only), and a Proxmox API token (fillable field;
+  value in the local secrets store, `api_token_ref` on the schema). Root
+  password is collected once, used to install a dedicated SSH key, then
+  discarded — never persisted, never logged, never written into the YAML
+  bundle.
 - **Network**: bridge name, operator-facing address as CIDR + gateway, NTP
   (`inherit` from the Proxmox host by default).
 - **Storage**: a storage pool name for later VM disks. Single-host only.
@@ -166,9 +168,9 @@ Field groups:
   or contacted except as a *probe* (reachability), and only when the
   operator has chosen adopt.
 
-Explicitly not collected: Proxmox subscription/repo settings; a separate
-Proxmox API token (first contact is root + the dedicated key, same as
-before); cluster node lists to form.
+Explicitly not collected: Proxmox subscription/repo settings; cluster
+node lists to form. The Proxmox API token *is* collected — intake jobs
+(`proxmox_api`, host discovery) authenticate with it.
 
 ### Playbooks
 
@@ -217,7 +219,7 @@ Installing the dedicated SSH key is `true` and needs approval.
 |---|---|
 | `llm_key` | The configured provider accepts the key. |
 | `outbound_https` | The CT can reach the public internet (needed later for images and APIs). |
-| `proxmox_api` | API reachable; root (or the dedicated key once installed) authenticates. |
+| `proxmox_api` | API reachable; the saved API token authenticates (`/version`). |
 | `proxmox_capacity` | CPU / RAM / disk against documented minimums — warn, don't hard-fail, if below. |
 | `bridge_exists` | Named bridge exists on the host. |
 | `storage_pool_exists` | Named pool exists. |

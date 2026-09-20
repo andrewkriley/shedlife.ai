@@ -6,13 +6,19 @@ def test_empty_document_is_not_complete() -> None:
     result = validate_foundations(empty_foundations())
     assert result.ok is False
     assert "tenant.slug" in result.errors
+    assert "proxmox.api_token" in result.errors
 
 
 def test_valid_minimal_foundations_pass() -> None:
     doc = empty_foundations()
     doc["tenant"] = {"name": "Riley Lab", "slug": "riley-lab"}
     doc["operator"] = {"email": "op@example.com"}
-    doc["proxmox"] = {"host": "192.0.2.10", "node": "pve", "ssh_key_fingerprint": None}
+    doc["proxmox"] = {
+        "host": "192.0.2.10",
+        "node": "pve",
+        "api_token_ref": "local://proxmox/api_token",
+        "ssh_key_fingerprint": None,
+    }
     doc["network"] = {
         "bridge": "vmbr0",
         "address": "192.0.2.50/24",

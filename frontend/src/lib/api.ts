@@ -282,7 +282,14 @@ export interface FoundationsDocument {
   version: number
   tenant: { name: string; slug: string }
   operator: { email: string }
-  proxmox: { host: string; node: string; ssh_key_fingerprint: string | null }
+  proxmox: {
+    host: string
+    node: string
+    ssh_key_fingerprint: string | null
+    api_token_ref?: string
+    api_token_set?: boolean
+    api_token?: string
+  }
   network: { bridge: string; address: string; gateway: string; ntp: string }
   storage: { pool: string }
   domains: { intended: string[] }

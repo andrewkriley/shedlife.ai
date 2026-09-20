@@ -70,7 +70,12 @@ async def test_put_get_validate_and_export(
     doc = empty_foundations()
     doc["tenant"] = {"name": "Riley Lab", "slug": "riley-lab"}
     doc["operator"] = {"email": "op@example.com"}
-    doc["proxmox"] = {"host": "192.0.2.10", "node": "pve", "ssh_key_fingerprint": None}
+    doc["proxmox"] = {
+        "host": "192.0.2.10",
+        "node": "pve",
+        "api_token": "root@pam!shed=secret-token",
+        "ssh_key_fingerprint": None,
+    }
 
     put = await client.put("/foundations", json={"document": doc}, headers=authed)
     assert put.status_code == 200
@@ -91,6 +96,13 @@ async def test_put_get_validate_and_export(
     yaml_text = exported.json()["yaml"]
     assert "riley-lab" in yaml_text
     assert "sk-ant" not in yaml_text
+    assert "secret-token" not in yaml_text
+    assert "local://proxmox/api_token" in yaml_text
+    stored = await client.get("/foundations")
+    assert stored.json()["proxmox"]["api_token_set"] is True
+    assert "api_token" not in stored.json()["proxmox"] or stored.json()["proxmox"].get(
+        "api_token"
+    ) in {None, ""}
 
 
 @pytest.mark.asyncio

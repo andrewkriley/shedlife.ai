@@ -117,6 +117,7 @@ operator:
 proxmox:
   host: <ip or hostname>
   node: <node name>
+  api_token_ref: local://proxmox/api_token   # value never in this file
   ssh_key_fingerprint: <fingerprint or null>
 network:
   bridge: vmbr0
@@ -147,7 +148,11 @@ probes:
 
 Secret *values* are only in the local secrets store, referenced as
 `local://<path>` (see Secrets Management). The exportable bundle is this
-document plus those references.
+document plus those references. The Foundations panel has a Proxmox API
+token field; saving it writes `local://proxmox/api_token` and leaves only
+the ref on the schema. `foundations_write` does the same if the assistant
+is handed `proxmox.api_token`. GET never returns the raw token — only
+`api_token_set`. `proxmox_api` authenticates with `PVEAPIToken=`.
 
 ### Sub-agent registry (bootstrap profile seed)
 

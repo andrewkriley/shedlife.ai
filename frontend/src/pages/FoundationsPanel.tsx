@@ -27,7 +27,7 @@ function emptyDoc(): FoundationsDocument {
     version: 1,
     tenant: { name: '', slug: '' },
     operator: { email: '' },
-    proxmox: { host: '', node: '', ssh_key_fingerprint: null },
+    proxmox: { host: '', node: '', ssh_key_fingerprint: null, api_token_ref: '', api_token_set: false },
     network: { bridge: '', address: '', gateway: '', ntp: 'inherit' },
     storage: { pool: '' },
     domains: { intended: [] },
@@ -43,6 +43,7 @@ function emptyDoc(): FoundationsDocument {
 
 export function FoundationsPanel() {
   const [doc, setDoc] = useState<FoundationsDocument>(emptyDoc)
+  const [apiToken, setApiToken] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [status, setStatus] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -61,8 +62,17 @@ export function FoundationsPanel() {
     setBusy('save')
     setStatus('Saving…')
     try {
-      const saved = await putFoundations(doc)
+      const payload: FoundationsDocument = {
+        ...doc,
+        proxmox: { ...doc.proxmox },
+      }
+      delete payload.proxmox.api_token_set
+      if (apiToken.trim()) {
+        payload.proxmox.api_token = apiToken.trim()
+      }
+      const saved = await putFoundations(payload)
       setDoc({ ...emptyDoc(), ...saved, probes: saved.probes ?? {} })
+      setApiToken('')
       setStatus('Saved.')
     } catch {
       setStatus('Failed to save foundations.')
@@ -175,6 +185,23 @@ export function FoundationsPanel() {
                 />
               </div>
             </div>
+            <label htmlFor="proxmox-api-token">Proxmox API token</label>
+            <input
+              id="proxmox-api-token"
+              type="password"
+              value={apiToken}
+              onChange={(e) => setApiToken(e.target.value)}
+              placeholder={
+                doc.proxmox.api_token_set
+                  ? 'Token is saved. Paste a new one to replace it.'
+                  : 'USER@REALM!tokenid=uuid'
+              }
+              autoComplete="off"
+            />
+            {doc.proxmox.api_token_set && !apiToken && (
+              <p className="hint">A token is saved. Leave blank to keep it.</p>
+            )}
+            {errors['proxmox.api_token'] && <p className="field-error">{errors['proxmox.api_token']}</p>}
           </fieldset>
 
           <fieldset className="group">

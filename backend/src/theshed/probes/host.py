@@ -15,6 +15,7 @@ from theshed.probes.runner import (
     NTP_OFFSET_MAX_SECONDS,
     ProbeResult,
 )
+from theshed.secrets.client import SecretNotFoundError
 
 
 class DefaultProbeHost:
@@ -68,14 +69,26 @@ class DefaultProbeHost:
         return ProbeResult("pass")
 
     def proxmox_api(self) -> ProbeResult:
-        host = ((self._doc().get("proxmox") or {}).get("host") or "").strip()
+        proxmox = self._doc().get("proxmox") or {}
+        host = (proxmox.get("host") or "").strip()
         if not host:
             return ProbeResult("fail", detail="proxmox.host is empty")
-        url = host if host.startswith("http") else f"https://{host}:8006"
+        ref = (proxmox.get("api_token_ref") or "").strip()
+        if self._secrets is None or not ref:
+            return ProbeResult("fail", detail="proxmox API token is not set")
         try:
-            status, _ = self._http_get(url, 5.0)
+            token = self._secrets.get(ref)
+        except SecretNotFoundError:
+            return ProbeResult("fail", detail="proxmox API token is not set")
+        base = host if host.startswith("http") else f"https://{host}:8006"
+        url = f"{base.rstrip('/')}/api2/json/version"
+        headers = {"Authorization": f"PVEAPIToken={token}"}
+        try:
+            status, _ = _call_http(self._http_get, url, 5.0, headers)
         except Exception as exc:  # noqa: BLE001 — injected HTTP can raise anything
             return ProbeResult("fail", detail=str(exc))
+        if status in {401, 403}:
+            return ProbeResult("fail", detail="proxmox API token was rejected")
         return ProbeResult("pass" if status < 500 else "fail", detail=f"HTTP {status}")
 
     def proxmox_capacity(self) -> ProbeResult:
@@ -150,8 +163,22 @@ class DefaultProbeHost:
         return ProbeResult("pass")
 
 
-def _http_get(url: str, timeout: float) -> tuple[int, str]:
-    request = Request(url, method="GET")
+def _call_http(
+    http_get: Callable[..., tuple[int, str]],
+    url: str,
+    timeout: float,
+    headers: dict[str, str] | None = None,
+) -> tuple[int, str]:
+    try:
+        return http_get(url, timeout, headers)
+    except TypeError:
+        return http_get(url, timeout)
+
+
+def _http_get(
+    url: str, timeout: float, headers: dict[str, str] | None = None
+) -> tuple[int, str]:
+    request = Request(url, method="GET", headers=headers or {})
     try:
         with urlopen(request, timeout=timeout) as response:
             return int(response.status), ""

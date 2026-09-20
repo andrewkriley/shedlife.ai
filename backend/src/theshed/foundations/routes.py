@@ -9,6 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from theshed.auth.dependencies import get_current_user_id, require_csrf
 from theshed.db.session import get_session
 from theshed.foundations.store import load_foundations, record_probe_result, save_foundations
+from theshed.foundations.tokens import (
+    persist_proxmox_api_token,
+    present_foundations,
+    take_proxmox_api_token,
+)
 from theshed.foundations.validate import validate_foundations
 from theshed.foundations.yamlutil import dump_yaml
 from theshed.issues.store import record_issue
@@ -24,21 +29,26 @@ class FoundationsPayload(BaseModel):
 
 @router.get("/foundations")
 async def get_foundations(
+    request: Request,
     db: AsyncSession = Depends(get_session),
     _user_id: str = Depends(get_current_user_id),
 ) -> dict[str, Any]:
-    return await load_foundations(db)
+    doc = await load_foundations(db)
+    return present_foundations(doc, getattr(request.app.state, "secrets", None))
 
 
 @router.put("/foundations", dependencies=[Depends(require_csrf)])
 async def put_foundations(
     body: FoundationsPayload,
+    request: Request,
     db: AsyncSession = Depends(get_session),
     _user_id: str = Depends(get_current_user_id),
 ) -> dict[str, Any]:
-    saved = await save_foundations(db, body.document)
+    secrets = getattr(request.app.state, "secrets", None)
+    document = persist_proxmox_api_token(body.document, secrets)
+    saved = await save_foundations(db, document)
     await db.commit()
-    return saved
+    return present_foundations(saved, secrets)
 
 
 @router.post("/foundations/validate", dependencies=[Depends(require_csrf)])
@@ -57,7 +67,8 @@ async def export_foundations(
     _user_id: str = Depends(get_current_user_id),
 ) -> dict[str, str]:
     doc = await load_foundations(db)
-    return {"yaml": dump_yaml(doc)}
+    cleaned, _token = take_proxmox_api_token(doc)
+    return {"yaml": dump_yaml(cleaned)}
 
 
 @router.post("/probes/{probe_id}", dependencies=[Depends(require_csrf)])

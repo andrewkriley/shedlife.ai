@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from theshed.agents.tool_loop import ToolCall
 from theshed.bootstrap.tools import make_bootstrap_tool_executor
-from theshed.foundations.schema import empty_foundations
+from theshed.foundations.schema import PROXMOX_API_TOKEN_REF, empty_foundations
 from theshed.foundations.store import load_foundations, save_foundations
 from theshed.probes.host import DefaultProbeHost
 from theshed.secrets.client import LocalSecretsClient
@@ -29,6 +29,33 @@ async def test_foundations_write_and_validate_round_trip(db_session: AsyncSessio
     )
     assert validated["ok"] is False
     assert "operator.email" in validated["errors"]
+
+
+@pytest.mark.asyncio
+async def test_foundations_write_stores_a_proxmox_api_token(
+    db_session: AsyncSession,
+) -> None:
+    secrets = LocalSecretsClient()
+    execute = make_bootstrap_tool_executor(db_session, DefaultProbeHost(secrets=secrets))
+    written = json.loads(
+        await execute(
+            ToolCall(
+                tool_name="foundations_write",
+                arguments={
+                    "patch": {
+                        "proxmox": {
+                            "host": "192.0.2.10",
+                            "api_token": "root@pam!shed=secret-token",
+                        }
+                    }
+                },
+                has_side_effects=False,
+            )
+        )
+    )
+    assert written["proxmox"]["api_token_set"] is True
+    assert "api_token" not in written["proxmox"]
+    assert secrets.get(PROXMOX_API_TOKEN_REF) == "root@pam!shed=secret-token"
 
 
 @pytest.mark.asyncio
@@ -73,12 +100,31 @@ def test_default_host_uses_injected_http() -> None:
 
 
 def test_default_host_bind_sees_foundations() -> None:
+    secrets = LocalSecretsClient()
+    secrets.set(PROXMOX_API_TOKEN_REF, "root@pam!shed=secret-token")
     host = DefaultProbeHost(
+        secrets=secrets,
         http_get=lambda url, _t: (200, "") if "8006" in url else (500, ""),
         foundations=dict,
     )
-    bound = host.bind(lambda: {"proxmox": {"host": "192.0.2.10"}})
+    bound = host.bind(
+        lambda: {
+            "proxmox": {
+                "host": "192.0.2.10",
+                "api_token_ref": PROXMOX_API_TOKEN_REF,
+            }
+        }
+    )
     assert bound.proxmox_api().status == "pass"
+
+
+def test_proxmox_api_fails_without_a_token() -> None:
+    host = DefaultProbeHost(
+        http_get=lambda url, _t: (200, ""),
+        foundations=lambda: {"proxmox": {"host": "192.0.2.10"}},
+    )
+    assert host.proxmox_api().status == "fail"
+    assert "token" in (host.proxmox_api().detail or "")
 
 
 @pytest.mark.asyncio
