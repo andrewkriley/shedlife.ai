@@ -121,7 +121,7 @@ Technical design for
 
 | Table | Key fields |
 |---|---|
-| `sub_agent_model_overrides` | `sub_agent_id`, `provider`, `model`, `set_by_user_id`, `set_at` — one row per sub-agent currently overridden; absence of a row means "use the registry default." Provider resolution checks this table first, falling back to the registry's `default_provider`/`default_model`. |
+| `sub_agent_model_overrides` | `sub_agent_id`, `provider`, `model`, `set_by_user_id`, `set_at` — one row per sub-agent currently overridden; absence of a row means "use the registry default." Provider resolution checks this table first, falling back to the registry's `default_provider`/`default_model`. A release that changes the registry default does not delete or rewrite these rows. |
 
 ### Conversation / turn (Postgres)
 
@@ -149,7 +149,11 @@ attachments are given to a sub-agent, per step 6c of the Sequence.
   a conversation; response is an SSE stream: `progress` events, an `approval_required`
   event if a side-effect tool call is pending, token-level text for the final answer
   (or an `error` event on failure), then a closing event carrying the turn id and any
-  output attachment references (see Sequence).
+  output attachment references (see Sequence). The client parses `fetch()` bytes
+  (Starlette emits `\r\n`); normalize to `\n` before splitting on blank lines.
+  When the stream ends, parse any leftover buffer — a missing trailing blank
+  line otherwise drops the last `error` or `done` and the UI shows nothing.
+  Vendor failures surface the provider `error.message`, not the SDK dump.
 - `POST /turns/{id}/approvals` — respond (approve/decline) to a pending
   `approval_required` event for that turn; resumes or ends the paused tool loop.
 - `POST /turns/{id}/verify` — manually invoke the verifier against a completed turn;

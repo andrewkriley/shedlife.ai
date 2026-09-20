@@ -121,6 +121,9 @@ reconnection (if wanted) has to be hand-rolled, the same as it would for WebSock
 The infrastructure argument above (no sticky sessions/pub-sub backplane) is unaffected
 by this and remains the actual reason SSE's format still beats WebSocket here — it
 just isn't reinforced by a free-reconnection advantage that doesn't materialize.
+The parser must treat `\r\n` as a line ending and must emit a trailing event
+that arrived without a final blank line — otherwise a failed turn looks like
+the send button did nothing.
 
 The stream carries two kinds of events: **progress** (classify started/done, each
 sub-agent started/done, synthesis started) so the UI shows what's happening rather than

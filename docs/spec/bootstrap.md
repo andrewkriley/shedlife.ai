@@ -57,7 +57,19 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    classification and opens that agent. The registry default is OpenAI
    `gpt-4.1-mini`. If the configured key is a different vendor, chat uses
    that vendor's default model rather than sending a Claude id to
-   OpenAI (or the reverse).
+   OpenAI (or the reverse). A Settings override for `bootstrap.intake`
+   is its own row and **survives image upgrades**; changing the registry
+   default does not clear it. Send must produce a visible reply or a
+   visible error — a silent no-op is a bug. Confirmed live on a LAN
+   HTTP CT URL: `crypto.randomUUID()` throws (not a secure context),
+   so chat message ids must not depend on it. Confirmed live with a
+   persisted `openai/gpt-5` override: Chat Completions
+   `reasoning_effort=none` is a 400 (`minimal` / `low` / `medium` /
+   `high` only); `gpt-5.4` still accepts `none`. The OpenAI client
+   must pick the effort the named model accepts. The SSE client must
+   flush a leftover event when the stream ends without a trailing
+   blank line, or an `error` / `done` is dropped and the UI looks
+   dead.
 6. `collect-foundations`: the agent asks for schema fields, writes them
    through a `foundations.write` tool (no side effects beyond the store).
    It may first enumerate the host and adopted URLs with the discovery
@@ -196,6 +208,9 @@ pre-selected), and a "Change the model" assignment block. Bootstrap
 wires an Anthropic or OpenAI client from `local://providers/llm/*` so
 chat and the live models list use the same key. Opening Settings keeps
 the chat transcript mounted (hidden), so Back to chat does not wipe it.
+A saved override is what the next turn calls; a product release that
+only updates `default_model` will not unstick a tenant that already
+picked another id (the v0.4.11–0.4.14 default-model churn did not).
 
 ### Debug log
 
@@ -236,7 +251,11 @@ chat — not as a fixed overlay.
 - Dedicated SSH private key: on the CT's local secrets store, never in
   YAML, never in issues, never in Galileo payloads.
 - LLM API key: local secrets store, same rules.
-- LAN HTTP only. No Cloudflared, no public DNS requirement.
+- LAN HTTP only. No Cloudflared, no public DNS requirement. The
+  printed URL is not a [secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts):
+  do not call `crypto.randomUUID()` (or any other secure-context-only
+  Web API) on the chat send path. Cookie `Secure` is already off for
+  the same reason.
 
 ## Discovery tools
 

@@ -74,7 +74,10 @@ building bespoke job infrastructure.
   feature fidelity (prompt caching, native tool-use semantics), rather than
   flattened through a compatibility layer. A Claude *subscription* (or any
   browser-login / Claude Code credential) is not a supported auth path; an
-  API key is required.
+  API key is required. OpenAI reasoning models do not share one
+  `reasoning_effort` value: `gpt-5` / `gpt-5-mini` accept `minimal` (not
+  `none`); `gpt-5.4*` accepts `none`; o-series wants `low` / `medium` /
+  `high`. Sending the wrong one is a 400 with no chat reply.
 - Galileo is the tracing/eval layer (see Observability). Its OpenAI wrapper
   is sync-only and is **not** placed in front of the async/streaming path;
   Anthropic and Gemini are native + manual spans, matching Galileo's own

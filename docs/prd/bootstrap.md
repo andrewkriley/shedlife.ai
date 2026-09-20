@@ -134,7 +134,11 @@ Buttons depress and show a busy label while work is in flight. The header
 shows **AI Assistant is Connected · provider · model**
 once `/health` is ok and a sub-agent is registered, naming the live
 provider and model chat will call — so the operator can tell the
-assistant is live before sending a message. The assistant fills records; it does not invent keys.
+assistant is live before sending a message. Sending a message on the
+printed LAN HTTP URL must show a reply or an error in the transcript;
+a click that does nothing is a product bug (the page is not a secure
+context). A Settings model override is what chat calls and it persists
+across upgrades. The assistant fills records; it does not invent keys.
 
 Field groups:
 
