@@ -423,7 +423,7 @@ export async function setModelAssignments(
     body: JSON.stringify({ sub_agent_ids: subAgentIds, provider, model }),
   })
   if (!response.ok) {
-    throw new Error('Failed to update model assignments')
+    throw new Error(await readErrorDetail(response, 'Failed to update model assignments'))
   }
   return response.json()
 }

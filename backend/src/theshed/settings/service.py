@@ -17,6 +17,7 @@ from typing import Any, Protocol
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from theshed.agents.models import VENDOR_DEFAULT_MODELS, resolve_runtime_model
 from theshed.agents.registry import list_sub_agents
 from theshed.db.models import SubAgentModelOverride
 from theshed.debug import log as debug_log
@@ -61,6 +62,30 @@ def pick_connection_setting(settings: list[SubAgentSetting]) -> SubAgentSetting 
         if setting.overridden:
             return setting
     return settings[0]
+
+
+async def resolved_runtime_choice(
+    db: AsyncSession,
+    client_vendor: str | None,
+) -> tuple[str | None, str | None]:
+    """The vendor+model chat, verify, and the header must all call.
+
+    Settings can store a Claude id while the live key is OpenAI. Resolution
+    follows the live client — never send `claude-*` to OpenAI.
+    """
+    settings = await list_sub_agent_settings(db)
+    chosen = pick_connection_setting(settings)
+    if chosen is None:
+        if not client_vendor:
+            return None, None
+        return client_vendor, VENDOR_DEFAULT_MODELS.get(client_vendor)
+    return resolve_runtime_model(
+        client_vendor=client_vendor,
+        default_provider=chosen.default_provider,
+        default_model=chosen.default_model,
+        override_provider=chosen.provider if chosen.overridden else None,
+        override_model=chosen.model if chosen.overridden else None,
+    )
 
 
 async def list_sub_agent_settings(db: AsyncSession) -> list[SubAgentSetting]:

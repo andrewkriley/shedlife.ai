@@ -160,7 +160,11 @@ attachments are given to a sub-agent, per step 6c of the Sequence.
   returns its assessment (also stored in `turn_verifications`).
 - Settings surface (REST): list sub-agents; `POST /settings/model-assignments` to
   bulk-assign a provider/model to a selected set of sub-agents (writes/clears rows in
-  `sub_agent_model_overrides`); `GET /settings/models` lists live options — a real
+  `sub_agent_model_overrides`). Assigning a provider that is not the live client
+  is `400` — save that key first. Chat, the connection header, classify,
+  synthesize, and verify all resolve the live vendor + matching override (or
+  that vendor's default); a Claude override is never sent to OpenAI.
+  `GET /settings/models` lists live options — a real
   call to each cloud provider's own models-list API, plus whatever's currently
   registered in LiteLLM for local models (the same registrations GPU/Compute
   Management creates — this endpoint reads them, it doesn't maintain a second list).

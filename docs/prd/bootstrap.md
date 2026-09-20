@@ -138,8 +138,12 @@ provider and model chat will call — so the operator can tell the
 assistant is live before sending a message. Sending a message on the
 printed LAN HTTP URL must show a reply or an error in the transcript;
 a click that does nothing is a product bug (the page is not a secure
-context). A Settings model override is what chat calls and it persists
-across upgrades. The assistant fills records; it does not invent keys.
+context). A Settings model override is what chat, the header, and verify call
+when it matches the live vendor; it persists across upgrades. Applying
+another vendor's model is refused until that key is saved — otherwise
+the header and chat keep the live vendor and verify can 404
+(`claude-*` on OpenAI). The assistant fills records; it does not
+invent keys.
 
 Field groups:
 

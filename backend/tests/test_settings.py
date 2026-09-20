@@ -15,6 +15,7 @@ from theshed.settings.service import (
     list_live_models,
     list_sub_agent_settings,
     pick_connection_setting,
+    resolved_runtime_choice,
     set_model_assignments,
 )
 
@@ -199,6 +200,39 @@ class TestPickConnectionSetting:
 
 
 @pytest.mark.asyncio
+class TestResolvedRuntimeChoice:
+    async def test_uses_a_matching_intake_override(
+        self, db_session: AsyncSession, user: User
+    ) -> None:
+        await set_model_assignments(
+            db=db_session,
+            sub_agent_ids=["bootstrap.intake"],
+            provider="openai",
+            model="gpt-5",
+            set_by_user_id=user.id,
+        )
+
+        provider, model = await resolved_runtime_choice(db_session, "openai")
+
+        assert (provider, model) == ("openai", "gpt-5")
+
+    async def test_does_not_send_a_claude_override_to_openai(
+        self, db_session: AsyncSession, user: User
+    ) -> None:
+        await set_model_assignments(
+            db=db_session,
+            sub_agent_ids=["bootstrap.intake"],
+            provider="anthropic",
+            model="claude-haiku-4-5",
+            set_by_user_id=user.id,
+        )
+
+        provider, model = await resolved_runtime_choice(db_session, "openai")
+
+        assert (provider, model) == ("openai", "gpt-4.1-mini")
+
+
+@pytest.mark.asyncio
 class TestSetModelAssignments:
     async def test_creates_an_override_for_each_selected_sub_agent(
         self, db_session: AsyncSession, sub_agent: SubAgent, user: User
@@ -372,19 +406,49 @@ class TestSettingsRoutes:
         assert body["gemini"] == ["gemini-2.5-flash", "gemini-2.5-pro"]
 
     async def test_post_model_assignments_applies_and_returns_updated_settings(
-        self, client: AsyncClient, sub_agent: SubAgent
+        self, client: AsyncClient
     ) -> None:
-        app.state.classifier_model = "gpt-5.4"
+        app.state.llm_client = FakeProviderClient(
+            FakeModelsList([FakeModel("gpt-5")]), vendor="openai"
+        )
+        app.state.classifier_model = "gpt-4.1-mini"
         response = await client.post(
             "/settings/model-assignments",
-            json={"sub_agent_ids": [sub_agent.id], "provider": "openai", "model": "gpt-5"},
+            json={
+                "sub_agent_ids": ["bootstrap.intake"],
+                "provider": "openai",
+                "model": "gpt-5",
+            },
         )
 
         assert response.status_code == 200
-        setting = next(row for row in response.json() if row["id"] == sub_agent.id)
+        setting = next(row for row in response.json() if row["id"] == "bootstrap.intake")
         assert setting["provider"] == "openai"
+        assert setting["model"] == "gpt-5"
         assert setting["overridden"] is True
         assert app.state.classifier_model == "gpt-5"
+
+    async def test_post_model_assignments_rejects_a_vendor_that_is_not_live(
+        self, client: AsyncClient
+    ) -> None:
+        app.state.llm_client = FakeProviderClient(
+            FakeModelsList([FakeModel("gpt-5")]), vendor="openai"
+        )
+        app.state.classifier_model = "gpt-4.1-mini"
+
+        response = await client.post(
+            "/settings/model-assignments",
+            json={
+                "sub_agent_ids": ["bootstrap.intake"],
+                "provider": "anthropic",
+                "model": "claude-haiku-4-5",
+            },
+        )
+
+        assert response.status_code == 400
+        assert "openai" in response.json()["detail"]
+        assert "anthropic" in response.json()["detail"]
+        assert app.state.classifier_model == "gpt-4.1-mini"
 
     async def test_post_provider_key_configures_the_openai_client(
         self, client: AsyncClient
@@ -407,9 +471,16 @@ class TestSettingsRoutes:
     async def test_post_model_assignments_with_no_provider_clears_the_override(
         self, client: AsyncClient, sub_agent: SubAgent
     ) -> None:
+        app.state.llm_client = FakeProviderClient(
+            FakeModelsList([FakeModel("claude-sonnet-5")]), vendor="anthropic"
+        )
         await client.post(
             "/settings/model-assignments",
-            json={"sub_agent_ids": [sub_agent.id], "provider": "openai", "model": "gpt-5"},
+            json={
+                "sub_agent_ids": [sub_agent.id],
+                "provider": "anthropic",
+                "model": "claude-sonnet-5",
+            },
         )
 
         response = await client.post(

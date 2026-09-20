@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AssistantStatus } from '../components/AssistantStatus'
 import {
+  getConnection,
   getLiveModels,
   getSubAgentSettings,
   notifyConnectionChanged,
@@ -19,11 +20,29 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
   const [subAgents, setSubAgents] = useState<SubAgentSetting[]>([])
   const [liveModels, setLiveModels] = useState<Record<string, string[]>>({})
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [provider, setProvider] = useState('anthropic')
+  const [keyProvider, setKeyProvider] = useState('openai')
+  const [liveVendor, setLiveVendor] = useState<string | null>(null)
   const [model, setModel] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [status, setStatus] = useState<string | null>(null)
   const [busy, setBusy] = useState<'apply' | 'clear' | 'key' | null>(null)
+
+  function pickModelForVendor(
+    models: Record<string, string[]>,
+    vendor: string | null,
+    preferred?: string | null,
+  ) {
+    if (!vendor) {
+      setModel('')
+      return
+    }
+    const options = models[vendor] ?? []
+    if (preferred && options.includes(preferred)) {
+      setModel(preferred)
+      return
+    }
+    setModel(options[0] ?? '')
+  }
 
   useEffect(() => {
     getSubAgentSettings()
@@ -32,16 +51,15 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
         if (agents.length === 1) setSelectedIds(new Set([agents[0].id]))
       })
       .catch(() => setStatus('Failed to load sub-agents.'))
-    getLiveModels()
-      .then((models) => {
+    Promise.all([getLiveModels(), getConnection().catch(() => null)])
+      .then(([models, connection]) => {
         setLiveModels(models)
-        const firstProvider = Object.keys(models).includes('openai')
-          ? 'openai'
-          : Object.keys(models)[0]
-        if (firstProvider) {
-          setProvider(firstProvider)
-          setModel(models[firstProvider][0] ?? '')
-        }
+        const vendor = connection?.configured ? connection.provider : null
+        setLiveVendor(vendor)
+        const keyDefault =
+          vendor ?? (Object.keys(models).includes('openai') ? 'openai' : Object.keys(models)[0])
+        if (keyDefault) setKeyProvider(keyDefault)
+        pickModelForVendor(models, vendor, connection?.model)
       })
       .catch(() => setStatus('Failed to load live models.'))
   }, [])
@@ -55,9 +73,8 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
     })
   }
 
-  function handleProviderChange(next: string) {
-    setProvider(next)
-    setModel(liveModels[next]?.[0] ?? '')
+  function handleKeyProviderChange(next: string) {
+    setKeyProvider(next)
   }
 
   async function handleSaveKey() {
@@ -68,13 +85,18 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
     setBusy('key')
     setStatus('Saving…')
     try {
-      await setProviderKey(provider, apiKey.trim())
+      await setProviderKey(keyProvider, apiKey.trim())
       setApiKey('')
-      const models = await getLiveModels()
+      const [models, connection] = await Promise.all([
+        getLiveModels(),
+        getConnection().catch(() => null),
+      ])
       setLiveModels(models)
-      setModel(models[provider]?.[0] ?? '')
+      const vendor = connection?.configured ? connection.provider : keyProvider
+      setLiveVendor(vendor)
+      pickModelForVendor(models, vendor, connection?.model)
       notifyConnectionChanged()
-      setStatus(`Saved the ${provider} key. Chat will use this provider.`)
+      setStatus(`Saved the ${keyProvider} key. Chat will use this provider.`)
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Failed to save the provider key.')
     } finally {
@@ -83,19 +105,23 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
   }
 
   async function handleApply() {
-    if (selectedIds.size === 0 || !provider || !model) {
-      setStatus('Select an assistant, then choose a provider and model.')
+    if (selectedIds.size === 0 || !liveVendor || !model) {
+      setStatus(
+        liveVendor
+          ? 'Select an assistant, then choose a model.'
+          : 'Save a provider key first, then choose a model.',
+      )
       return
     }
     setBusy('apply')
     setStatus('Applying…')
     try {
-      const updated = await setModelAssignments(Array.from(selectedIds), provider, model)
+      const updated = await setModelAssignments(Array.from(selectedIds), liveVendor, model)
       setSubAgents(updated)
       notifyConnectionChanged()
       setStatus('This model is now assigned to the selected assistant.')
-    } catch {
-      setStatus('Failed to apply assignment.')
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Failed to apply assignment.')
     } finally {
       setBusy(null)
     }
@@ -136,8 +162,8 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
             <label htmlFor="connection-provider">Provider</label>
             <select
               id="connection-provider"
-              value={provider}
-              onChange={(e) => handleProviderChange(e.target.value)}
+              value={keyProvider}
+              onChange={(e) => handleKeyProviderChange(e.target.value)}
             >
               {PROVIDERS.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -194,26 +220,21 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
 
       <fieldset className="group">
         <legend>Change the model</legend>
-        <p className="hint">This is the model the assistant uses to talk with you.</p>
+        <p className="hint">
+          {liveVendor
+            ? `This is the model the assistant uses on ${liveVendor}. Save a different provider key first to switch vendors.`
+            : 'Save a provider key first, then pick a model.'}
+        </p>
         <div className="field-grid">
           <div>
-            <label htmlFor="provider">Provider</label>
-            <select
-              id="provider"
-              value={provider}
-              onChange={(e) => handleProviderChange(e.target.value)}
-            >
-              {PROVIDERS.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
             <label htmlFor="model">Model</label>
-            <select id="model" value={model} onChange={(e) => setModel(e.target.value)}>
-              {(liveModels[provider] ?? []).map((m) => (
+            <select
+              id="model"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              disabled={!liveVendor || busy !== null}
+            >
+              {(liveModels[liveVendor ?? ''] ?? []).map((m) => (
                 <option key={m} value={m}>
                   {m}
                 </option>
@@ -222,7 +243,11 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
           </div>
         </div>
         <div className="panel-actions">
-          <button type="button" onClick={handleApply} disabled={selectedIds.size === 0 || busy !== null}>
+          <button
+            type="button"
+            onClick={handleApply}
+            disabled={selectedIds.size === 0 || !liveVendor || !model || busy !== null}
+          >
             {busy === 'apply' ? 'Applying…' : 'Apply this model'}
           </button>
           <button

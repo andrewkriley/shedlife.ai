@@ -57,9 +57,13 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    classification and opens that agent. The registry default is OpenAI
    `gpt-4.1-mini`. If the configured key is a different vendor, chat uses
    that vendor's default model rather than sending a Claude id to
-   OpenAI (or the reverse). A Settings override for `bootstrap.intake`
-   is its own row and **survives image upgrades**; changing the registry
-   default does not clear it. Send must produce a visible reply or a
+   OpenAI (or the reverse). Classify, synthesize, and verify use that
+   same resolved model — not a stale `classifier_model` left from a
+   previous Apply. A Settings override for `bootstrap.intake` is its
+   own row and **survives image upgrades**; changing the registry
+   default does not clear it. Apply of a vendor that is not the live
+   key is refused (`400`); save that provider's key first. The Settings
+   model picker only lists models for the live vendor. Send must produce a visible reply or a
    visible error — a silent no-op is a bug. Confirmed live on a LAN
    HTTP CT URL: `crypto.randomUUID()` throws (not a secure context),
    so chat message ids must not depend on it. Confirmed live with a
@@ -200,17 +204,23 @@ New:
 Settings (`GET /settings/models`, `GET /settings/connection`,
 `POST /settings/provider`, model overrides) stay; they are how the
 operator changes provider after the gate. `GET /settings/connection`
-is the live vendor and the model assigned to `bootstrap.intake` (or the
-first override). Apply / save-key refreshes the header immediately. The
-page always lists Anthropic / OpenAI / Gemini, can save a new
-API key, groups connection status, the assistant list (a lone agent is
-pre-selected), and a "Change the model" assignment block. Bootstrap
-wires an Anthropic or OpenAI client from `local://providers/llm/*` so
-chat and the live models list use the same key. Opening Settings keeps
-the chat transcript mounted (hidden), so Back to chat does not wipe it.
-A saved override is what the next turn calls; a product release that
-only updates `default_model` will not unstick a tenant that already
-picked another id (the v0.4.11–0.4.14 default-model churn did not).
+is the live vendor and the resolved model chat / verify will actually
+call for `bootstrap.intake` (or the first override). Apply / save-key
+refreshes the header immediately. The page always lists Anthropic /
+OpenAI / Gemini for saving a key; the model assignment block is locked
+to the live vendor. `POST /settings/model-assignments` rejects a
+provider that is not the live client (`400`: save that key first) so a
+Claude id cannot be stored and then sent to OpenAI (the live
+`claude-haiku-4-5` / `model_not_found` 404 on `POST /turns/.../verify`).
+Classify, synthesize, and verify resolve the same way as chat, so a
+stale `app.state.classifier_model` cannot outlive the live key.
+Bootstrap wires an Anthropic or OpenAI client from
+`local://providers/llm/*` so chat and the live models list use the
+same key. Opening Settings keeps the chat transcript mounted (hidden),
+so Back to chat does not wipe it. A saved override that matches the
+live vendor is what the next turn calls; a product release that only
+updates `default_model` will not unstick a tenant that already picked
+another id (the v0.4.11–0.4.14 default-model churn did not).
 
 ### Debug log
 

@@ -222,7 +222,9 @@ an answer instead of a dead end.
 Each sub-agent (and the classifier) has a registry-declared default provider/model.
 An operator-facing settings surface allows overriding this per sub-agent — select
 one/some/all via checkboxes, bulk-assign a provider/model — listing live providers and
-models, not a hardcoded list.
+models, not a hardcoded list. The assigned provider must be the live key; switching
+vendors is a key save, not a model apply. Header, chat, and verify share that
+resolved choice.
 
 An override is its own record, distinct from the registry default it overrides — not
 a mutation of the registry row itself, so the original default is never lost and an

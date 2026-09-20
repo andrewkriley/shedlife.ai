@@ -17,11 +17,27 @@ const baseSubAgents: api.SubAgentSetting[] = [
   },
 ]
 
+function mockSettingsApis(overrides?: {
+  models?: Record<string, string[]>
+  connection?: api.ConnectionStatus
+}) {
+  vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
+  vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue(baseSubAgents)
+  vi.spyOn(api, 'getLiveModels').mockResolvedValue(
+    overrides?.models ?? { anthropic: ['claude-sonnet-5'] },
+  )
+  vi.spyOn(api, 'getConnection').mockResolvedValue(
+    overrides?.connection ?? {
+      provider: 'anthropic',
+      model: 'claude-haiku-4-5',
+      configured: true,
+    },
+  )
+}
+
 describe('Settings', () => {
   it('lists sub-agents with their current provider/model', async () => {
-    vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
-    vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue(baseSubAgents)
-    vi.spyOn(api, 'getLiveModels').mockResolvedValue({ anthropic: ['claude-sonnet-5'] })
+    mockSettingsApis()
 
     render(<Settings onClose={() => {}} />)
 
@@ -30,20 +46,20 @@ describe('Settings', () => {
     expect(screen.getByText(/Using the default model/)).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Your assistants' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Change the model' })).toBeInTheDocument()
-    expect(await screen.findByText('AI Assistant is Connected')).toBeInTheDocument()
-    expect(screen.getAllByLabelText('Provider').length).toBe(2)
-    expect(screen.getAllByRole('option', { name: 'OpenAI' }).length).toBeGreaterThan(0)
-    expect(screen.getAllByRole('option', { name: 'Anthropic' }).length).toBeGreaterThan(0)
+    expect(await screen.findByText(/AI Assistant is Connected/)).toBeInTheDocument()
+    expect(screen.getAllByLabelText('Provider').length).toBe(1)
+    expect(screen.getByRole('option', { name: 'OpenAI' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Anthropic' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save provider key' })).toBeInTheDocument()
   })
 
   it('saves a provider key from the connection block', async () => {
-    vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
-    vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue(baseSubAgents)
-    vi.spyOn(api, 'getLiveModels').mockResolvedValue({
-      anthropic: ['claude-haiku-4-5'],
-      openai: ['gpt-4o'],
-      gemini: ['gemini-2.5-flash'],
+    mockSettingsApis({
+      models: {
+        anthropic: ['claude-haiku-4-5'],
+        openai: ['gpt-4o'],
+        gemini: ['gemini-2.5-flash'],
+      },
     })
     const setProviderKey = vi.spyOn(api, 'setProviderKey').mockResolvedValue({ provider: 'openai' })
 
@@ -59,9 +75,7 @@ describe('Settings', () => {
   })
 
   it('preselects the only assistant and applies a model without an extra click', async () => {
-    vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
-    vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue(baseSubAgents)
-    vi.spyOn(api, 'getLiveModels').mockResolvedValue({ anthropic: ['claude-sonnet-5'] })
+    mockSettingsApis()
     const setModelAssignments = vi.spyOn(api, 'setModelAssignments').mockResolvedValue([
       { ...baseSubAgents[0], provider: 'anthropic', model: 'claude-sonnet-5', overridden: true },
     ])
@@ -70,6 +84,7 @@ describe('Settings', () => {
     render(<Settings onClose={() => {}} />)
 
     expect(await screen.findByRole('checkbox')).toBeChecked()
+    expect(await screen.findByRole('option', { name: 'claude-sonnet-5' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Apply this model' }))
 
     expect(setModelAssignments).toHaveBeenCalledWith(['assist'], 'anthropic', 'claude-sonnet-5')
@@ -77,9 +92,7 @@ describe('Settings', () => {
   })
 
   it('notifies the header immediately after applying a model', async () => {
-    vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
-    vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue(baseSubAgents)
-    vi.spyOn(api, 'getLiveModels').mockResolvedValue({ anthropic: ['claude-sonnet-5'] })
+    mockSettingsApis()
     vi.spyOn(api, 'setModelAssignments').mockResolvedValue([
       { ...baseSubAgents[0], provider: 'anthropic', model: 'claude-sonnet-5', overridden: true },
     ])
@@ -89,17 +102,17 @@ describe('Settings', () => {
     render(<Settings onClose={() => {}} />)
 
     expect(await screen.findByRole('checkbox')).toBeChecked()
+    expect(await screen.findByRole('option', { name: 'claude-sonnet-5' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Apply this model' }))
 
     expect(notify).toHaveBeenCalled()
   })
 
   it('clears an override for the selected sub-agents', async () => {
-    vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
+    mockSettingsApis()
     vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue([
       { ...baseSubAgents[0], provider: 'openai', model: 'gpt-5', overridden: true },
     ])
-    vi.spyOn(api, 'getLiveModels').mockResolvedValue({ anthropic: ['claude-sonnet-5'] })
     const setModelAssignments = vi.spyOn(api, 'setModelAssignments').mockResolvedValue([
       baseSubAgents[0],
     ])
@@ -112,5 +125,51 @@ describe('Settings', () => {
 
     expect(setModelAssignments).toHaveBeenCalledWith(['assist'], null, null)
     expect(await screen.findByText(/Using the default model/)).toBeInTheDocument()
+  })
+
+  it('assigns a model for the live vendor even if the key picker is on another provider', async () => {
+    mockSettingsApis({
+      models: {
+        anthropic: ['claude-haiku-4-5'],
+        openai: ['gpt-4.1-mini', 'gpt-5'],
+      },
+      connection: { provider: 'openai', model: 'gpt-4.1-mini', configured: true },
+    })
+    const setModelAssignments = vi.spyOn(api, 'setModelAssignments').mockResolvedValue([
+      { ...baseSubAgents[0], provider: 'openai', model: 'gpt-5', overridden: true },
+    ])
+
+    const user = userEvent.setup()
+    render(<Settings onClose={() => {}} />)
+
+    expect(await screen.findByRole('checkbox')).toBeChecked()
+    await user.selectOptions(screen.getByLabelText('Provider'), 'anthropic')
+    expect(screen.getByRole('option', { name: 'gpt-5' })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'claude-haiku-4-5' })).not.toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('Model'), 'gpt-5')
+    await user.click(screen.getByRole('button', { name: 'Apply this model' }))
+
+    expect(setModelAssignments).toHaveBeenCalledWith(['assist'], 'openai', 'gpt-5')
+  })
+
+  it('shows the API error when apply is rejected', async () => {
+    mockSettingsApis({
+      connection: { provider: 'openai', model: 'gpt-4.1-mini', configured: true },
+      models: { openai: ['gpt-4.1-mini'], anthropic: ['claude-haiku-4-5'] },
+    })
+    vi.spyOn(api, 'setModelAssignments').mockRejectedValue(
+      new Error('Chat is using openai. Save an anthropic key first, then assign that provider\'s model.'),
+    )
+
+    const user = userEvent.setup()
+    render(<Settings onClose={() => {}} />)
+
+    expect(await screen.findByRole('checkbox')).toBeChecked()
+    expect(await screen.findByRole('option', { name: 'gpt-4.1-mini' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Apply this model' }))
+
+    expect(
+      await screen.findByText(/Chat is using openai. Save an anthropic key first/),
+    ).toBeInTheDocument()
   })
 })
