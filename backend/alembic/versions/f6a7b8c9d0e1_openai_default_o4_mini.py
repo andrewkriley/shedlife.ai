@@ -1,7 +1,7 @@
 """bootstrap.intake default OpenAI model is o4-mini
 
 Revision ID: f6a7b8c9d0e1
-Revises: e5f6a7b8c9d0
+Revises: h8c9d0e1f2a3
 Create Date: 2026-09-20 16:18:00.000000
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "f6a7b8c9d0e1"
-down_revision: Union[str, Sequence[str], None] = "e5f6a7b8c9d0"
+down_revision: Union[str, Sequence[str], None] = "h8c9d0e1f2a3"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
