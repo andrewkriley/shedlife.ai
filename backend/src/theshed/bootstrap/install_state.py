@@ -11,7 +11,8 @@ import secrets
 from dataclasses import dataclass
 from typing import Any
 
-DEFAULT_OPERATOR_EMAIL = "operator@theshed.local"
+DEFAULT_OPERATOR_USERNAME = "admin"
+DEFAULT_OPERATOR_EMAIL = DEFAULT_OPERATOR_USERNAME  # back-compat alias
 
 # Ubuntu 26.04 LTS is the current latest Proxmox `*-standard` template.
 # Pin the series; still take the newest pveam build of that series.
@@ -79,6 +80,7 @@ def completion_summary(
     hostname: str,
     image_ref: str,
     port: int = 8080,
+    username: str | None = None,
     email: str | None = None,
     password: str | None = None,
     ct_password: str | None = None,
@@ -91,10 +93,11 @@ def completion_summary(
         f"  CT:   {ctid} ({hostname})",
         f"  Ref:  {image_ref}",
     ]
-    if email:
-        lines.append(f"  User: {email}")
+    user = username or email
+    if user:
+        lines.append(f"  Username: {user}")
     if password:
-        lines.append(f"  Pass: {password}")
+        lines.append(f"  Password: {password}")
     if ct_password:
         lines.append("  CT user: root")
         lines.append(f"  CT pass: {ct_password}")

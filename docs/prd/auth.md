@@ -20,9 +20,10 @@ comes to exist.
 - An auth mechanism that works cleanly with the transport already chosen for turn
   streaming (SSE via the browser's native `EventSource`), not one that fights it.
 - The first user account on a new tenant deployment exists without a public
-  signup: the bootstrap **setup gate** creates it (email + password + LLM
-  provider key). A later declarative apply (Fleet) may reconcile the same
-  identity once Deploy exists; it is not how the account first comes to be.
+  signup: the bootstrap **setup gate** creates it (username + password +
+  LLM provider key). The installer-seeded username is `admin`. A later
+  declarative apply (Fleet) may reconcile the same identity once Deploy
+  exists; it is not how the account first comes to be.
 
 ## Non-goals (this phase)
 
@@ -76,8 +77,9 @@ the user, not fields on the user record itself, so OAuth providers are additive 
 
 ### First user
 
-Created by `POST /setup` on the bootstrap LXC (see Bootstrap SPEC): email,
-password, LLM provider key. Refused once any identity exists; subsequent
+Created by `POST /setup` on the bootstrap LXC (see Bootstrap SPEC):
+username, password, LLM provider key. The login UI asks for username, not
+email. Refused once any identity exists; subsequent
 visits are login. This replaces the earlier "seed via Fleet declarative
 config" requirement, which assumed a repo that Phase 1 does not have.
 

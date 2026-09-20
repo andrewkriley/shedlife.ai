@@ -40,7 +40,7 @@ MEMORY="${THESHED_MEMORY:-4096}"
 CORES="${THESHED_CORES:-2}"
 DISK="${THESHED_DISK:-16}"
 PORT="${THESHED_PORT:-8080}"
-OPERATOR_EMAIL="${THESHED_OPERATOR_EMAIL:-operator@theshed.local}"
+OPERATOR_USERNAME="${THESHED_OPERATOR_USERNAME:-${THESHED_OPERATOR_EMAIL:-admin}}"
 OPERATOR_PASSWORD=""
 CT_ROOT_PASSWORD=""
 APP_DIR="/opt/theshed"
@@ -141,9 +141,12 @@ persist_ct_root_password() {
 
 load_operator_from_ct() {
   local line
-  line="$(pct exec "${CTID}" -- bash -c "grep -E '^THESHED_OPERATOR_EMAIL=|^THESHED_OPERATOR_PASSWORD=|^THESHED_CT_ROOT_PASSWORD=|^THESHED_DEBUG=' ${APP_DIR}/.env" 2>/dev/null || true)"
+  line="$(pct exec "${CTID}" -- bash -c "grep -E '^THESHED_OPERATOR_USERNAME=|^THESHED_OPERATOR_EMAIL=|^THESHED_OPERATOR_PASSWORD=|^THESHED_CT_ROOT_PASSWORD=|^THESHED_DEBUG=' ${APP_DIR}/.env" 2>/dev/null || true)"
   if [[ -n "${line}" ]]; then
-    OPERATOR_EMAIL="$(printf '%s\n' "${line}" | awk -F= '/^THESHED_OPERATOR_EMAIL=/{print $2}')"
+    OPERATOR_USERNAME="$(printf '%s\n' "${line}" | awk -F= '/^THESHED_OPERATOR_USERNAME=/{print $2}')"
+    if [[ -z "${OPERATOR_USERNAME}" ]]; then
+      OPERATOR_USERNAME="$(printf '%s\n' "${line}" | awk -F= '/^THESHED_OPERATOR_EMAIL=/{print $2}')"
+    fi
     OPERATOR_PASSWORD="$(printf '%s\n' "${line}" | awk -F= '/^THESHED_OPERATOR_PASSWORD=/{print $2}')"
     CT_ROOT_PASSWORD="$(printf '%s\n' "${line}" | awk -F= '/^THESHED_CT_ROOT_PASSWORD=/{print $2}')"
     if printf '%s\n' "${line}" | grep -q '^THESHED_DEBUG=1'; then
@@ -221,10 +224,10 @@ print_url() {
   echo "The Shed is at: http://${1}:${PORT}"
   echo "Open that URL from a browser on this LAN. Setup happens there."
   echo
-  echo "  User:    ${OPERATOR_EMAIL}"
-  echo "  Pass:    ${OPERATOR_PASSWORD}"
-  echo "  CT user: root"
-  echo "  CT pass: ${CT_ROOT_PASSWORD}"
+  echo "  Username: ${OPERATOR_USERNAME}"
+  echo "  Password: ${OPERATOR_PASSWORD}"
+  echo "  CT user:  root"
+  echo "  CT pass:  ${CT_ROOT_PASSWORD}"
 }
 
 print_summary() {
@@ -233,19 +236,19 @@ print_summary() {
   echo "========================================"
   echo "The Shed is ready."
   echo
-  echo "  URL:     http://${ip}:${PORT}"
-  echo "  User:    ${OPERATOR_EMAIL}"
-  echo "  Pass:    ${OPERATOR_PASSWORD}"
-  echo "  CT user: root"
-  echo "  CT pass: ${CT_ROOT_PASSWORD}"
-  echo "  CT:      ${CTID} (${CT_HOSTNAME})"
-  echo "  Ref:     ${THESHED_REF}"
+  echo "  URL:      http://${ip}:${PORT}"
+  echo "  Username: ${OPERATOR_USERNAME}"
+  echo "  Password: ${OPERATOR_PASSWORD}"
+  echo "  CT user:  root"
+  echo "  CT pass:  ${CT_ROOT_PASSWORD}"
+  echo "  CT:       ${CTID} (${CT_HOSTNAME})"
+  echo "  Ref:      ${THESHED_REF}"
   if wants_debug; then
-    echo "  Debug:   on  (http://${ip}:${PORT}/api/debug/logs)"
+    echo "  Debug:    on  (http://${ip}:${PORT}/api/debug/logs)"
   fi
   echo
   echo "Open that URL from a browser on this LAN."
-  echo "Log in with the user and pass above, then add an API key if asked."
+  echo "Log in with username and password above, then add an API key if asked."
   echo "Proxmox console / pct console: root and the CT pass."
   echo "========================================"
 }
@@ -414,7 +417,8 @@ INNER
 POSTGRES_PASSWORD=${db_pass}
 THESHED_IMAGE=${THESHED_IMAGE:-}
 THESHED_DEBUG=${debug_flag}
-THESHED_OPERATOR_EMAIL=${OPERATOR_EMAIL}
+THESHED_OPERATOR_USERNAME=${OPERATOR_USERNAME}
+THESHED_OPERATOR_EMAIL=${OPERATOR_USERNAME}
 THESHED_OPERATOR_PASSWORD=${OPERATOR_PASSWORD}
 THESHED_CT_ROOT_PASSWORD=${CT_ROOT_PASSWORD}
 EOF"

@@ -60,10 +60,10 @@ curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/
 
 `THESHED_REF` overrides the ref the script clones (a branch or another
 release). The script does not ask for an API key. It prints a LAN URL plus
-the generated operator user and password, plus the CT `root` password
-for the Proxmox console, next to the URL (before `/health` finishes).
-Log in with the operator user, then add an API key if the setup gate
-asks. Toggle debug from the header once the UI is up.
+the generated `admin` password and the CT `root` password for the
+Proxmox console, next to the URL (before `/health` finishes). Log in
+with username `admin`, then add an API key if the setup gate asks.
+Toggle debug from the header once the UI is up.
 
 ## How a message becomes an answer
 

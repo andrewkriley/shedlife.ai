@@ -41,7 +41,7 @@ class Identity(Base):
 
     Correction from the original SPEC draft: `provider_user_id` is not
     "not applicable" for `local` — it has to hold *something* to look the
-    identity up by (the email/username used to log in). For an OAuth
+    identity up by (the username used to log in). For an OAuth
     provider it holds that provider's own user id instead. Unified: it's
     always "however this identity is identified by its provider."
     """

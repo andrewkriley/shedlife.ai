@@ -26,15 +26,16 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    a release tag (overrideable). Example shape:
    `curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash`
 2. The script creates the LXC if no healthy CT is recorded in its state
-   file, generates an operator email + password and a CT `root` password
-   (`pct create --password`), writes them into the CT `.env`, starts The
-   Shed image, prints `http://<ct-ip>:<port>` plus User / Pass / CT user
-   / CT pass immediately, then waits until `GET /health` succeeds and
-   reprints the same block. `--debug` also writes `THESHED_DEBUG=1`.
-3. Operator opens the URL. Seeded identity exists → login with the
-   printed credentials, then setup if no LLM key yet. No identity →
-   setup gate.
-4. Setup gate: provider + API key (live validate). Email + password
+   file, generates an operator username (`admin`) + password and a CT
+   `root` password (`pct create --password`), writes them into the CT
+   `.env`, starts The Shed image, prints `http://<ct-ip>:<port>` plus
+   Username / Password / CT user / CT pass immediately, then waits until
+   `GET /health` succeeds and reprints the same block. `--debug` also
+   writes `THESHED_DEBUG=1`.
+3. Operator opens the URL. Seeded identity exists → login with username
+   `admin` and the printed password, then setup if no LLM key yet. No
+   identity → setup gate.
+4. Setup gate: provider + API key (live validate). Username + password
    (typed twice) only when no operator identity exists yet.
    Writes `local://providers/llm/api_key` (and optional Galileo refs).
    Creates `users` / `identities` rows. Sets the session cookie

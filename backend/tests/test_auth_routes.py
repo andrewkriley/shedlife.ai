@@ -25,19 +25,19 @@ async def seeded_user(db_session: AsyncSession) -> dict[str, str]:
     # one is committed for real by the dev-setup flow, outside this test's
     # rolled-back transaction, so reusing it would collide on the unique
     # (provider, provider_user_id) constraint.
-    email = "test-auth-routes@example.com"
+    username = "admin-test"
     user = User(display_name="Test User")
     db_session.add(user)
     await db_session.flush()
     identity = Identity(
         user_id=user.id,
         provider="local",
-        provider_user_id=email,
+        provider_user_id=username,
         password_hash=hash_password("correct-horse-battery-staple"),
     )
     db_session.add(identity)
     await db_session.flush()
-    return {"email": email, "password": "correct-horse-battery-staple"}
+    return {"username": username, "password": "correct-horse-battery-staple"}
 
 
 @pytest_asyncio.fixture
@@ -65,15 +65,22 @@ class TestLogin:
         self, client: AsyncClient, seeded_user: dict[str, str]
     ) -> None:
         response = await client.post(
-            "/auth/login", json={"email": seeded_user["email"], "password": "wrong"}
+            "/auth/login", json={"username": seeded_user["username"], "password": "wrong"}
         )
         assert response.status_code == 401
 
-    async def test_unknown_email_returns_401(self, client: AsyncClient) -> None:
+    async def test_unknown_username_returns_401(self, client: AsyncClient) -> None:
         response = await client.post(
-            "/auth/login", json={"email": "nobody@example.com", "password": "whatever"}
+            "/auth/login", json={"username": "nobody", "password": "whatever"}
         )
         assert response.status_code == 401
+
+    async def test_email_field_still_accepted(self, client: AsyncClient, seeded_user: dict[str, str]) -> None:
+        response = await client.post(
+            "/auth/login",
+            json={"email": seeded_user["username"], "password": seeded_user["password"]},
+        )
+        assert response.status_code == 200
 
 
 @pytest.mark.asyncio

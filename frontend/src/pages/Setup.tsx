@@ -14,7 +14,7 @@ export function Setup({
   onComplete: () => void
   hasOperator?: boolean
 }) {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [provider, setProvider] = useState('anthropic')
@@ -34,7 +34,7 @@ export function Setup({
     setSubmitting(true)
     try {
       await completeSetup({
-        email: hasOperator ? undefined : email,
+        username: hasOperator ? undefined : username,
         password: hasOperator ? undefined : password,
         provider,
         api_key: apiKey,
@@ -75,12 +75,13 @@ export function Setup({
 
       {!hasOperator && (
         <>
-          <label htmlFor="setup-email">Email</label>
+          <label htmlFor="setup-username">Username</label>
           <input
-            id="setup-email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            id="setup-username"
+            type="text"
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             required
           />
 
