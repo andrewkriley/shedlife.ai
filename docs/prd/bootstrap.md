@@ -171,6 +171,26 @@ Only these four, all predetermined:
 
 The model may not add a fifth.
 
+### Discovery (not a playbook)
+
+Read-only tools the assistant may call during `collect-foundations` to
+enumerate what is already on the host or at an adopted URL. They fill
+the conversation, not the schema — the assistant writes known keys
+afterwards with `foundations_write`, after the operator confirms.
+Provenance on each result is `discovered`.
+
+Host inventory (skip when Proxmox facts are unavailable):
+`list_proxmox_nodes`, `list_bridges`, `list_storage_pools`,
+`proxmox_version`.
+
+Adopted-platform discovery (skip unless that intent is adopt /
+brownfield; k3s skips when only `kubeconfig_ref` is set):
+`discover_gitlab`, `discover_infisical`, `discover_dns`, `discover_k3s`.
+
+These are not generic exec / SSH / web-search, and they do not
+provision GitLab, Infisical, DNS, or k3s. HTTP bodies are never
+returned.
+
 ### Pre-deploy probes
 
 Each probe is a tool. Read-only probes are `has_side_effects: false`.

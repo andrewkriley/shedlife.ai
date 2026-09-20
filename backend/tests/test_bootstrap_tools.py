@@ -79,3 +79,55 @@ def test_default_host_bind_sees_foundations() -> None:
     )
     bound = host.bind(lambda: {"proxmox": {"host": "192.0.2.10"}})
     assert bound.proxmox_api().status == "pass"
+
+
+@pytest.mark.asyncio
+async def test_discovery_lists_do_not_write_foundations(db_session: AsyncSession) -> None:
+    host = DefaultProbeHost(
+        proxmox_facts=lambda: {
+            "nodes": ["pve"],
+            "bridges": ["vmbr0"],
+            "pools": ["local-lvm"],
+            "version": "8.3.5",
+        }
+    )
+    execute = make_bootstrap_tool_executor(db_session, host)
+    await save_foundations(db_session, empty_foundations())
+    await db_session.commit()
+
+    raw = await execute(
+        ToolCall(tool_name="list_bridges", arguments={}, has_side_effects=False)
+    )
+    payload = json.loads(raw)
+    assert payload["status"] == "found"
+    assert payload["provenance"] == "discovered"
+    assert payload["values"] == {"bridges": ["vmbr0"]}
+
+    stored = await load_foundations(db_session)
+    assert stored["network"]["bridge"] == ""
+    assert "list_bridges" not in (stored.get("probes") or {})
+
+
+@pytest.mark.asyncio
+async def test_discover_gitlab_reads_intent_and_skips_bodies(db_session: AsyncSession) -> None:
+    def http_get(url: str, _timeout: float) -> tuple[int, str]:
+        return 200, "token=should-not-leak"
+
+    host = DefaultProbeHost(http_get=http_get)
+    execute = make_bootstrap_tool_executor(db_session, host)
+    doc = empty_foundations()
+    doc["intent"]["gitlab"] = {"mode": "adopt", "url": "https://git.example.test"}
+    await save_foundations(db_session, doc)
+    await db_session.commit()
+
+    raw = await execute(
+        ToolCall(tool_name="discover_gitlab", arguments={}, has_side_effects=False)
+    )
+    payload = json.loads(raw)
+    assert payload["status"] == "found"
+    assert payload["values"]["reachable"] is True
+    assert "should-not-leak" not in raw
+
+    stored = await load_foundations(db_session)
+    assert stored["intent"]["gitlab"]["url"] == "https://git.example.test"
+    assert "discover_gitlab" not in (stored.get("probes") or {})

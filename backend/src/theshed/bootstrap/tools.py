@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from theshed.agents.tool_loop import ToolCall
+from theshed.bootstrap.discovery import DISCOVERY_TOOLS, host_for, run_discovery
 from theshed.foundations.store import load_foundations, patch_foundations, record_probe_result
 from theshed.foundations.validate import validate_foundations
 from theshed.foundations.yamlutil import dump_yaml
@@ -56,6 +57,18 @@ def make_bootstrap_tool_executor(db: Any, probe_host: Any) -> ToolExecutor:
             return json.dumps(
                 {"probe_id": probe_id, "status": probe.status, "detail": probe.detail}
             )
+        if name in DISCOVERY_TOOLS:
+            doc = await load_foundations(db)
+            result = run_discovery(name, host_for(probe_host, doc))
+            if result.status == "error":
+                await record_issue(
+                    db,
+                    summary=f"discovery {name} crashed",
+                    detail=result.detail,
+                    source="automatic",
+                )
+                await db.commit()
+            return json.dumps(result.as_dict())
         if name == "export_state":
             return dump_yaml(await load_foundations(db))
         if name == "install_ssh_key":
