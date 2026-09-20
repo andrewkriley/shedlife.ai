@@ -58,8 +58,11 @@ Live debug console (errors, clicks, provider attempts; also `GET /debug/logs`):
 curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash -s -- --debug
 ```
 
-`THESHED_REF` overrides the ref the script clones (a branch or another
-release). The script does not ask for an API key. It prints a LAN URL plus
+The script checks for an existing CT, prints its status, and asks you to
+type `yes` before a fresh install, an in-place update, or a `--delete`.
+`THESHED_YES=1` (or `--yes`) skips that prompt. `THESHED_REF` overrides
+the ref the script clones (a branch or another release). The script does
+not ask for an API key. It prints a LAN URL plus
 the generated `admin` password and the CT `root` password for the
 Proxmox console, next to the URL (before `/api/setup/status` answers).
 Log in with username `admin`, then add an API key if the setup gate asks.

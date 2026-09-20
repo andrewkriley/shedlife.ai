@@ -45,6 +45,64 @@ def should_reuse(
     return state.health_ok and live_health_ok and bool(state.ct_ip)
 
 
+def classify_install(*, delete_requested: bool, ct_present: bool) -> str:
+    """What this run will do: fresh create, in-place update, or delete-then-create."""
+    if delete_requested:
+        return "delete"
+    if ct_present:
+        return "update"
+    return "fresh"
+
+
+def install_plan_warning(
+    action: str,
+    *,
+    ctid: int,
+    hostname: str = DEFAULT_CT_HOSTNAME,
+    ct_status: str = "missing",
+    app_ready: bool = False,
+    ct_ip: str | None = None,
+    image_ref: str | None = None,
+) -> str:
+    """Human-readable status + warning shown before the yes/no confirm."""
+    app = "ready" if app_ready else "not ready"
+    lines = [
+        "Installation status",
+        f"  Action:  {action}",
+        f"  CT:      {ctid} ({hostname}) — {ct_status}",
+        f"  App:     {app}",
+    ]
+    if ct_ip:
+        lines.append(f"  URL:     {render_url(ct_ip)}")
+    if image_ref:
+        lines.append(f"  Ref:     {image_ref}")
+    lines.append("")
+    if action == "delete":
+        if ct_status == "missing":
+            lines.append(
+                f"WARNING: --delete was set but CT {ctid} is not present. "
+                "A new installation will be created."
+            )
+        else:
+            lines.append(
+                f"WARNING: --delete will DESTROY CT {ctid} ({hostname}) and all "
+                "data on it, then create a new installation."
+            )
+    elif action == "update":
+        lines.append(
+            f"WARNING: an existing installation is present. This will UPDATE "
+            f"CT {ctid} ({hostname}) in place. Operator login and data volumes "
+            "are kept; the app clone and image are refreshed."
+        )
+    else:
+        lines.append(
+            f"WARNING: this is a fresh install. It will create CT {ctid} "
+            f"({hostname}) and start The Shed."
+        )
+    lines.append("Type yes to continue.")
+    return "\n".join(lines) + "\n"
+
+
 def delete_target_ctid(state: InstallState | None, default_ctid: int) -> int:
     """CT id --delete will destroy. Prefer the id recorded on the host."""
     if state is not None:

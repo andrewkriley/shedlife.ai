@@ -4,8 +4,10 @@ from theshed.bootstrap.install_state import (
     DEFAULT_CT_HOSTNAME,
     PINNED_UBUNTU_VERSION,
     InstallState,
+    classify_install,
     completion_summary,
     delete_target_ctid,
+    install_plan_warning,
     ostemplate_volume,
     parse_state,
     parse_storage_cfg,
@@ -34,6 +36,44 @@ def test_delete_target_prefers_recorded_ctid() -> None:
     state = InstallState(ctid=200, ct_ip="192.0.2.50", image_ref="v0.3.0", health_ok=True)
     assert delete_target_ctid(state, default_ctid=9100) == 200
     assert delete_target_ctid(None, default_ctid=9100) == 9100
+
+
+def test_classify_install_fresh_update_or_delete() -> None:
+    assert classify_install(delete_requested=False, ct_present=False) == "fresh"
+    assert classify_install(delete_requested=False, ct_present=True) == "update"
+    assert classify_install(delete_requested=True, ct_present=True) == "delete"
+    assert classify_install(delete_requested=True, ct_present=False) == "delete"
+
+
+def test_install_plan_warning_fresh() -> None:
+    text = install_plan_warning("fresh", ctid=9100, ct_status="missing")
+    assert "Action:  fresh" in text
+    assert "not present" in text or "missing" in text
+    assert "fresh install" in text
+    assert "Type yes to continue." in text
+
+
+def test_install_plan_warning_update_shows_status() -> None:
+    text = install_plan_warning(
+        "update",
+        ctid=9100,
+        ct_status="running",
+        app_ready=True,
+        ct_ip="192.0.2.50",
+        image_ref="theshed-v0.4.7",
+    )
+    assert "Action:  update" in text
+    assert "running" in text
+    assert "App:     ready" in text
+    assert "UPDATE" in text
+    assert "http://192.0.2.50:8080" in text
+
+
+def test_install_plan_warning_delete_destroys_ct() -> None:
+    text = install_plan_warning("delete", ctid=9100, hostname="theshed-deploy", ct_status="running")
+    assert "DESTROY" in text
+    assert "9100" in text
+    assert "theshed-deploy" in text
 
 
 def test_stale_state_without_live_health_creates_again() -> None:

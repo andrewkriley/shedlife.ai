@@ -23,6 +23,25 @@ def test_install_script_does_not_collect_operator_secrets() -> None:
     assert "sk-ant" not in text
 
 
+def test_install_script_confirms_fresh_update_or_delete() -> None:
+    text = SCRIPT.read_text()
+    assert "inspect_existing" in text
+    assert "print_plan" in text
+    assert "confirm_install" in text
+    assert "update_existing_ct" in text
+    assert "/dev/tty" in text
+    assert "read -r" in text
+    assert "THESHED_YES" in text
+    assert "--yes" in text
+    assert "fresh install" in text
+    assert "UPDATE" in text
+    assert "DESTROY" in text
+    main = text.split("main() {", 1)[1]
+    assert main.index("inspect_existing") < main.index("print_plan")
+    assert main.index("print_plan") < main.index("confirm_install")
+    assert main.index("confirm_install") < main.index("create_ct")
+
+
 def test_readme_install_is_a_one_line_latest_release() -> None:
     text = README.read_text()
     assert (

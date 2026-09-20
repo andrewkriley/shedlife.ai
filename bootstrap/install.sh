@@ -25,9 +25,11 @@
 #   THESHED_PORT         published app port (default: 8080)
 #   THESHED_DELETE=1     same as --delete: destroy the bootstrap CT, then install
 #   THESHED_DEBUG=1      same as --debug: live debug console, CT stdout, GET /debug/logs
+#   THESHED_YES=1        same as --yes: skip the confirmation prompt
 #
 #   curl -fsSL .../install.sh | bash -s -- --delete
 #   curl -fsSL .../install.sh | bash -s -- --debug
+#   curl -fsSL .../install.sh | bash -s -- --yes
 set -euo pipefail
 
 REPO="https://github.com/andrewkriley/shedlife.ai.git"
@@ -44,6 +46,11 @@ OPERATOR_USERNAME="${THESHED_OPERATOR_USERNAME:-${THESHED_OPERATOR_EMAIL:-admin}
 OPERATOR_PASSWORD=""
 CT_ROOT_PASSWORD=""
 APP_DIR="/opt/theshed"
+CT_EXISTS=0
+CT_STATUS="missing"
+APP_READY=0
+EXISTING_IP=""
+EXISTING_REF=""
 
 print_banner() {
   cat <<'EOF'
@@ -85,15 +92,17 @@ parse_args() {
     case "${arg}" in
       --delete) THESHED_DELETE=1 ;;
       --debug) THESHED_DEBUG=1 ;;
+      --yes) THESHED_YES=1 ;;
       --help|-h)
-        echo "Usage: install.sh [--delete] [--debug]"
+        echo "Usage: install.sh [--delete] [--debug] [--yes]"
         echo "  --delete   destroy the bootstrap CT, then install"
         echo "  --debug    enable the live debug console, container stdout, and GET /debug/logs"
+        echo "  --yes      skip the confirmation prompt"
         exit 0
         ;;
       *)
         echo "Unknown option: ${arg}" >&2
-        echo "Usage: install.sh [--delete] [--debug]" >&2
+        echo "Usage: install.sh [--delete] [--debug] [--yes]" >&2
         exit 1
         ;;
     esac
@@ -106,6 +115,110 @@ wants_delete() {
 
 wants_debug() {
   [[ "${THESHED_DEBUG:-}" == "1" || "${THESHED_DEBUG:-}" == "true" ]]
+}
+
+wants_yes() {
+  [[ "${THESHED_YES:-}" == "1" || "${THESHED_YES:-}" == "true" ]]
+}
+
+inspect_existing() {
+  local recorded name ip
+  recorded="$(read_state_ctid || true)"
+  if [[ -n "${recorded}" ]]; then
+    CTID="${recorded}"
+  fi
+  CT_EXISTS=0
+  CT_STATUS="missing"
+  APP_READY=0
+  EXISTING_IP="$(read_state_ip || true)"
+  EXISTING_REF=""
+  if [[ -f "${STATE_FILE}" ]]; then
+    EXISTING_REF="$(awk '/^image_ref:/{print $2}' "${STATE_FILE}" | tr -d '"')"
+  fi
+  if pct status "${CTID}" >/dev/null 2>&1; then
+    CT_EXISTS=1
+    CT_STATUS="$(pct status "${CTID}" 2>/dev/null | awk '/^status:/{print $2}')"
+    name="$(pct config "${CTID}" 2>/dev/null | awk '/^hostname:/{print $2}')"
+    if [[ -n "${name}" && "${name}" != "${CT_HOSTNAME}" && "${name}" != "theshed" ]]; then
+      echo "CT ${CTID} is hostname '${name}', not ${CT_HOSTNAME}." >&2
+      exit 1
+    fi
+    if [[ "${CT_STATUS}" == "running" ]]; then
+      ip="$(ct_ip 2>/dev/null || true)"
+      if [[ -n "${ip}" ]]; then
+        EXISTING_IP="${ip}"
+      fi
+      if [[ -n "${EXISTING_IP}" ]] && ct_ready_ok "${EXISTING_IP}"; then
+        APP_READY=1
+      fi
+    fi
+  fi
+}
+
+plan_action() {
+  if wants_delete; then
+    echo delete
+  elif [[ "${CT_EXISTS}" == "1" ]]; then
+    echo update
+  else
+    echo fresh
+  fi
+}
+
+print_plan() {
+  local action="$1"
+  echo
+  echo "Installation status"
+  echo "  Action:  ${action}"
+  echo "  CT:      ${CTID} (${CT_HOSTNAME}) — ${CT_STATUS}"
+  if [[ "${APP_READY}" == "1" ]]; then
+    echo "  App:     ready"
+  else
+    echo "  App:     not ready"
+  fi
+  if [[ -n "${EXISTING_IP}" ]]; then
+    echo "  URL:     http://${EXISTING_IP}:${PORT}"
+  fi
+  if [[ -n "${EXISTING_REF}" ]]; then
+    echo "  Ref:     ${EXISTING_REF}"
+  fi
+  echo
+  case "${action}" in
+    delete)
+      if [[ "${CT_STATUS}" == "missing" ]]; then
+        echo "WARNING: --delete was set but CT ${CTID} is not present. A new installation will be created."
+      else
+        echo "WARNING: --delete will DESTROY CT ${CTID} (${CT_HOSTNAME}) and all data on it, then create a new installation."
+      fi
+      ;;
+    update)
+      echo "WARNING: an existing installation is present. This will UPDATE CT ${CTID} (${CT_HOSTNAME}) in place. Operator login and data volumes are kept; the app clone and image are refreshed."
+      ;;
+    *)
+      echo "WARNING: this is a fresh install. It will create CT ${CTID} (${CT_HOSTNAME}) and start The Shed."
+      ;;
+  esac
+  echo "Type yes to continue."
+}
+
+confirm_install() {
+  local reply
+  if wants_yes; then
+    echo "THESHED_YES=1: continuing without a prompt."
+    return 0
+  fi
+  if [[ ! -r /dev/tty ]]; then
+    echo "No TTY for confirmation. Re-run with --yes or THESHED_YES=1." >&2
+    exit 1
+  fi
+  if ! read -r reply < /dev/tty; then
+    echo "Confirmation failed." >&2
+    exit 1
+  fi
+  if [[ "${reply}" != "yes" ]]; then
+    echo "Aborted."
+    exit 1
+  fi
 }
 
 ensure_operator_password() {
@@ -260,27 +373,79 @@ print_summary() {
   echo "========================================"
 }
 
-maybe_reuse() {
-  local ip ctid_recorded
-  ip="$(read_state_ip || true)"
-  ctid_recorded="$(read_state_ctid || true)"
-  if [[ -z "${ip}" ]]; then
-    return 1
+prepare_ct_packages() {
+  pct exec "${CTID}" -- bash -s <<'INNER'
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y --no-install-recommends ca-certificates curl git openssl
+if ! command -v docker >/dev/null 2>&1; then
+  curl -fsSL https://get.docker.com | sh
+fi
+INNER
+}
+
+compose_up() {
+  if [[ -n "${THESHED_IMAGE:-}" ]]; then
+    pct exec "${CTID}" -- bash -c "cd ${APP_DIR} && docker compose --env-file .env -f bootstrap/docker-compose.yml up -d"
+  else
+    pct exec "${CTID}" -- bash -c "cd ${APP_DIR} && docker compose --env-file .env -f bootstrap/docker-compose.yml up -d --build"
   fi
-  if [[ -n "${ctid_recorded}" ]]; then
-    CTID="${ctid_recorded}"
+}
+
+write_fresh_env() {
+  local db_pass debug_flag
+  db_pass="$(openssl rand -hex 24)"
+  ensure_operator_password
+  ensure_ct_root_password
+  debug_flag="0"
+  if wants_debug; then
+    debug_flag="1"
   fi
-  if ct_ready_ok "${ip}"; then
-    load_operator_from_ct
-    if [[ -z "${CT_ROOT_PASSWORD}" ]]; then
-      apply_ct_root_password
-      persist_ct_root_password
+  pct exec "${CTID}" -- bash -c "cat > ${APP_DIR}/.env <<EOF
+POSTGRES_PASSWORD=${db_pass}
+THESHED_IMAGE=${THESHED_IMAGE:-}
+THESHED_DEBUG=${debug_flag}
+THESHED_OPERATOR_USERNAME=${OPERATOR_USERNAME}
+THESHED_OPERATOR_EMAIL=${OPERATOR_USERNAME}
+THESHED_OPERATOR_PASSWORD=${OPERATOR_PASSWORD}
+THESHED_CT_ROOT_PASSWORD=${CT_ROOT_PASSWORD}
+EOF"
+}
+
+update_existing_ct() {
+  local ref="$1"
+  if [[ "${CT_STATUS}" == "stopped" ]]; then
+    echo "Starting CT ${CTID}"
+    pct start "${CTID}"
+    CT_STATUS="running"
+  fi
+  echo "Updating CT ${CTID} (${CT_HOSTNAME}) to ${ref}"
+  load_operator_from_ct
+  prepare_ct_packages
+  pct exec "${CTID}" -- bash -c "
+    set -euo pipefail
+    if [[ -f ${APP_DIR}/.env ]]; then
+      cp ${APP_DIR}/.env /tmp/theshed.env
     fi
-    write_state "${ip}" "${THESHED_REF}"
-    print_summary "${ip}"
-    return 0
+    rm -rf ${APP_DIR}
+    git clone --depth 1 --branch ${ref} ${REPO} ${APP_DIR}
+    if [[ -f /tmp/theshed.env ]]; then
+      cp /tmp/theshed.env ${APP_DIR}/.env
+    fi
+  "
+  if ! pct exec "${CTID}" -- test -f "${APP_DIR}/.env"; then
+    write_fresh_env
+  elif wants_debug; then
+    pct exec "${CTID}" -- bash -c "
+      if grep -q '^THESHED_DEBUG=' ${APP_DIR}/.env; then
+        sed -i 's/^THESHED_DEBUG=.*/THESHED_DEBUG=1/' ${APP_DIR}/.env
+      else
+        echo 'THESHED_DEBUG=1' >> ${APP_DIR}/.env
+      fi
+    "
   fi
-  return 1
+  compose_up
 }
 
 ensure_template() {
@@ -402,38 +567,10 @@ create_ct() {
 
 bootstrap_ct() {
   local ref="$1"
-  pct exec "${CTID}" -- bash -s <<'INNER'
-set -euo pipefail
-export DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get install -y --no-install-recommends ca-certificates curl git openssl
-if ! command -v docker >/dev/null 2>&1; then
-  curl -fsSL https://get.docker.com | sh
-fi
-INNER
+  prepare_ct_packages
   pct exec "${CTID}" -- bash -c "rm -rf ${APP_DIR} && git clone --depth 1 --branch ${ref} ${REPO} ${APP_DIR}"
-  local db_pass debug_flag
-  db_pass="$(openssl rand -hex 24)"
-  ensure_operator_password
-  ensure_ct_root_password
-  debug_flag="0"
-  if wants_debug; then
-    debug_flag="1"
-  fi
-  pct exec "${CTID}" -- bash -c "cat > ${APP_DIR}/.env <<EOF
-POSTGRES_PASSWORD=${db_pass}
-THESHED_IMAGE=${THESHED_IMAGE:-}
-THESHED_DEBUG=${debug_flag}
-THESHED_OPERATOR_USERNAME=${OPERATOR_USERNAME}
-THESHED_OPERATOR_EMAIL=${OPERATOR_USERNAME}
-THESHED_OPERATOR_PASSWORD=${OPERATOR_PASSWORD}
-THESHED_CT_ROOT_PASSWORD=${CT_ROOT_PASSWORD}
-EOF"
-  if [[ -n "${THESHED_IMAGE:-}" ]]; then
-    pct exec "${CTID}" -- bash -c "cd ${APP_DIR} && docker compose --env-file .env -f bootstrap/docker-compose.yml up -d"
-  else
-    pct exec "${CTID}" -- bash -c "cd ${APP_DIR} && docker compose --env-file .env -f bootstrap/docker-compose.yml up -d --build"
-  fi
+  write_fresh_env
+  compose_up
 }
 
 wait_ready() {
@@ -454,10 +591,34 @@ main() {
   need_root
   THESHED_REF="$(resolve_ref)"
   echo "The Shed installer — ref ${THESHED_REF}"
-  if wants_delete; then
+  inspect_existing
+  local action
+  action="$(plan_action)"
+  print_plan "${action}"
+  confirm_install
+  if [[ "${action}" == "delete" ]]; then
     delete_existing_ct
-  elif maybe_reuse; then
-    exit 0
+    action="fresh"
+  fi
+  local ip
+  if [[ "${action}" == "update" ]]; then
+    update_existing_ct "${THESHED_REF}"
+    load_operator_from_ct
+    if [[ -z "${CT_ROOT_PASSWORD}" ]]; then
+      apply_ct_root_password
+      persist_ct_root_password
+    fi
+    ip="$(ct_ip)"
+    if [[ -z "${ip}" ]]; then
+      echo "Could not determine the CT address. Set THESHED_CT_IP." >&2
+      exit 1
+    fi
+    print_url "${ip}"
+    echo "Waiting for GET ${READY_PATH} ..."
+    wait_ready "${ip}"
+    write_state "${ip}" "${THESHED_REF}"
+    print_summary "${ip}"
+    return 0
   fi
   STORAGE="$(resolve_storage)"
   echo "Using storage ${STORAGE} for the CT rootfs"
@@ -467,7 +628,6 @@ main() {
   ensure_ct_root_password
   create_ct "${template}"
   bootstrap_ct "${THESHED_REF}"
-  local ip
   ip="$(ct_ip)"
   if [[ -z "${ip}" ]]; then
     echo "Could not determine the CT address. Set THESHED_CT_IP." >&2

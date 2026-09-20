@@ -25,15 +25,18 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
 1. Operator, as root on the Proxmox host, runs the install command pinned to
    a release tag (overrideable). Example shape:
    `curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash`
-2. The script creates the LXC if no healthy CT is recorded in its state
-   file, generates an operator username (`admin`) + password and a CT
-   `root` password (`pct create --password`), writes them into the CT
-   `.env`, starts The Shed image, prints `http://<ct-ip>:<port>` plus
-   Username / Password / CT user / CT pass immediately, then waits until
+2. The script inspects the recorded CT (if any): present / running /
+   stopped, and whether `GET /api/setup/status` answers. It prints that
+   status and a warning, then requires `yes` on the TTY unless
+   `--yes` / `THESHED_YES=1`. Fresh → create. Existing → update in
+   place (keep `.env` and compose volumes, refresh the clone and
+   image). `--delete` → destroy the CT, then fresh. New CTs get a
+   generated `admin` password and CT `root` password
+   (`pct create --password`). Prints the URL plus Username / Password /
+   CT user / CT pass immediately, then waits until
    `GET /api/setup/status` succeeds (from the host, or `pct exec` to
-   localhost if the host cannot reach the CT IP) and reprints the same
-   block. Do not wait on `GET /health` — the static UI mount can swallow
-   that path. `--debug` also writes `THESHED_DEBUG=1`.
+   localhost). Do not wait on `GET /health`. `--debug` writes
+   `THESHED_DEBUG=1`.
 3. Operator opens the URL. Seeded identity exists → login with username
    `admin` and the printed password, then setup if no LLM key yet. No
    identity → setup gate.

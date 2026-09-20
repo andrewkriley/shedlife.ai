@@ -77,6 +77,12 @@ has to exist before Git, Kubernetes, or a secrets backend do.
   `/api/setup/status` returns), set the CT password so the Proxmox
   console can log in, and seed the operator identity so the web UI
   accepts `admin`.
+- Before changing anything, the installer inspects whether a bootstrap CT
+  is already present and whether the app answers. It prints that status,
+  a warning for the planned action, and waits for `yes` on the TTY
+  (`THESHED_YES=1` / `--yes` skips the prompt). Fresh: create a new CT.
+  Existing: update that CT in place (keep login and volumes). `--delete`:
+  destroy the CT, then a fresh install.
 - `--debug` (or `THESHED_DEBUG=1`) starts the CT with the live debug
   console on: HTTP requests, UI clicks, provider connection attempts, and
   errors. The same log is on `GET /debug/logs`, on the app process
@@ -200,8 +206,8 @@ Probes are rerunnable. Results hang off the schema, not the chat transcript.
 
 ### Idempotency / failure recovery
 
-- Re-run the install script: if the CT exists and the app answers
-  `/api/setup/status`, print the URL and stop.
+- Re-run the install script: after confirmation, an existing CT is
+  updated in place. `--delete` destroys it first, after confirmation.
 - Re-run a playbook or probe: completed work is skipped after live
   verification, same hybrid model as before (local state + live check).
 - Abandoned-CT cleanup is still manual this phase. The installer's state
