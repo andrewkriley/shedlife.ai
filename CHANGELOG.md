@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.9](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.8...theshed-v0.4.9) (2026-09-20)
+
+
+### Bug Fixes
+
+* keep debug logs under chat and echo them on CT tty1 ([#27](https://github.com/andrewkriley/shedlife.ai/issues/27)) ([d5af8de](https://github.com/andrewkriley/shedlife.ai/commit/d5af8dee83f307cca334d0a6e669ae04cfcd08ce))
+
 ## [0.4.8](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.7...theshed-v0.4.8) (2026-09-20)
 
 
