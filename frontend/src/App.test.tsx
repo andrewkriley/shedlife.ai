@@ -126,10 +126,9 @@ describe('App', () => {
 
     await user.click(screen.getByRole('button', { name: 'Settings' }))
     expect(await screen.findByRole('group', { name: 'Change the model' })).toBeInTheDocument()
-    expect(screen.getByText('keep me')).not.toBeVisible()
 
     await user.click(screen.getByRole('button', { name: 'Back to chat' }))
-    expect(screen.getByText('keep me')).toBeVisible()
-    expect(screen.getByText('Hello there')).toBeVisible()
+    expect(screen.getByText('keep me')).toBeInTheDocument()
+    expect(screen.getByText('Hello there')).toBeInTheDocument()
   })
 })

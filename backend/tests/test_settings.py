@@ -319,16 +319,6 @@ class TestSettingsRoutes:
                 default_model="claude-haiku-4-5",
             )
         )
-        db_session.add(
-            SubAgent(
-                id="bootstrap.intake",
-                macro_category="assist",
-                description="Intake",
-                system_prompt="You collect.",
-                default_provider="openai",
-                default_model="gpt-5.4",
-            )
-        )
         await db_session.flush()
         await set_model_assignments(
             db=db_session,

@@ -12,9 +12,9 @@ from theshed.agents.providers.anthropic import LLMResponse
 from theshed.auth.dependencies import get_current_user_id, require_csrf
 from theshed.db.models import Conversation, Turn, User
 from theshed.db.session import get_session
+from theshed.debug import log as debug_log
 from theshed.main import app
 from theshed.observability.galileo import TurnTracer
-from theshed.debug import log as debug_log
 from theshed.turns.service import stream_turn, verify_turn
 
 
