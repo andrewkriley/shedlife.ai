@@ -55,6 +55,26 @@ def test_gpt_5_4_uses_reasoning_chat_completion_params() -> None:
     assert kwargs["tools"][0]["function"]["name"] == "foundations_read"
 
 
+def test_gpt_4_1_mini_does_not_send_reasoning_params() -> None:
+    kwargs = completion_kwargs(
+        model="gpt-4.1-mini",
+        messages=[{"role": "user", "content": "hi"}],
+    )
+    assert kwargs["model"] == "gpt-4.1-mini"
+    assert "reasoning_effort" not in kwargs
+    assert "max_completion_tokens" not in kwargs
+
+
+def test_o4_mini_uses_low_reasoning_effort() -> None:
+    kwargs = completion_kwargs(
+        model="o4-mini",
+        messages=[{"role": "user", "content": "hi"}],
+    )
+    assert kwargs["model"] == "o4-mini"
+    assert kwargs["max_completion_tokens"] == 4096
+    assert kwargs["reasoning_effort"] == "low"
+
+
 def test_to_openai_tools_maps_input_schema() -> None:
     tools = _to_openai_tools(
         [{"name": "foundations_read", "description": "Read", "input_schema": {"type": "object"}}]

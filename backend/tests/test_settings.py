@@ -144,7 +144,7 @@ class TestListLiveModels:
         result = list_live_models(clients)
 
         assert result["anthropic"] == ["claude-sonnet-5"]
-        assert result["openai"] == ["gpt-5.4", "gpt-5.4-mini", "gpt-4.1"]
+        assert result["openai"] == ["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini"]
 
 
 class TestPickConnectionSetting:
@@ -302,7 +302,7 @@ class TestSettingsRoutes:
         assert response.status_code == 200
         assert response.json() == {
             "provider": "openai",
-            "model": "gpt-5.4",
+            "model": "gpt-4.1-mini",
             "configured": True,
         }
 
@@ -368,7 +368,7 @@ class TestSettingsRoutes:
         assert response.status_code == 200
         body = response.json()
         assert body["anthropic"] == ["claude-sonnet-5"]
-        assert body["openai"] == ["gpt-5.4", "gpt-5.4-mini", "gpt-4.1"]
+        assert body["openai"] == ["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini"]
         assert body["gemini"] == ["gemini-2.5-flash", "gemini-2.5-pro"]
 
     async def test_post_model_assignments_applies_and_returns_updated_settings(
