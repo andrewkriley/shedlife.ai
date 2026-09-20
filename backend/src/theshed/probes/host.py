@@ -175,9 +175,7 @@ def _call_http(
         return http_get(url, timeout)
 
 
-def _http_get(
-    url: str, timeout: float, headers: dict[str, str] | None = None
-) -> tuple[int, str]:
+def _http_get(url: str, timeout: float, headers: dict[str, str] | None = None) -> tuple[int, str]:
     request = Request(url, method="GET", headers=headers or {})
     try:
         with urlopen(request, timeout=timeout) as response:

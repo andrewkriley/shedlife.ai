@@ -8,7 +8,17 @@ SCHEMA_VERSION = 1
 PROXMOX_API_TOKEN_REF = "local://proxmox/api_token"
 
 KNOWN_TOP_LEVEL = frozenset(
-    {"version", "tenant", "operator", "proxmox", "network", "storage", "domains", "intent", "probes"}
+    {
+        "version",
+        "tenant",
+        "operator",
+        "proxmox",
+        "network",
+        "storage",
+        "domains",
+        "intent",
+        "probes",
+    }
 )
 
 INTENT_KEYS = ("gitlab", "infisical", "dns", "k3s")
