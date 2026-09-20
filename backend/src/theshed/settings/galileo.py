@@ -39,7 +39,7 @@ def _secret_or_env(secrets: Any, ref: str, env_keys: tuple[str, ...], default: s
     if secrets is not None:
         try:
             value = secrets.get(ref)
-            if value:
+            if isinstance(value, str) and value:
                 return value
         except SecretNotFoundError:
             pass

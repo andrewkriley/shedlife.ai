@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from theshed.observability.galileo import TurnTracer
-from theshed.secrets.client import LocalSecretsClient
+from theshed.secrets.client import LocalSecretsClient, SecretNotFoundError
 from theshed.settings.galileo import (
     DEFAULT_LOG_STREAM,
     DEFAULT_PROJECT,
@@ -15,6 +15,46 @@ from theshed.settings.galileo import (
     read_galileo_settings,
     write_galileo_settings,
 )
+
+
+def test_read_galileo_settings_treats_untyped_get_as_string(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """secrets is Any at the settings boundary; get() must still yield str."""
+    monkeypatch.delenv("GALILEO_API_KEY", raising=False)
+    monkeypatch.delenv("GALILEO_CONSOLE_URL", raising=False)
+    monkeypatch.delenv("GALILEO_PROJECT", raising=False)
+    monkeypatch.delenv("GALILEO_PROJECT_NAME", raising=False)
+    monkeypatch.delenv("GALILEO_LOG_STREAM", raising=False)
+
+    class UntypedStore:
+        def get(self, reference: str) -> object:
+            if reference == GALILEO_PROJECT_REF:
+                return "shed-lab"
+            raise SecretNotFoundError(reference)
+
+    settings = read_galileo_settings(UntypedStore())
+    assert settings.project == "shed-lab"
+    assert isinstance(settings.project, str)
+
+
+def test_read_galileo_settings_ignores_non_string_secret_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("GALILEO_API_KEY", raising=False)
+    monkeypatch.delenv("GALILEO_CONSOLE_URL", raising=False)
+    monkeypatch.delenv("GALILEO_PROJECT", raising=False)
+    monkeypatch.delenv("GALILEO_PROJECT_NAME", raising=False)
+    monkeypatch.delenv("GALILEO_LOG_STREAM", raising=False)
+
+    class UntypedStore:
+        def get(self, _reference: str) -> object:
+            return {"not": "a string"}
+
+    settings = read_galileo_settings(UntypedStore())
+    assert settings.project == DEFAULT_PROJECT
+    assert settings.host == ""
+    assert settings.api_key_set is False
 
 
 def test_read_galileo_settings_uses_defaults_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
