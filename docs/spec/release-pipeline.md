@@ -37,8 +37,9 @@ unconditionally, including to an admin's own merge.
 
 ## Sequence (release, happy path)
 
-1. A commit is pushed / a PR is opened against `theshed`, with a Conventional-Commits
-   -formatted title.
+1. A commit is pushed / a PR is opened against the product GitHub repo
+   (`andrewkriley/shedlife.ai`), with a Conventional-Commits-formatted title.
+   The release-please package name remains `theshed`.
 2. GitHub Actions runs, in parallel: `gitleaks` (existing), `pytest` + frontend tests,
    lint + type-check, `commitlint` on the PR title, CodeQL. Any failure blocks merge
    (Ruleset A).
