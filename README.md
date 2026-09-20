@@ -64,7 +64,8 @@ type `yes` before a fresh install, an in-place update, or a `--delete`.
 the ref the script clones (a branch or another release). The script does
 not ask for an API key. It prints a LAN URL plus
 the generated `admin` password and the CT `root` password for the
-Proxmox console, next to the URL (before `/api/setup/status` answers).
+Proxmox console, next to the URL (before `/api/setup/status` answers),
+and writes those same details to the CT notes field in the Proxmox UI.
 Log in with username `admin`, then add an API key if the setup gate asks.
 Toggle debug from the header once the UI is up.
 

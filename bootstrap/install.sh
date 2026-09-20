@@ -350,6 +350,29 @@ print_url() {
   echo "  CT pass:  ${CT_ROOT_PASSWORD}"
 }
 
+write_ct_notes() {
+  local ip="$1"
+  local notes
+  notes="$(
+    printf '%s\n' \
+      "The Shed is ready." \
+      "" \
+      "  URL:      http://${ip}:${PORT}" \
+      "  Username: ${OPERATOR_USERNAME}" \
+      "  Password: ${OPERATOR_PASSWORD}" \
+      "  CT user:  root" \
+      "  CT pass:  ${CT_ROOT_PASSWORD}" \
+      "  CT:       ${CTID} (${CT_HOSTNAME})" \
+      "  Ref:      ${THESHED_REF}"
+  )"
+  if wants_debug; then
+    notes="${notes}"$'\n'"  Debug:    on  (http://${ip}:${PORT}/api/debug/logs, CT tty1)"
+  fi
+  if ! pct set "${CTID}" --description "${notes}"; then
+    echo "Could not write the URL and passwords to the CT notes field." >&2
+  fi
+}
+
 print_summary() {
   local ip="$1"
   echo
@@ -370,7 +393,9 @@ print_summary() {
   echo "Open that URL from a browser on this LAN."
   echo "Log in with username and password above, then add an API key if asked."
   echo "Proxmox console / pct console: root and the CT pass."
+  echo "These details are also on the CT notes in the Proxmox UI."
   echo "========================================"
+  write_ct_notes "${ip}"
 }
 
 prepare_ct_packages() {

@@ -11,6 +11,7 @@ from theshed.bootstrap.install_state import (
     ostemplate_volume,
     parse_state,
     parse_storage_cfg,
+    proxmox_notes,
     render_url,
     select_os_template,
     select_rootfs_storage,
@@ -125,6 +126,38 @@ def test_completion_summary_includes_login_and_debug() -> None:
     assert "CT pass: ct-root-once" in text
     assert "Debug: on" in text
     assert "/api/debug/logs" in text
+
+
+def test_proxmox_notes_are_the_completion_details() -> None:
+    text = proxmox_notes(
+        ct_ip="192.0.2.50",
+        ctid=9100,
+        hostname="theshed-deploy",
+        image_ref="theshed-v0.4.9",
+        username="admin",
+        password="once-only",
+        ct_password="ct-root-once",
+        debug=True,
+    )
+    assert "The Shed is ready." in text
+    assert "URL:" in text
+    assert "http://192.0.2.50:8080" in text
+    assert "Username: admin" in text
+    assert "Password: once-only" in text
+    assert "CT user: root" in text
+    assert "CT pass: ct-root-once" in text
+    assert "9100 (theshed-deploy)" in text
+    assert "theshed-v0.4.9" in text
+    assert text == completion_summary(
+        ct_ip="192.0.2.50",
+        ctid=9100,
+        hostname="theshed-deploy",
+        image_ref="theshed-v0.4.9",
+        username="admin",
+        password="once-only",
+        ct_password="ct-root-once",
+        debug=True,
+    )
 
 
 PVEAM_AVAILABLE = """
