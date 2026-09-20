@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.15](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.14...theshed-v0.4.15) (2026-09-20)
+
+
+### Features
+
+* ship settings, debug timestamps, proxmox token, and Galileo ([dc08f32](https://github.com/andrewkriley/shedlife.ai/commit/dc08f3247f7818b06338be2d536cece0fb04f3a6))
+
+
+### Bug Fixes
+
+* narrow Galileo secret values so mypy accepts the str return ([#46](https://github.com/andrewkriley/shedlife.ai/issues/46)) ([d449c1b](https://github.com/andrewkriley/shedlife.ai/commit/d449c1be0411621153115fb3a166566d0595b826))
+
 ## [0.4.14](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.13...theshed-v0.4.14) (2026-09-20)
 
 
