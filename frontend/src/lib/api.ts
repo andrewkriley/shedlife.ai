@@ -356,6 +356,29 @@ export async function fileIssue(body: {
   return response.json()
 }
 
+export async function setProviderKey(provider: string, apiKey: string): Promise<{ provider: string }> {
+  const response = await fetch('/api/settings/provider', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-csrf-token': readCsrfCookie(),
+    },
+    body: JSON.stringify({ provider, api_key: apiKey }),
+  })
+  if (!response.ok) {
+    let detail = 'Failed to save the provider key'
+    try {
+      const payload: { detail?: string } = await response.json()
+      if (payload.detail) detail = payload.detail
+    } catch {
+      // keep default
+    }
+    throw new Error(detail)
+  }
+  return response.json()
+}
+
 export async function setModelAssignments(
   subAgentIds: string[],
   provider: string | null,

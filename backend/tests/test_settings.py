@@ -9,6 +9,7 @@ from theshed.auth.dependencies import get_current_user_id, require_csrf
 from theshed.db.models import SubAgent, SubAgentModelOverride, User
 from theshed.db.session import get_session
 from theshed.main import app
+from theshed.secrets.client import LocalSecretsClient
 from theshed.settings.service import (
     list_live_models,
     list_sub_agent_settings,
@@ -99,7 +100,28 @@ class TestListLiveModels:
 
         result = list_live_models(clients)
 
-        assert result == {"anthropic": ["claude-sonnet-5"], "openai": ["gpt-5"]}
+        assert result["anthropic"] == ["claude-sonnet-5"]
+        assert result["openai"] == ["gpt-5"]
+        assert result["gemini"] == [
+            "gemini-2.5-flash",
+            "gemini-2.5-pro",
+        ]
+
+    def test_skips_a_missing_client_without_raising(self) -> None:
+        clients = {
+            "anthropic": None,
+            "openai": FakeProviderClient(FakeModelsList([FakeModel("gpt-5")])),
+        }
+
+        result = list_live_models(clients)
+
+        assert result["anthropic"] == [
+            "claude-haiku-4-5",
+            "claude-sonnet-4-5",
+            "claude-opus-4-5",
+        ]
+        assert result["openai"] == ["gpt-5"]
+        assert "gemini" in result
 
     def test_a_failing_provider_returns_an_empty_list_without_breaking_others(self) -> None:
         @dataclass
@@ -119,7 +141,7 @@ class TestListLiveModels:
         result = list_live_models(clients)
 
         assert result["anthropic"] == ["claude-sonnet-5"]
-        assert result["openai"] == []
+        assert result["openai"] == ["gpt-4.1", "gpt-4o", "o4-mini"]
 
 
 @pytest.mark.asyncio
@@ -218,12 +240,11 @@ class TestSettingsRoutes:
         response = await client.get("/settings/models")
 
         assert response.status_code == 200
-        assert response.json() == {
-            "anthropic": ["claude-sonnet-5"],
-            "openai": ["gpt-5"],
-        }
+        assert response.json()["anthropic"] == ["claude-sonnet-5"]
+        assert response.json()["openai"] == ["gpt-5"]
+        assert "gemini" in response.json()
 
-    async def test_get_models_omits_openai_when_no_client_is_configured(
+    async def test_get_models_keeps_openai_when_no_client_is_configured(
         self, client: AsyncClient
     ) -> None:
         app.state.openai_client = None
@@ -231,7 +252,10 @@ class TestSettingsRoutes:
         response = await client.get("/settings/models")
 
         assert response.status_code == 200
-        assert response.json() == {"anthropic": ["claude-sonnet-5"]}
+        body = response.json()
+        assert body["anthropic"] == ["claude-sonnet-5"]
+        assert body["openai"] == ["gpt-4.1", "gpt-4o", "o4-mini"]
+        assert body["gemini"] == ["gemini-2.5-flash", "gemini-2.5-pro"]
 
     async def test_post_model_assignments_applies_and_returns_updated_settings(
         self, client: AsyncClient, sub_agent: SubAgent
@@ -245,6 +269,24 @@ class TestSettingsRoutes:
         setting = next(row for row in response.json() if row["id"] == sub_agent.id)
         assert setting["provider"] == "openai"
         assert setting["overridden"] is True
+
+    async def test_post_provider_key_configures_the_openai_client(
+        self, client: AsyncClient
+    ) -> None:
+        configured: list[tuple[str, str]] = []
+        app.state.secrets = LocalSecretsClient()
+        app.state.configure_llm = lambda provider, key: configured.append((provider, key))
+        app.state.provider_live_check = None
+
+        response = await client.post(
+            "/settings/provider",
+            json={"provider": "openai", "api_key": "sk-test-openai"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ok", "provider": "openai"}
+        assert configured == [("openai", "sk-test-openai")]
+        assert app.state.secrets.get("local://providers/llm/vendor") == "openai"
 
     async def test_post_model_assignments_with_no_provider_clears_the_override(
         self, client: AsyncClient, sub_agent: SubAgent

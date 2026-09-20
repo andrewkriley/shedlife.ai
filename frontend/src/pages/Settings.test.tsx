@@ -31,6 +31,31 @@ describe('Settings', () => {
     expect(screen.getByRole('group', { name: 'Your assistants' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Change the model' })).toBeInTheDocument()
     expect(await screen.findByText('AI Assistant is Connected')).toBeInTheDocument()
+    expect(screen.getAllByLabelText('Provider').length).toBe(2)
+    expect(screen.getAllByRole('option', { name: 'OpenAI' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('option', { name: 'Anthropic' }).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Save provider key' })).toBeInTheDocument()
+  })
+
+  it('saves a provider key from the connection block', async () => {
+    vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
+    vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue(baseSubAgents)
+    vi.spyOn(api, 'getLiveModels').mockResolvedValue({
+      anthropic: ['claude-haiku-4-5'],
+      openai: ['gpt-4o'],
+      gemini: ['gemini-2.5-flash'],
+    })
+    const setProviderKey = vi.spyOn(api, 'setProviderKey').mockResolvedValue({ provider: 'openai' })
+
+    const user = userEvent.setup()
+    render(<Settings onClose={() => {}} />)
+
+    await user.selectOptions(screen.getAllByLabelText('Provider')[0], 'openai')
+    await user.type(screen.getByLabelText('API key'), 'sk-test-openai')
+    await user.click(screen.getByRole('button', { name: 'Save provider key' }))
+
+    expect(setProviderKey).toHaveBeenCalledWith('openai', 'sk-test-openai')
+    expect(await screen.findByText(/Saved the openai key/)).toBeInTheDocument()
   })
 
   it('preselects the only assistant and applies a model without an extra click', async () => {

@@ -10,6 +10,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from theshed.agents.mcp_tools import call_mcp_tool
 from theshed.agents.providers.anthropic import AnthropicClient
+from theshed.agents.providers.openai import OpenAIClient
 from theshed.agents.tool_loop import ToolCall
 from theshed.auth.routes import router as auth_router
 from theshed.bootstrap.operator import seed_operator_from_env
@@ -50,15 +51,16 @@ GALILEO_LOG_STREAM = os.environ.get("GALILEO_LOG_STREAM", "default")
 
 
 def _configure_llm(app: FastAPI, provider: str, api_key: str) -> None:
+    app.state.llm_client = None
     if provider == "anthropic":
         app.state.llm_client = AnthropicClient(api_key=api_key)
-    else:
-        # OpenAI/Gemini use the same Anthropic client path only when the
-        # operator picked Anthropic. Other vendors are accepted at setup
-        # and stored; the first Phase 1 intake model stays Anthropic-shaped
-        # until a native client is wired. A missing client fails the turn
-        # the same way any other LLM outage does.
-        app.state.llm_client = AnthropicClient(api_key=api_key) if provider == "anthropic" else None
+        return
+    if provider == "openai":
+        client = OpenAIClient(api_key=api_key)
+        app.state.llm_client = client
+        app.state.openai_client = client
+        return
+    # Gemini is listed in Settings; chat still needs a native client.
 
 
 @asynccontextmanager
@@ -72,13 +74,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         secrets: EnvVarSecretsClient | LocalSecretsClient = LocalSecretsClient(path=secrets_path)
         app.state.secrets = secrets
         app.state.llm_client = None
+        app.state.openai_client = None
         try:
             vendor = secrets.get("local://providers/llm/vendor")
             key = secrets.get("local://providers/llm/api_key")
             _configure_llm(app, vendor, key)
         except SecretNotFoundError:
             pass
-        app.state.openai_client = None
         app.state.tracer_factory = lambda: TurnTracer(None)
         app.state.probe_host = DefaultProbeHost(secrets=secrets)
         app.state.tool_executor = None

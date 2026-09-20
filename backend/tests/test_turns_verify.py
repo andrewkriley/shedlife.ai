@@ -14,7 +14,7 @@ from theshed.db.models import Conversation, Turn, User
 from theshed.db.session import get_session
 from theshed.main import app
 from theshed.observability.galileo import TurnTracer
-from theshed.turns.service import verify_turn
+from theshed.turns.service import stream_turn, verify_turn
 
 
 @dataclass
@@ -187,3 +187,22 @@ class TestVerifyTurnRoute:
         response = await client.post(f"/turns/{uuid4()}/verify")
 
         assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_stream_turn_reports_a_missing_llm_client(
+    db_session: AsyncSession, route_user: User
+) -> None:
+    events = [
+        event
+        async for event in stream_turn(
+            db=db_session,
+            user_id=route_user.id,
+            conversation_id=None,
+            message="hello",
+            llm=None,
+            classifier_model="claude-haiku-4-5",
+            tracer=TurnTracer(None),
+        )
+    ]
+    assert any("No LLM client" in event.get("data", "") for event in events)
