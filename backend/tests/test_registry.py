@@ -33,6 +33,8 @@ class TestRegistry:
         sub_agent = await get_sub_agent(db_session, "bootstrap.intake")
         assert sub_agent is not None
         assert sub_agent.macro_category == "assist"
+        assert sub_agent.default_provider == "openai"
+        assert sub_agent.default_model == "o4-mini"
         tool_names = {t["name"] for t in sub_agent.tools}
         assert "foundations_write" in tool_names
         assert "install_ssh_key" in tool_names

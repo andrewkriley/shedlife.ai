@@ -22,9 +22,9 @@ def completion_kwargs(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Chat Completions payload. GPT-5.x needs max_completion_tokens and a
-    reasoning_effort; sending tools without that can return empty content
-    or hang — which looked like chat Send doing nothing."""
+    """Chat Completions payload. Reasoning models need
+    max_completion_tokens. GPT-5.x accepts reasoning_effort=none;
+    o-series (o4-mini, …) rejects none and wants low/medium/high."""
     kwargs: dict[str, Any] = {
         "model": model,
         "messages": messages,
@@ -34,7 +34,7 @@ def completion_kwargs(
         kwargs["tools"] = converted
     if _is_reasoning_model(model):
         kwargs["max_completion_tokens"] = 4096
-        kwargs["reasoning_effort"] = "none"
+        kwargs["reasoning_effort"] = "none" if model.startswith("gpt-5") else "low"
     return kwargs
 
 

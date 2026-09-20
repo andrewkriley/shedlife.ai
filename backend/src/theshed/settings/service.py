@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 FALLBACK_MODELS: dict[str, list[str]] = {
     "anthropic": ["claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5"],
-    "openai": ["gpt-5.4", "gpt-5.4-mini", "gpt-4.1"],
+    "openai": ["o4-mini", "gpt-5.4", "gpt-4.1"],
     "gemini": ["gemini-2.5-flash", "gemini-2.5-pro"],
 }
 

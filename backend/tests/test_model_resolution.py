@@ -5,9 +5,9 @@ from theshed.agents.models import (
 )
 
 
-def test_bootstrap_default_is_openai_gpt_5_4() -> None:
+def test_bootstrap_default_is_openai_o4_mini() -> None:
     assert BOOTSTRAP_DEFAULT_PROVIDER == "openai"
-    assert BOOTSTRAP_DEFAULT_MODEL == "gpt-5.4"
+    assert BOOTSTRAP_DEFAULT_MODEL == "o4-mini"
 
 
 def test_override_wins_when_it_matches_the_live_vendor() -> None:
@@ -27,7 +27,7 @@ def test_openai_client_does_not_send_a_claude_registry_default() -> None:
         default_provider="anthropic",
         default_model="claude-haiku-4-5",
     )
-    assert (provider, model) == ("openai", "gpt-5.4")
+    assert (provider, model) == ("openai", "o4-mini")
 
 
 def test_anthropic_client_does_not_send_an_openai_registry_default() -> None:
@@ -43,6 +43,6 @@ def test_registry_default_used_when_vendor_matches() -> None:
     provider, model = resolve_runtime_model(
         client_vendor="openai",
         default_provider="openai",
-        default_model="gpt-5.4",
+        default_model="o4-mini",
     )
-    assert (provider, model) == ("openai", "gpt-5.4")
+    assert (provider, model) == ("openai", "o4-mini")
