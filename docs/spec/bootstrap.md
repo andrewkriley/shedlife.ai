@@ -174,10 +174,13 @@ New:
 - Setup-gate endpoints: `POST /setup` (first user + provider key) —
   refused once an identity exists.
 
-Settings (`GET /settings/models`, model overrides) stay; they are how the
-operator changes provider after the gate. The page groups connection
-status, the assistant list (a lone agent is pre-selected), and a
-"Change the model" assignment block.
+Settings (`GET /settings/models`, `POST /settings/provider`, model
+overrides) stay; they are how the operator changes provider after the
+gate. The page always lists Anthropic / OpenAI / Gemini, can save a new
+API key, groups connection status, the assistant list (a lone agent is
+pre-selected), and a "Change the model" assignment block. Bootstrap
+wires an Anthropic or OpenAI client from `local://providers/llm/*` so
+chat and the live models list use the same key.
 
 ### Debug log
 

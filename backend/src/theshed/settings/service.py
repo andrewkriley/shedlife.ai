@@ -20,8 +20,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from theshed.agents.registry import list_sub_agents
 from theshed.db.models import SubAgentModelOverride
 from theshed.debug import log as debug_log
+from theshed.setup.providers import SUPPORTED
 
 logger = logging.getLogger(__name__)
+
+FALLBACK_MODELS: dict[str, list[str]] = {
+    "anthropic": ["claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-5"],
+    "openai": ["gpt-4.1", "gpt-4o", "o4-mini"],
+    "gemini": ["gemini-2.5-flash", "gemini-2.5-pro"],
+}
 
 
 class ModelListingClient(Protocol):
@@ -63,21 +70,31 @@ async def list_sub_agent_settings(db: AsyncSession) -> list[SubAgentSetting]:
     ]
 
 
-def list_live_models(clients: dict[str, ModelListingClient]) -> dict[str, list[str]]:
+def list_live_models(
+    clients: dict[str, ModelListingClient | None],
+) -> dict[str, list[str]]:
     """A real call to each cloud provider's own models-list API, per the
     spec. One provider's failure (an unset/invalid key, a network hiccup)
     doesn't take down the others — same fail-soft posture as Galileo
     tracing: an external provider's outage is never allowed to break a page
-    that only needs to list two other providers' models."""
+    that only needs to list two other providers' models. A missing client
+    or a failed list falls back to a short known catalog so Settings can
+    still offer Anthropic / OpenAI / Gemini."""
     result: dict[str, list[str]] = {}
-    for provider, client in clients.items():
+    for provider in SUPPORTED:
+        client = clients.get(provider)
+        fallback = list(FALLBACK_MODELS.get(provider, []))
+        if client is None:
+            result[provider] = fallback
+            continue
         debug_log.record("provider", "connect", f"Listing live models on {provider}")
         try:
-            result[provider] = [m.id for m in client.models.list()]
+            listed = [m.id for m in client.models.list()]
+            result[provider] = listed or fallback
             debug_log.record(
                 "provider",
                 "connected",
-                f"{provider} returned {len(result[provider])} models",
+                f"{provider} returned {len(listed)} models",
             )
         except Exception as exc:
             logger.exception("Listing models for provider %r failed", provider)
@@ -87,7 +104,7 @@ def list_live_models(clients: dict[str, ModelListingClient]) -> dict[str, list[s
                 f"{provider} models list failed: {exc}",
                 level="error",
             )
-            result[provider] = []
+            result[provider] = fallback
     return result
 
 

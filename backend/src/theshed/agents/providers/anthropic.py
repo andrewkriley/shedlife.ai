@@ -62,6 +62,8 @@ def _render_output_for_log(result: LLMResponse) -> str:
 
 
 class AnthropicClient:
+    vendor = "anthropic"
+
     def __init__(self, api_key: str) -> None:
         self._client = anthropic.Anthropic(api_key=api_key)
         # Exposed so callers outside the LLMClient shape (the settings

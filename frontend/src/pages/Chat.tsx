@@ -51,7 +51,12 @@ export function Chat() {
           },
         }))
       } else if (event.type === 'error') {
-        setStatus(`Error: ${String(event.data.message ?? 'something went wrong')}`)
+        const message = String(event.data.message ?? 'something went wrong')
+        setStatus(`Error: ${message}`)
+        updateMessage(id, (m) => ({
+          ...m,
+          text: m.text.trim() ? m.text : message,
+        }))
       } else if (event.type === 'done') {
         if (event.data.conversation_id) {
           setConversationId(String(event.data.conversation_id))

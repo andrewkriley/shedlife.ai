@@ -1,16 +1,23 @@
 import { useEffect, useState } from 'react'
 import { AssistantStatus } from '../components/AssistantStatus'
-import { getLiveModels, getSubAgentSettings, setModelAssignments } from '../lib/api'
+import { getLiveModels, getSubAgentSettings, setModelAssignments, setProviderKey } from '../lib/api'
 import type { SubAgentSetting } from '../lib/api'
+
+const PROVIDERS = [
+  { id: 'anthropic', label: 'Anthropic' },
+  { id: 'openai', label: 'OpenAI' },
+  { id: 'gemini', label: 'Gemini' },
+]
 
 export function Settings({ onClose: _onClose }: { onClose: () => void }) {
   const [subAgents, setSubAgents] = useState<SubAgentSetting[]>([])
   const [liveModels, setLiveModels] = useState<Record<string, string[]>>({})
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [provider, setProvider] = useState('')
+  const [provider, setProvider] = useState('anthropic')
   const [model, setModel] = useState('')
+  const [apiKey, setApiKey] = useState('')
   const [status, setStatus] = useState<string | null>(null)
-  const [busy, setBusy] = useState<'apply' | 'clear' | null>(null)
+  const [busy, setBusy] = useState<'apply' | 'clear' | 'key' | null>(null)
 
   useEffect(() => {
     getSubAgentSettings()
@@ -22,7 +29,9 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
     getLiveModels()
       .then((models) => {
         setLiveModels(models)
-        const firstProvider = Object.keys(models)[0]
+        const firstProvider = Object.keys(models).includes('anthropic')
+          ? 'anthropic'
+          : Object.keys(models)[0]
         if (firstProvider) {
           setProvider(firstProvider)
           setModel(models[firstProvider][0] ?? '')
@@ -43,6 +52,27 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
   function handleProviderChange(next: string) {
     setProvider(next)
     setModel(liveModels[next]?.[0] ?? '')
+  }
+
+  async function handleSaveKey() {
+    if (!apiKey.trim()) {
+      setStatus('Paste an API key for the selected provider.')
+      return
+    }
+    setBusy('key')
+    setStatus('Saving…')
+    try {
+      await setProviderKey(provider, apiKey.trim())
+      setApiKey('')
+      const models = await getLiveModels()
+      setLiveModels(models)
+      setModel(models[provider]?.[0] ?? '')
+      setStatus(`Saved the ${provider} key. Chat will use this provider.`)
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Failed to save the provider key.')
+    } finally {
+      setBusy(null)
+    }
   }
 
   async function handleApply() {
@@ -91,6 +121,39 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
       <fieldset className="group">
         <legend>Connection</legend>
         <AssistantStatus />
+        <p className="hint">Change the provider key without re-running setup.</p>
+        <div className="field-grid">
+          <div>
+            <label htmlFor="connection-provider">Provider</label>
+            <select
+              id="connection-provider"
+              value={provider}
+              onChange={(e) => handleProviderChange(e.target.value)}
+            >
+              {PROVIDERS.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="connection-key">API key</label>
+            <input
+              id="connection-key"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="Paste a new key to switch provider"
+              autoComplete="off"
+            />
+          </div>
+        </div>
+        <div className="panel-actions">
+          <button type="button" onClick={() => void handleSaveKey()} disabled={busy !== null}>
+            {busy === 'key' ? 'Saving…' : 'Save provider key'}
+          </button>
+        </div>
       </fieldset>
 
       <fieldset className="group">
@@ -131,9 +194,9 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
               value={provider}
               onChange={(e) => handleProviderChange(e.target.value)}
             >
-              {Object.keys(liveModels).map((p) => (
-                <option key={p} value={p}>
-                  {p}
+              {PROVIDERS.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
                 </option>
               ))}
             </select>

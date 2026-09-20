@@ -192,7 +192,7 @@ async def stream_turn(
     user_id: uuid.UUID,
     conversation_id: uuid.UUID | None,
     message: str,
-    llm: LLMClient,
+    llm: LLMClient | None,
     classifier_model: str,
     tracer: TurnTracer,
     tool_executor: ToolExecutor | None = None,
@@ -211,31 +211,46 @@ async def stream_turn(
     db.add(turn)
     await db.flush()
 
+    if llm is None:
+        yield _sse(
+            "error",
+            {
+                "message": (
+                    "No LLM client is configured. Open Settings and save an "
+                    "Anthropic or OpenAI API key."
+                )
+            },
+        )
+        return
+
     tracer.use_conversation(str(conversation_id))
-    with tracer:
-        tracer.start_trace(message, str(turn.id))
+    try:
+        with tracer:
+            tracer.start_trace(message, str(turn.id))
 
-        sub_agents = await list_sub_agents(db)
+            sub_agents = await list_sub_agents(db)
 
-        tracer.start_span(AgentType.classifier, "classify", message)
-        matches = await resolve_matches(message, sub_agents, llm, classifier_model, context)
-        tracer.conclude_span(json.dumps([m.id for m in matches]))
-        yield _sse("progress", {"stage": "classify:done"})
+            tracer.start_span(AgentType.classifier, "classify", message)
+            matches = await resolve_matches(message, sub_agents, llm, classifier_model, context)
+            tracer.conclude_span(json.dumps([m.id for m in matches]))
+            yield _sse("progress", {"stage": "classify:done"})
 
-        state = _FanOutState()
-        async for event in _run_matches(
-            db, turn, message, context, matches, llm, tracer, state, tool_executor
-        ):
-            yield event
+            state = _FanOutState()
+            async for event in _run_matches(
+                db, turn, message, context, matches, llm, tracer, state, tool_executor
+            ):
+                yield event
 
-        if state.paused is not None:
-            await db.commit()
-            return
+            if state.paused is not None:
+                await db.commit()
+                return
 
-        async for event in _finalize(
-            db, turn, conversation_id, message, state, llm, classifier_model, tracer
-        ):
-            yield event
+            async for event in _finalize(
+                db, turn, conversation_id, message, state, llm, classifier_model, tracer
+            ):
+                yield event
+    except Exception as exc:  # noqa: BLE001 — SSE must report the failure, not drop the stream
+        yield _sse("error", {"message": f"The assistant could not answer: {exc}"})
 
 
 async def resume_turn(
