@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.13](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.12...theshed-v0.4.13) (2026-09-20)
+
+
+### Features
+
+* add read-only bootstrap discovery tools ([0ab56a8](https://github.com/andrewkriley/shedlife.ai/commit/0ab56a8429c7c1de1b5e2312c608b5968cf0ea9b))
+
 ## [0.4.12](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.11...theshed-v0.4.12) (2026-09-20)
 
 
