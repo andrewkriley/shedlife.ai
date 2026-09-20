@@ -178,6 +178,43 @@ export async function getConnection(): Promise<ConnectionStatus> {
   return response.json()
 }
 
+export interface GalileoSettings {
+  project: string
+  host: string
+  log_stream: string
+  api_key_set: boolean
+  configured: boolean
+}
+
+export async function getGalileoSettings(): Promise<GalileoSettings> {
+  const response = await fetch('/api/settings/galileo', { credentials: 'include' })
+  if (!response.ok) {
+    throw new Error('Failed to load Galileo settings')
+  }
+  return response.json()
+}
+
+export async function setGalileoSettings(body: {
+  project: string
+  host: string
+  log_stream: string
+  api_key?: string
+}): Promise<GalileoSettings> {
+  const response = await fetch('/api/settings/galileo', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-csrf-token': readCsrfCookie(),
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    throw new Error(await readErrorDetail(response, 'Failed to save Galileo settings'))
+  }
+  return response.json()
+}
+
 export const CONNECTION_CHANGED_EVENT = 'shed:connection-changed'
 
 export function notifyConnectionChanged(): void {

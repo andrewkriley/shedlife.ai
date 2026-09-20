@@ -10,6 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from theshed.auth.dependencies import get_current_user_id, require_csrf
 from theshed.db.session import get_session
 from theshed.secrets.client import LocalSecretsClient
+from theshed.settings.galileo import (
+    apply_galileo_runtime,
+    read_galileo_settings,
+    write_galileo_settings,
+)
 from theshed.settings.service import (
     list_live_models,
     list_sub_agent_settings,
@@ -47,6 +52,21 @@ class ConnectionResponse(BaseModel):
     provider: str | None
     model: str | None
     configured: bool
+
+
+class GalileoSettingsResponse(BaseModel):
+    project: str
+    host: str
+    log_stream: str
+    api_key_set: bool
+    configured: bool
+
+
+class GalileoSettingsRequest(BaseModel):
+    project: str | None = None
+    host: str | None = None
+    log_stream: str | None = None
+    api_key: str | None = None
 
 
 def listing_clients(app_state: Any) -> dict[str, Any]:
@@ -87,6 +107,40 @@ async def get_connection(
     vendor = getattr(llm, "vendor", None)
     provider, model = await resolved_runtime_choice(db, vendor)
     return ConnectionResponse(provider=provider, model=model, configured=True)
+
+
+@router.get("/galileo", dependencies=[Depends(get_current_user_id)])
+async def get_galileo_settings(request: Request) -> GalileoSettingsResponse:
+    settings = read_galileo_settings(getattr(request.app.state, "secrets", None))
+    return GalileoSettingsResponse(
+        project=settings.project,
+        host=settings.host,
+        log_stream=settings.log_stream,
+        api_key_set=settings.api_key_set,
+        configured=settings.configured,
+    )
+
+
+@router.post("/galileo", dependencies=[Depends(require_csrf)])
+async def post_galileo_settings(
+    body: GalileoSettingsRequest, request: Request
+) -> GalileoSettingsResponse:
+    secrets = getattr(request.app.state, "secrets", None)
+    settings = write_galileo_settings(
+        secrets,
+        project=body.project,
+        host=body.host,
+        log_stream=body.log_stream,
+        api_key=body.api_key,
+    )
+    apply_galileo_runtime(request.app.state, secrets)
+    return GalileoSettingsResponse(
+        project=settings.project,
+        host=settings.host,
+        log_stream=settings.log_stream,
+        api_key_set=settings.api_key_set,
+        configured=settings.configured,
+    )
 
 
 @router.post("/provider", dependencies=[Depends(require_csrf)])

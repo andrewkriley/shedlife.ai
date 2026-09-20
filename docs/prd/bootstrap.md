@@ -118,7 +118,9 @@ has to exist before Git, Kubernetes, or a secrets backend do.
   installer seed), the gate still collects username + password typed
   twice. This *is* the first user — not a later Fleet apply.
 - Optional Galileo key / console URL; omitted means the existing no-op
-  tracer.
+  tracer. Settings later shows the current project, host, log stream,
+  and key (set/unset) and can update all four so turns send traces
+  without re-running setup.
 - Gate is skippable on later visits once an operator identity exists
   (login). Changing the provider key later is a settings action, not a
   re-install.

@@ -492,6 +492,59 @@ class TestSettingsRoutes:
         setting = next(row for row in response.json() if row["id"] == sub_agent.id)
         assert setting["overridden"] is False
 
+    async def test_get_galileo_settings_returns_defaults(
+        self, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("GALILEO_API_KEY", raising=False)
+        monkeypatch.delenv("GALILEO_CONSOLE_URL", raising=False)
+        monkeypatch.delenv("GALILEO_PROJECT", raising=False)
+        monkeypatch.delenv("GALILEO_PROJECT_NAME", raising=False)
+        monkeypatch.delenv("GALILEO_LOG_STREAM", raising=False)
+        app.state.secrets = LocalSecretsClient()
+
+        response = await client.get("/settings/galileo")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["project"] == "the-shed"
+        assert body["log_stream"] == "default"
+        assert body["host"] == ""
+        assert body["api_key_set"] is False
+        assert body["configured"] is False
+
+    async def test_post_galileo_settings_saves_and_hides_the_key(
+        self, client: AsyncClient
+    ) -> None:
+        app.state.secrets = LocalSecretsClient()
+
+        response = await client.post(
+            "/settings/galileo",
+            json={
+                "project": "shed-lab",
+                "host": "https://galileo.example.test",
+                "log_stream": "bootstrap",
+                "api_key": "galileo-secret",
+            },
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body == {
+            "project": "shed-lab",
+            "host": "https://galileo.example.test",
+            "log_stream": "bootstrap",
+            "api_key_set": True,
+            "configured": True,
+        }
+        assert "galileo-secret" not in str(body)
+        tracer = app.state.tracer_factory()
+        assert tracer._project == "shed-lab"
+        assert tracer._log_stream == "bootstrap"
+
+        again = await client.get("/settings/galileo")
+        assert again.json()["api_key_set"] is True
+        assert "galileo-secret" not in again.text
+
 
 @pytest.mark.asyncio
 class TestSettingsRoutesRequireAuth:

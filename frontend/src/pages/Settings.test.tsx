@@ -20,6 +20,7 @@ const baseSubAgents: api.SubAgentSetting[] = [
 function mockSettingsApis(overrides?: {
   models?: Record<string, string[]>
   connection?: api.ConnectionStatus
+  galileo?: api.GalileoSettings
 }) {
   vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
   vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue(baseSubAgents)
@@ -31,6 +32,15 @@ function mockSettingsApis(overrides?: {
       provider: 'anthropic',
       model: 'claude-haiku-4-5',
       configured: true,
+    },
+  )
+  vi.spyOn(api, 'getGalileoSettings').mockResolvedValue(
+    overrides?.galileo ?? {
+      project: 'the-shed',
+      host: '',
+      log_stream: 'default',
+      api_key_set: false,
+      configured: false,
     },
   )
 }
@@ -51,6 +61,9 @@ describe('Settings', () => {
     expect(screen.getByRole('option', { name: 'OpenAI' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Anthropic' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save provider key' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Galileo' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('Project')).toHaveValue('the-shed')
+    expect(screen.getByLabelText('Log stream')).toHaveValue('default')
   })
 
   it('saves a provider key from the connection block', async () => {
@@ -171,5 +184,43 @@ describe('Settings', () => {
     expect(
       await screen.findByText(/Chat is using openai. Save an anthropic key first/),
     ).toBeInTheDocument()
+  })
+
+  it('loads and saves Galileo project, host, log stream, and API key', async () => {
+    mockSettingsApis({
+      galileo: {
+        project: 'shed-lab',
+        host: 'https://galileo.example.test',
+        log_stream: 'bootstrap',
+        api_key_set: true,
+        configured: true,
+      },
+    })
+    const setGalileoSettings = vi.spyOn(api, 'setGalileoSettings').mockResolvedValue({
+      project: 'shed-lab',
+      host: 'https://galileo.example.test',
+      log_stream: 'live',
+      api_key_set: true,
+      configured: true,
+    })
+
+    const user = userEvent.setup()
+    render(<Settings onClose={() => {}} />)
+
+    expect(await screen.findByLabelText('Project')).toHaveValue('shed-lab')
+    expect(screen.getByLabelText('Host')).toHaveValue('https://galileo.example.test')
+    expect(screen.getByLabelText('Log stream')).toHaveValue('bootstrap')
+    await user.clear(screen.getByLabelText('Log stream'))
+    await user.type(screen.getByLabelText('Log stream'), 'live')
+    await user.type(screen.getByLabelText('Galileo API key'), 'galileo-secret')
+    await user.click(screen.getByRole('button', { name: 'Save Galileo settings' }))
+
+    expect(setGalileoSettings).toHaveBeenCalledWith({
+      project: 'shed-lab',
+      host: 'https://galileo.example.test',
+      log_stream: 'live',
+      api_key: 'galileo-secret',
+    })
+    expect(await screen.findByText(/Galileo settings saved/)).toBeInTheDocument()
   })
 })

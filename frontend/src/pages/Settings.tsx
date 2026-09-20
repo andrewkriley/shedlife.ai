@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react'
 import { AssistantStatus } from '../components/AssistantStatus'
 import {
   getConnection,
+  getGalileoSettings,
   getLiveModels,
   getSubAgentSettings,
   notifyConnectionChanged,
+  setGalileoSettings,
   setModelAssignments,
   setProviderKey,
 } from '../lib/api'
-import type { SubAgentSetting } from '../lib/api'
+import type { GalileoSettings, SubAgentSetting } from '../lib/api'
 
 const PROVIDERS = [
   { id: 'anthropic', label: 'Anthropic' },
@@ -24,8 +26,16 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
   const [liveVendor, setLiveVendor] = useState<string | null>(null)
   const [model, setModel] = useState('')
   const [apiKey, setApiKey] = useState('')
+  const [galileo, setGalileo] = useState<GalileoSettings>({
+    project: '',
+    host: '',
+    log_stream: '',
+    api_key_set: false,
+    configured: false,
+  })
+  const [galileoKey, setGalileoKey] = useState('')
   const [status, setStatus] = useState<string | null>(null)
-  const [busy, setBusy] = useState<'apply' | 'clear' | 'key' | null>(null)
+  const [busy, setBusy] = useState<'apply' | 'clear' | 'key' | 'galileo' | null>(null)
 
   function pickModelForVendor(
     models: Record<string, string[]>,
@@ -51,8 +61,12 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
         if (agents.length === 1) setSelectedIds(new Set([agents[0].id]))
       })
       .catch(() => setStatus('Failed to load sub-agents.'))
-    Promise.all([getLiveModels(), getConnection().catch(() => null)])
-      .then(([models, connection]) => {
+    Promise.all([
+      getLiveModels(),
+      getConnection().catch(() => null),
+      getGalileoSettings().catch(() => null),
+    ])
+      .then(([models, connection, galileoSettings]) => {
         setLiveModels(models)
         const vendor = connection?.configured ? connection.provider : null
         setLiveVendor(vendor)
@@ -60,6 +74,7 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
           vendor ?? (Object.keys(models).includes('openai') ? 'openai' : Object.keys(models)[0])
         if (keyDefault) setKeyProvider(keyDefault)
         pickModelForVendor(models, vendor, connection?.model)
+        if (galileoSettings) setGalileo(galileoSettings)
       })
       .catch(() => setStatus('Failed to load live models.'))
   }, [])
@@ -122,6 +137,30 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
       setStatus('This model is now assigned to the selected assistant.')
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Failed to apply assignment.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function handleSaveGalileo() {
+    setBusy('galileo')
+    setStatus('Saving Galileo…')
+    try {
+      const saved = await setGalileoSettings({
+        project: galileo.project,
+        host: galileo.host,
+        log_stream: galileo.log_stream,
+        ...(galileoKey.trim() ? { api_key: galileoKey.trim() } : {}),
+      })
+      setGalileo(saved)
+      setGalileoKey('')
+      setStatus(
+        saved.configured
+          ? 'Galileo settings saved. The next turn will send traces.'
+          : 'Galileo settings saved. Add an API key to start sending traces.',
+      )
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Failed to save Galileo settings.')
     } finally {
       setBusy(null)
     }
@@ -257,6 +296,60 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
             disabled={selectedIds.size === 0 || busy !== null}
           >
             {busy === 'clear' ? 'Resetting…' : 'Use default model'}
+          </button>
+        </div>
+      </fieldset>
+
+      <fieldset className="group">
+        <legend>Galileo</legend>
+        <p className="hint">
+          {galileo.configured
+            ? 'Traces are sent with these settings on the next turn.'
+            : 'Optional. Save a host, project, log stream, and API key to send turn traces.'}
+        </p>
+        <div className="field-grid">
+          <div>
+            <label htmlFor="galileo-project">Project</label>
+            <input
+              id="galileo-project"
+              value={galileo.project}
+              onChange={(e) => setGalileo({ ...galileo, project: e.target.value })}
+            />
+          </div>
+          <div>
+            <label htmlFor="galileo-host">Host</label>
+            <input
+              id="galileo-host"
+              value={galileo.host}
+              onChange={(e) => setGalileo({ ...galileo, host: e.target.value })}
+              placeholder="https://console.galileo.ai"
+            />
+          </div>
+          <div>
+            <label htmlFor="galileo-log-stream">Log stream</label>
+            <input
+              id="galileo-log-stream"
+              value={galileo.log_stream}
+              onChange={(e) => setGalileo({ ...galileo, log_stream: e.target.value })}
+            />
+          </div>
+          <div>
+            <label htmlFor="galileo-key">Galileo API key</label>
+            <input
+              id="galileo-key"
+              type="password"
+              value={galileoKey}
+              onChange={(e) => setGalileoKey(e.target.value)}
+              placeholder={
+                galileo.api_key_set ? 'Key is saved. Paste a new one to replace it.' : 'Paste a Galileo API key'
+              }
+              autoComplete="off"
+            />
+          </div>
+        </div>
+        <div className="panel-actions">
+          <button type="button" onClick={() => void handleSaveGalileo()} disabled={busy !== null}>
+            {busy === 'galileo' ? 'Saving…' : 'Save Galileo settings'}
           </button>
         </div>
       </fieldset>

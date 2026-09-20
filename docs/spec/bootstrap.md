@@ -207,8 +207,13 @@ New:
   refused once an identity exists.
 
 Settings (`GET /settings/models`, `GET /settings/connection`,
-`POST /settings/provider`, model overrides) stay; they are how the
-operator changes provider after the gate. `GET /settings/connection`
+`POST /settings/provider`, model overrides, `GET`/`POST /settings/galileo`)
+stay; they are how the operator changes provider and Galileo after the
+gate. `GET /settings/galileo` returns the current project, host (console
+URL), log stream, and whether an API key is saved — never the key.
+`POST /settings/galileo` writes `local://observability/galileo_*`,
+applies `GALILEO_*` env for the SDK, and enables the tracer when a key
+is present (otherwise the no-op tracer stays). `GET /settings/connection`
 is the live vendor and the resolved model chat / verify will actually
 call for `bootstrap.intake` (or the first override). Apply / save-key
 refreshes the header immediately. The page always lists Anthropic /
