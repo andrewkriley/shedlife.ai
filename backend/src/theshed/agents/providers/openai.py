@@ -16,6 +16,20 @@ def _is_reasoning_model(model: str) -> bool:
     return model.startswith(_REASONING_PREFIXES)
 
 
+def reasoning_effort_for(model: str) -> str:
+    """Chat Completions reasoning_effort for a reasoning model.
+
+    Confirmed live against OpenAI: `gpt-5` (and `gpt-5-mini`) reject
+    `none` — only `minimal` / `low` / `medium` / `high`. `gpt-5.4` accepts
+    `none`. o-series rejects `none` and wants low/medium/high.
+    """
+    if model.startswith("gpt-5."):
+        return "none"
+    if model.startswith("gpt-5"):
+        return "minimal"
+    return "low"
+
+
 def completion_kwargs(
     *,
     model: str,
@@ -23,8 +37,7 @@ def completion_kwargs(
     tools: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Chat Completions payload. Reasoning models need
-    max_completion_tokens. GPT-5.x accepts reasoning_effort=none;
-    o-series (o4-mini, …) rejects none and wants low/medium/high."""
+    max_completion_tokens plus a reasoning_effort the named model accepts."""
     kwargs: dict[str, Any] = {
         "model": model,
         "messages": messages,
@@ -34,7 +47,7 @@ def completion_kwargs(
         kwargs["tools"] = converted
     if _is_reasoning_model(model):
         kwargs["max_completion_tokens"] = 4096
-        kwargs["reasoning_effort"] = "none" if model.startswith("gpt-5") else "low"
+        kwargs["reasoning_effort"] = reasoning_effort_for(model)
     return kwargs
 
 

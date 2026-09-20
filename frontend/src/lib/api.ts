@@ -60,21 +60,30 @@ async function* consumeSseStream(response: Response): AsyncGenerator<TurnEvent> 
 
   while (true) {
     const { value, done } = await reader.read()
-    if (done) break
-    // The server emits \r\n line endings (valid per the SSE spec — Starlette's
-    // own choice, confirmed live by inspecting the raw stream). \r\n\r\n never
-    // contains the substring \n\n, so splitting on a bare '\n\n' silently
-    // matched nothing at all: the buffer just grew forever and no event was
-    // ever parsed out, with no error anywhere — the fetch still completed
-    // normally. Normalizing line endings first is the fix.
-    buffer += value.replace(/\r\n/g, '\n')
+    if (value) {
+      // The server emits \r\n line endings (valid per the SSE spec — Starlette's
+      // own choice, confirmed live by inspecting the raw stream). \r\n\r\n never
+      // contains the substring \n\n, so splitting on a bare '\n\n' silently
+      // matched nothing at all: the buffer just grew forever and no event was
+      // ever parsed out, with no error anywhere — the fetch still completed
+      // normally. Normalizing line endings first is the fix.
+      buffer += value.replace(/\r\n/g, '\n')
 
-    const events = buffer.split('\n\n')
-    buffer = events.pop() ?? ''
+      const events = buffer.split('\n\n')
+      buffer = events.pop() ?? ''
 
-    for (const raw of events) {
-      const event = parseSseEvent(raw)
+      for (const raw of events) {
+        const event = parseSseEvent(raw)
+        if (event) yield event
+      }
+    }
+    if (done) {
+      // A stream that ends without a trailing blank line still has a valid
+      // last event in the leftover buffer. Dropping it is "send a message
+      // and nothing happens" when that last event is `error` or `done`.
+      const event = parseSseEvent(buffer)
       if (event) yield event
+      break
     }
   }
 }

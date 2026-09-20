@@ -52,6 +52,21 @@ async def _model_for(db: AsyncSession, sub_agent: SubAgent, llm: LLMClient) -> s
     return model
 
 
+def public_turn_error(exc: BaseException) -> str:
+    """SSE `error` text. Prefer a vendor `error.message` over the SDK's
+    `Error code: 400 - {full body}` dump — that dump is what the live
+    gpt-5 400 looked like, and it is too noisy to show in chat."""
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error")
+        if isinstance(err, dict):
+            vendor_message = err.get("message")
+            if isinstance(vendor_message, str) and vendor_message.strip():
+                return f"The assistant could not answer: {vendor_message.strip()}"
+    text = str(exc).strip() or type(exc).__name__
+    return f"The assistant could not answer: {text}"
+
+
 def _sse(event_type: str, data: dict[str, Any]) -> dict[str, str]:
     """`sse-starlette`'s `EventSourceResponse` does its own wire-formatting
     from a dict — it must not be handed an already-formatted SSE string, or
@@ -305,7 +320,7 @@ async def stream_turn(
             level="error",
             detail={"type": type(exc).__name__},
         )
-        yield _sse("error", {"message": f"The assistant could not answer: {exc}"})
+        yield _sse("error", {"message": public_turn_error(exc)})
 
 
 async def resume_turn(

@@ -15,7 +15,7 @@ from theshed.db.session import get_session
 from theshed.debug import log as debug_log
 from theshed.main import app
 from theshed.observability.galileo import TurnTracer
-from theshed.turns.service import stream_turn, verify_turn
+from theshed.turns.service import public_turn_error, stream_turn, verify_turn
 
 
 @dataclass
@@ -188,6 +188,32 @@ class TestVerifyTurnRoute:
         response = await client.post(f"/turns/{uuid4()}/verify")
 
         assert response.status_code == 404
+
+
+def test_public_turn_error_prefers_vendor_message() -> None:
+    class VendorError(RuntimeError):
+        def __init__(self) -> None:
+            super().__init__("Error code: 400 - buried dump")
+            self.body = {
+                "error": {
+                    "message": (
+                        "Unsupported value: 'reasoning_effort' does not support "
+                        "'none' with this model."
+                    ),
+                    "type": "invalid_request_error",
+                }
+            }
+
+    assert public_turn_error(VendorError()) == (
+        "The assistant could not answer: Unsupported value: 'reasoning_effort' "
+        "does not support 'none' with this model."
+    )
+
+
+def test_public_turn_error_falls_back_to_str() -> None:
+    assert public_turn_error(RuntimeError("timeout")) == (
+        "The assistant could not answer: timeout"
+    )
 
 
 @pytest.mark.asyncio
