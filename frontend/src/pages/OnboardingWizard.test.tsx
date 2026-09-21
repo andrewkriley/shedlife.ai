@@ -7,7 +7,7 @@ import * as api from '../lib/api'
 const emptyStatus: api.OnboardingStatus = {
   needed: true,
   tenant: { name: '', slug: '' },
-  proxmox: { host: '', node: '', api_token_set: false },
+  proxmox: { host: '', node: '', api_token_id: '', api_token_set: false },
   network: { bridge: '' },
   storage: { pool: '' },
   provider: { vendor: null, api_key_set: false },
@@ -31,6 +31,7 @@ describe('OnboardingWizard', () => {
       proxmox: {
         host: body.host || '192.0.2.10',
         node: 'pve',
+        api_token_id: body.api_token_id || '',
         api_token_set: Boolean(body.discover || body.api_token_id),
       },
       network: { bridge: 'vmbr0' },
@@ -45,14 +46,14 @@ describe('OnboardingWizard', () => {
       ...emptyStatus,
       needed: false,
       tenant: { name: 'Riley Lab', slug: 'riley-lab' },
-      proxmox: { host: '192.0.2.10', node: 'pve', api_token_set: true },
+      proxmox: { host: '192.0.2.10', node: 'pve', api_token_id: 'root@pam!shed', api_token_set: true },
       provider: { vendor: 'anthropic', api_key_set: true },
     })
     vi.spyOn(api, 'postOnboardingIntent').mockResolvedValue({
       ...emptyStatus,
       needed: false,
       tenant: { name: 'Riley Lab', slug: 'riley-lab' },
-      proxmox: { host: '192.0.2.10', node: 'pve', api_token_set: true },
+      proxmox: { host: '192.0.2.10', node: 'pve', api_token_id: 'root@pam!shed', api_token_set: true },
       provider: { vendor: 'anthropic', api_key_set: true },
       intent: { mode: 'build', services: emptyStatus.intent.services },
     })
@@ -111,10 +112,16 @@ describe('OnboardingWizard', () => {
       ...emptyStatus,
       needed: false,
       tenant: { name: 'Riley Lab', slug: 'riley-lab' },
-      proxmox: { host: '192.0.2.10', node: 'pve', api_token_set: true },
+      proxmox: { host: '192.0.2.10', node: 'pve', api_token_id: 'root@pam!shed', api_token_set: true },
       provider: { vendor: 'openai', api_key_set: true },
     })
     render(<OnboardingWizard onFinished={() => {}} />)
     expect(await screen.findByLabelText('Proxmox IP or API URL')).toHaveValue('192.0.2.10')
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Continue' }))
+    expect(await screen.findByLabelText('Proxmox Token ID')).toHaveValue('root@pam!shed')
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Continue' }))
+    expect(await screen.findByLabelText('Proxmox Token Secret')).toBeInTheDocument()
+    expect(screen.getByText('Token ID: root@pam!shed')).toBeInTheDocument()
+    expect(screen.getByText(/Token secret is saved/)).toBeInTheDocument()
   })
 })

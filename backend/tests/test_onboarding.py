@@ -16,6 +16,7 @@ from theshed.onboarding.service import (
     discovered_defaults,
     intent_from_choice,
     onboarding_needed,
+    present_status,
     save_provider,
     save_proxmox_token,
     summary_ok,
@@ -105,6 +106,18 @@ def test_onboarding_needed_until_minimum_facts_exist() -> None:
     doc["proxmox"]["host"] = "192.0.2.10"
     doc["proxmox"]["api_token_ref"] = PROXMOX_API_TOKEN_REF
     assert onboarding_needed(doc, secrets) is False
+
+
+def test_present_status_shows_token_id_not_the_secret() -> None:
+    secrets = LocalSecretsClient()
+    secrets.set(PROXMOX_API_TOKEN_REF, "root@pam!shed=secret-token")
+    doc = empty_foundations()
+    doc["proxmox"]["host"] = "192.0.2.10"
+    doc["proxmox"]["api_token_ref"] = PROXMOX_API_TOKEN_REF
+    status = present_status(doc, secrets)
+    assert status["proxmox"]["api_token_id"] == "root@pam!shed"
+    assert status["proxmox"]["api_token_set"] is True
+    assert "secret-token" not in str(status)
 
 
 def test_intent_build_writes_all_build() -> None:

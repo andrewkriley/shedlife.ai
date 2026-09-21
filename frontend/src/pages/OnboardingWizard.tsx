@@ -29,8 +29,25 @@ const STEPS = [
   'Summary',
 ] as const
 
-function stepError(err: unknown): string {
-  return err instanceof Error ? err.message : 'That step failed'
+function mergeStatus(
+  prev: OnboardingStatus | null,
+  next: OnboardingStatus,
+): OnboardingStatus {
+  return {
+    ...prev,
+    ...next,
+    proxmox: {
+      ...prev?.proxmox,
+      ...next.proxmox,
+      api_token_id: next.proxmox.api_token_id || prev?.proxmox.api_token_id || '',
+      api_token_set: Boolean(next.proxmox.api_token_set || prev?.proxmox.api_token_set),
+    },
+    provider: {
+      ...prev?.provider,
+      ...next.provider,
+      api_key_set: Boolean(next.provider?.api_key_set || prev?.provider.api_key_set),
+    },
+  }
 }
 
 export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
@@ -59,6 +76,7 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
       .then((current) => {
         setStatus(current)
         setHost(current.proxmox.host)
+        setTokenId(current.proxmox.api_token_id || '')
         setTenantName(current.tenant.name)
         setTenantSlug(current.tenant.slug)
         if (current.provider.vendor) setProvider(current.provider.vendor)
@@ -77,17 +95,25 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
     try {
       if (step === 0) {
         const next = await postOnboardingProxmox({ host })
-        setStatus(next)
+        setStatus((prev) => mergeStatus(prev, next))
         notifyFoundationsChanged()
       } else if (step === 2) {
-        const next = await postOnboardingProxmox({
-          api_token_id: tokenId,
-          api_token_secret: tokenSecret,
-          discover: true,
-        })
-        setStatus(next)
+        if (!tokenSecret.trim() && !status?.proxmox.api_token_set) {
+          throw new Error('Proxmox Token Secret is required')
+        }
+        const replacing = Boolean(tokenSecret.trim())
+        const next = await postOnboardingProxmox(
+          replacing
+            ? {
+                api_token_id: tokenId,
+                api_token_secret: tokenSecret,
+                discover: true,
+              }
+            : { discover: true },
+        )
+        setStatus((prev) => mergeStatus(prev, next))
         setDiscovery(next.discovery ?? null)
-        setTokenId('')
+        setTokenId(next.proxmox.api_token_id || tokenId)
         setTokenSecret('')
         notifyFoundationsChanged()
       } else if (step === 3) {
@@ -175,18 +201,20 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
             value={tokenId}
             onChange={(e) => setTokenId(e.target.value)}
             title={FOUNDATION_HINTS['proxmox.api_token_id']}
-            placeholder={
-              status?.proxmox.api_token_set
-                ? 'Token is saved. Paste a new ID to replace it, or continue.'
-                : 'USER@REALM!tokenid'
-            }
+            placeholder="USER@REALM!tokenid"
             autoComplete="off"
           />
+          {status?.proxmox.api_token_set && tokenId ? (
+            <p className="hint">Saved Token ID. Continue to confirm the secret, or paste a new ID.</p>
+          ) : null}
         </div>
       )}
 
       {step === 2 && (
         <div>
+          <p className="hint">
+            Token ID: {tokenId || status?.proxmox.api_token_id || 'not set'}
+          </p>
           <label htmlFor="onboard-token-secret" title={FOUNDATION_HINTS['proxmox.api_token_secret']}>
             Proxmox Token Secret
           </label>
@@ -196,13 +224,15 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
             value={tokenSecret}
             onChange={(e) => setTokenSecret(e.target.value)}
             title={FOUNDATION_HINTS['proxmox.api_token_secret']}
-            placeholder={
-              status?.proxmox.api_token_set
-                ? 'Secret is saved. Paste a new one to replace it, or continue.'
-                : 'Token secret'
-            }
+            placeholder="Token secret"
             autoComplete="off"
           />
+          {status?.proxmox.api_token_set ? (
+            <p className="hint">
+              Token secret is saved. Leave this blank to keep it, or paste a new secret to
+              replace it.
+            </p>
+          ) : null}
         </div>
       )}
 

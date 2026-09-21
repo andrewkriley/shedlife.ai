@@ -141,7 +141,9 @@ After login, a step-through wizard collects the minimum the operator must
 type, validates each step, discovers the rest from the Proxmox API, and
 ends on a pass / warn / fail summary. First login opens it when those
 facts are missing. **Onboarding** in the header re-runs it any time
-(existing values pre-fill; secrets stay blank placeholders). Chat, debug,
+(existing values pre-fill, including the Proxmox Token ID; the Token
+Secret stays a blank field with a visible “saved” status — GET never
+returns the secret value). Chat, debug,
 the assistant status, Settings, and Foundations stay in the chrome.
 
 Steps, in order:

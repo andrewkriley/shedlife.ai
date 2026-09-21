@@ -101,9 +101,11 @@ async def test_put_get_validate_and_export(
     assert "local://proxmox/api_token" in yaml_text
     stored = await client.get("/foundations")
     assert stored.json()["proxmox"]["api_token_set"] is True
+    assert stored.json()["proxmox"]["api_token_id"] == "root@pam!shed"
     assert "api_token" not in stored.json()["proxmox"] or stored.json()["proxmox"].get(
         "api_token"
     ) in {None, ""}
+    assert stored.json()["proxmox"].get("api_token_secret") in {None, ""}
 
 
 @pytest.mark.asyncio

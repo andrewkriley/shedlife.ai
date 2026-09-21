@@ -63,7 +63,8 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    validates before the next. Host discovery fills empty node / bridge /
    pool. The last screen is a probe summary. Completing writes
    foundations + secrets. Header **Onboarding** re-runs the wizard
-   (pre-filled; secrets stay placeholders). Writes
+   (pre-filled, including Token ID; the secret stays a blank field with a
+   visible “saved” status). Writes
    `local://providers/llm/api_key` and `local://proxmox/api_token`.
    Settings still changes the provider key later.
 5. Chat UI loads in a single-window shell (header + chat + tabbed review
@@ -179,7 +180,9 @@ Secret** fields with hover descriptions on every schema field. Saving
 joins them as `USER@REALM!tokenid=secret` into `local://proxmox/api_token`
 and leaves only the ref on the schema. `foundations_write` does the
 same if the assistant is handed `proxmox.api_token` (combined) or the
-two parts. GET never returns the raw token — only `api_token_set`.
+two parts. GET returns the Token ID (`USER@REALM!tokenid`) and
+`api_token_set`; it never returns the secret or the combined `id=secret`
+value.
 `proxmox_api` authenticates with `PVEAPIToken=`.
 
 ### Sub-agent registry (bootstrap profile seed)

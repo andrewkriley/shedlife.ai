@@ -74,7 +74,12 @@ describe('FoundationsPanel', () => {
     vi.spyOn(api, 'getFoundations').mockResolvedValue(baseDoc)
     const putFoundations = vi.spyOn(api, 'putFoundations').mockResolvedValue({
       ...baseDoc,
-      proxmox: { ...baseDoc.proxmox, api_token_ref: 'local://proxmox/api_token', api_token_set: true },
+      proxmox: {
+        ...baseDoc.proxmox,
+        api_token_ref: 'local://proxmox/api_token',
+        api_token_id: 'root@pam!shed',
+        api_token_set: true,
+      },
     })
 
     const user = userEvent.setup()
@@ -90,5 +95,7 @@ describe('FoundationsPanel', () => {
     expect(saved.proxmox.api_token_secret).toBe('secret-token')
     expect(saved.proxmox.api_token).toBeUndefined()
     expect(await screen.findByPlaceholderText(/Paste a new ID/)).toBeInTheDocument()
+    expect(screen.getByText(/Saved Token ID: root@pam!shed/)).toBeInTheDocument()
+    expect(screen.getByText(/Token secret is saved/)).toBeInTheDocument()
   })
 })

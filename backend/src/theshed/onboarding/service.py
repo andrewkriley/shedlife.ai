@@ -314,6 +314,7 @@ def present_status(document: dict[str, Any], secrets: Any) -> dict[str, Any]:
         "proxmox": {
             "host": proxmox.get("host") or "",
             "node": proxmox.get("node") or "",
+            "api_token_id": proxmox.get("api_token_id") or "",
             "api_token_set": bool(proxmox.get("api_token_set")),
         },
         "network": {

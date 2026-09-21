@@ -114,6 +114,7 @@ async def test_wizard_steps_and_summary(client: AsyncClient, authed: dict[str, s
     assert token.status_code == 200, token.text
     body = token.json()
     assert body["proxmox"]["api_token_set"] is True
+    assert body["proxmox"]["api_token_id"] == "root@pam!shed"
     assert body["discovery"]["nodes"] == ["pve"]
     assert body["network"]["bridge"] == "vmbr0"
     assert "secret-token" not in token.text
@@ -147,6 +148,12 @@ async def test_wizard_steps_and_summary(client: AsyncClient, authed: dict[str, s
     assert "tenant" in ids
     assert "proxmox_api" in ids
     assert "llm_key" in ids
+    assert "proxmox_token_id" in ids
+    assert "proxmox_token_secret" in ids
+    by_id = {item["id"]: item for item in summary["checks"]}
+    assert by_id["proxmox_token_id"]["detail"] == "root@pam!shed"
+    assert by_id["proxmox_token_secret"]["detail"] == "saved"
+    assert "secret-token" not in done.text
 
 
 @pytest.mark.asyncio

@@ -361,7 +361,7 @@ export async function runProbe(probeId: string): Promise<{ status: string; detai
 export interface OnboardingStatus {
   needed: boolean
   tenant: { name: string; slug: string }
-  proxmox: { host: string; node: string; api_token_set: boolean }
+  proxmox: { host: string; node: string; api_token_id?: string; api_token_set: boolean }
   network: { bridge: string }
   storage: { pool: string }
   provider: { vendor: string | null; api_key_set: boolean }

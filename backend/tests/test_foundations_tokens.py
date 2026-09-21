@@ -5,6 +5,7 @@ from theshed.foundations.tokens import (
     IncompleteProxmoxToken,
     persist_proxmox_api_token,
     present_foundations,
+    public_proxmox_token_id,
     take_proxmox_api_token,
 )
 from theshed.secrets.client import LocalSecretsClient
@@ -38,6 +39,12 @@ def test_take_rejects_a_token_id_without_the_secret() -> None:
     assert "proxmox.api_token_secret" in caught.value.errors
 
 
+def test_public_token_id_never_returns_the_secret() -> None:
+    assert public_proxmox_token_id("root@pam!shed=secret-token") == "root@pam!shed"
+    assert public_proxmox_token_id("just-a-secret") == ""
+    assert public_proxmox_token_id("") == ""
+
+
 def test_persist_and_present_never_echo_the_token() -> None:
     secrets = LocalSecretsClient()
     doc = empty_foundations()
@@ -50,7 +57,7 @@ def test_persist_and_present_never_echo_the_token() -> None:
 
     presented = present_foundations(stored, secrets)
     assert presented["proxmox"]["api_token_set"] is True
+    assert presented["proxmox"]["api_token_id"] == "root@pam!shed"
     assert "api_token" not in presented["proxmox"]
-    assert "api_token_id" not in presented["proxmox"]
     assert "api_token_secret" not in presented["proxmox"]
     assert "secret-token" not in str(presented)

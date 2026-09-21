@@ -254,14 +254,17 @@ export function FoundationsPanel() {
                 <HintedLabel htmlFor="proxmox-token-id" hint={FOUNDATION_HINTS['proxmox.api_token_id']}>
                   Proxmox Token ID
                 </HintedLabel>
+                {doc.proxmox.api_token_id ? (
+                  <p className="hint">Saved Token ID: {doc.proxmox.api_token_id}</p>
+                ) : null}
                 <HintedInput
                   id="proxmox-token-id"
                   hint={FOUNDATION_HINTS['proxmox.api_token_id']}
                   value={tokenId}
                   onChange={(e) => setTokenId(e.target.value)}
                   placeholder={
-                    doc.proxmox.api_token_set
-                      ? 'Token is saved. Paste a new ID to replace it.'
+                    doc.proxmox.api_token_id
+                      ? 'Paste a new ID to replace it'
                       : 'USER@REALM!tokenid'
                   }
                   autoComplete="off"
@@ -277,6 +280,9 @@ export function FoundationsPanel() {
                 >
                   Proxmox Token Secret
                 </HintedLabel>
+                {doc.proxmox.api_token_set ? (
+                  <p className="hint">Token secret is saved. It is never shown again.</p>
+                ) : null}
                 <HintedInput
                   id="proxmox-token-secret"
                   hint={FOUNDATION_HINTS['proxmox.api_token_secret']}
@@ -285,7 +291,7 @@ export function FoundationsPanel() {
                   onChange={(e) => setTokenSecret(e.target.value)}
                   placeholder={
                     doc.proxmox.api_token_set
-                      ? 'Secret is saved. Paste a new one to replace it.'
+                      ? 'Paste a new secret to replace it'
                       : 'token secret'
                   }
                   autoComplete="off"
@@ -296,7 +302,7 @@ export function FoundationsPanel() {
               </div>
             </div>
             {doc.proxmox.api_token_set && !tokenId && !tokenSecret && (
-              <p className="hint">A token is saved. Leave both blank to keep it.</p>
+              <p className="hint">Leave both fields blank to keep the saved token.</p>
             )}
             {errors['proxmox.api_token'] && <p className="field-error">{errors['proxmox.api_token']}</p>}
             {doc.proxmox.ssh_key_fingerprint && (

@@ -22,6 +22,14 @@ class IncompleteProxmoxToken(ValueError):
         self.errors = errors
 
 
+def public_proxmox_token_id(token: str | None) -> str:
+    """Return the Token ID half of `id=secret`. Empty when the value is missing."""
+    raw = (token or "").strip()
+    if "=" not in raw:
+        return ""
+    return raw.split("=", 1)[0].strip()
+
+
 def assemble_proxmox_api_token(
     *,
     api_token: str | None = None,
@@ -78,16 +86,23 @@ def persist_proxmox_api_token(document: dict[str, Any], secrets: Any) -> dict[st
 
 
 def present_foundations(document: dict[str, Any], secrets: Any = None) -> dict[str, Any]:
-    """GET/tool-read shape: never include the raw token."""
+    """GET/tool-read shape: Token ID is visible; the secret never is."""
     presented, _token = take_proxmox_api_token(document)
     proxmox = dict(presented.get("proxmox") or {})
     ref = (proxmox.get("api_token_ref") or "").strip()
-    saved = False
+    saved_value = ""
     if ref and secrets is not None:
         try:
-            saved = bool(secrets.get(ref))
+            got = secrets.get(ref)
+            saved_value = got.strip() if isinstance(got, str) else ""
         except SecretNotFoundError:
-            saved = False
-    proxmox["api_token_set"] = saved
+            saved_value = ""
+    proxmox["api_token_set"] = bool(saved_value)
+    token_id = public_proxmox_token_id(saved_value)
+    if token_id:
+        proxmox["api_token_id"] = token_id
+    else:
+        proxmox.pop("api_token_id", None)
+    proxmox.pop("api_token_secret", None)
     presented["proxmox"] = proxmox
     return presented

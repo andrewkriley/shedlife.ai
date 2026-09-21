@@ -266,6 +266,24 @@ async def post_complete(
             },
             *checks,
         ]
+    status_body = present_status(doc, secrets)
+    token_id = (status_body.get("proxmox") or {}).get("api_token_id") or ""
+    token_set = bool((status_body.get("proxmox") or {}).get("api_token_set"))
+    checks = [
+        {
+            "id": "proxmox_token_id",
+            "label": "Proxmox Token ID",
+            "status": "pass" if token_id else "fail",
+            "detail": token_id or "missing",
+        },
+        {
+            "id": "proxmox_token_secret",
+            "label": "Proxmox Token Secret",
+            "status": "pass" if token_set else "fail",
+            "detail": "saved" if token_set else "missing",
+        },
+        *checks,
+    ]
     await db.commit()
     return {
         "ok": summary_ok(checks),
