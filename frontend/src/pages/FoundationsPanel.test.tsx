@@ -70,6 +70,61 @@ describe('FoundationsPanel', () => {
     expect(saved.tenant.slug).toBe('riley-lab')
   })
 
+  it('shows the saved Proxmox Token ID in the field', async () => {
+    vi.spyOn(api, 'getFoundations').mockResolvedValue({
+      ...baseDoc,
+      proxmox: {
+        ...baseDoc.proxmox,
+        api_token_ref: 'local://proxmox/api_token',
+        api_token_id: 'root@pam!shed',
+        api_token_set: true,
+      },
+    })
+
+    render(<FoundationsPanel />)
+
+    expect(await screen.findByLabelText('Proxmox Token ID')).toHaveValue('root@pam!shed')
+    expect(screen.getByLabelText('Proxmox Token ID')).not.toHaveAttribute('type', 'password')
+    expect(screen.getByLabelText('Proxmox Token Secret')).toHaveValue('')
+    expect(screen.getByText(/Token secret is saved/)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Proxmox API token')).not.toBeInTheDocument()
+    expect(screen.queryByPlaceholderText(/Token is saved. Paste a new one/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/A token is saved. Leave blank/)).not.toBeInTheDocument()
+  })
+
+  it('does not resend the token when the visible Token ID is unchanged', async () => {
+    vi.spyOn(api, 'getFoundations').mockResolvedValue({
+      ...baseDoc,
+      proxmox: {
+        ...baseDoc.proxmox,
+        api_token_ref: 'local://proxmox/api_token',
+        api_token_id: 'root@pam!shed',
+        api_token_set: true,
+      },
+    })
+    const putFoundations = vi.spyOn(api, 'putFoundations').mockResolvedValue({
+      ...baseDoc,
+      proxmox: {
+        ...baseDoc.proxmox,
+        api_token_ref: 'local://proxmox/api_token',
+        api_token_id: 'root@pam!shed',
+        api_token_set: true,
+      },
+    })
+
+    const user = userEvent.setup()
+    render(<FoundationsPanel />)
+    expect(await screen.findByLabelText('Proxmox Token ID')).toHaveValue('root@pam!shed')
+    await user.click(screen.getByRole('button', { name: 'Save schema' }))
+
+    expect(putFoundations).toHaveBeenCalled()
+    const saved = putFoundations.mock.calls[0][0]
+    expect(saved.proxmox.api_token_id).toBeUndefined()
+    expect(saved.proxmox.api_token_secret).toBeUndefined()
+    expect(saved.proxmox.api_token).toBeUndefined()
+    expect(await screen.findByLabelText('Proxmox Token ID')).toHaveValue('root@pam!shed')
+  })
+
   it('saves a proxmox API token from the foundations field', async () => {
     vi.spyOn(api, 'getFoundations').mockResolvedValue(baseDoc)
     const putFoundations = vi.spyOn(api, 'putFoundations').mockResolvedValue({
@@ -94,8 +149,7 @@ describe('FoundationsPanel', () => {
     expect(saved.proxmox.api_token_id).toBe('root@pam!shed')
     expect(saved.proxmox.api_token_secret).toBe('secret-token')
     expect(saved.proxmox.api_token).toBeUndefined()
-    expect(await screen.findByPlaceholderText(/Paste a new ID/)).toBeInTheDocument()
-    expect(screen.getByText(/Saved Token ID: root@pam!shed/)).toBeInTheDocument()
+    expect(await screen.findByLabelText('Proxmox Token ID')).toHaveValue('root@pam!shed')
     expect(screen.getByText(/Token secret is saved/)).toBeInTheDocument()
   })
 })

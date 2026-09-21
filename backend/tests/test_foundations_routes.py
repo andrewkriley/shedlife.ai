@@ -107,6 +107,13 @@ async def test_put_get_validate_and_export(
     ) in {None, ""}
     assert stored.json()["proxmox"].get("api_token_secret") in {None, ""}
 
+    round_trip = await client.put(
+        "/foundations", json={"document": stored.json()}, headers=authed
+    )
+    assert round_trip.status_code == 200
+    assert round_trip.json()["proxmox"]["api_token_id"] == "root@pam!shed"
+    assert round_trip.json()["proxmox"]["api_token_set"] is True
+
 
 @pytest.mark.asyncio
 async def test_validate_failures_are_not_issues(

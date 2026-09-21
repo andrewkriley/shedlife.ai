@@ -17,6 +17,7 @@ def test_take_proxmox_api_token_strips_the_raw_value() -> None:
     cleaned, token = take_proxmox_api_token(doc)
     assert token == "root@pam!shed=secret-token"
     assert "api_token" not in cleaned["proxmox"]
+    assert cleaned["proxmox"]["api_token_id"] == "root@pam!shed"
     assert cleaned["proxmox"]["api_token_ref"] == PROXMOX_API_TOKEN_REF
 
 
@@ -26,8 +27,18 @@ def test_take_combines_token_id_and_secret() -> None:
     doc["proxmox"]["api_token_secret"] = "secret-token"
     cleaned, token = take_proxmox_api_token(doc)
     assert token == "root@pam!shed=secret-token"
-    assert "api_token_id" not in cleaned["proxmox"]
+    assert cleaned["proxmox"]["api_token_id"] == "root@pam!shed"
     assert "api_token_secret" not in cleaned["proxmox"]
+    assert cleaned["proxmox"]["api_token_ref"] == PROXMOX_API_TOKEN_REF
+
+
+def test_take_keeps_a_presented_token_id_without_replacing() -> None:
+    doc = empty_foundations()
+    doc["proxmox"]["api_token_ref"] = PROXMOX_API_TOKEN_REF
+    doc["proxmox"]["api_token_id"] = "root@pam!shed"
+    cleaned, token = take_proxmox_api_token(doc)
+    assert token is None
+    assert cleaned["proxmox"]["api_token_id"] == "root@pam!shed"
     assert cleaned["proxmox"]["api_token_ref"] == PROXMOX_API_TOKEN_REF
 
 
