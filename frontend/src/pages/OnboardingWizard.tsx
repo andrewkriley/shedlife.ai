@@ -5,6 +5,7 @@ import {
   notifyFoundationsChanged,
   postOnboardingComplete,
   postOnboardingIntent,
+  postOnboardingNetwork,
   postOnboardingProvider,
   postOnboardingProxmox,
   postOnboardingTenant,
@@ -23,11 +24,18 @@ const STEPS = [
   'Proxmox host',
   'Token ID',
   'Token Secret',
+  'Network & storage',
   'AI provider',
   'Tenant',
   'Install mode',
   'Summary',
 ] as const
+
+function optionList(discovered: string[] | undefined, current: string): string[] {
+  const items = [...(discovered ?? [])]
+  if (current && !items.includes(current)) items.push(current)
+  return items
+}
 
 function stepError(err: unknown): string {
   return err instanceof Error ? err.message : 'Onboarding step failed'
@@ -51,6 +59,15 @@ function mergeStatus(
       ...next.provider,
       api_key_set: Boolean(next.provider?.api_key_set || prev?.provider.api_key_set),
     },
+    network: {
+      ...prev?.network,
+      ...next.network,
+    },
+    storage: {
+      ...prev?.storage,
+      ...next.storage,
+    },
+    discovery: next.discovery ?? prev?.discovery ?? null,
   }
 }
 
@@ -60,6 +77,10 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
   const [host, setHost] = useState('')
   const [tokenId, setTokenId] = useState('')
   const [tokenSecret, setTokenSecret] = useState('')
+  const [bridge, setBridge] = useState('')
+  const [address, setAddress] = useState('')
+  const [gateway, setGateway] = useState('')
+  const [pool, setPool] = useState('')
   const [provider, setProvider] = useState('anthropic')
   const [apiKey, setApiKey] = useState('')
   const [tenantName, setTenantName] = useState('')
@@ -81,6 +102,10 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
         setStatus(current)
         setHost(current.proxmox.host)
         setTokenId(current.proxmox.api_token_id || '')
+        setBridge(current.network.bridge)
+        setAddress(current.network.address || '')
+        setGateway(current.network.gateway || '')
+        setPool(current.storage.pool)
         setTenantName(current.tenant.name)
         setTenantSlug(current.tenant.slug)
         if (current.provider.vendor) setProvider(current.provider.vendor)
@@ -119,19 +144,27 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
         setDiscovery(next.discovery ?? null)
         setTokenId(next.proxmox.api_token_id || tokenId)
         setTokenSecret('')
+        setBridge(next.network.bridge || next.discovery?.bridges?.[0] || bridge)
+        setAddress(next.network.address || next.discovery?.address || address)
+        setGateway(next.network.gateway || next.discovery?.gateway || gateway)
+        setPool(next.storage.pool || next.discovery?.pools?.[0] || pool)
         notifyFoundationsChanged()
       } else if (step === 3) {
+        const next = await postOnboardingNetwork({ bridge, address, gateway, pool })
+        setStatus((prev) => mergeStatus(prev, next))
+        notifyFoundationsChanged()
+      } else if (step === 4) {
         const saved = await postOnboardingProvider({ provider, api_key: apiKey })
         setStatus((prev) =>
           prev ? { ...prev, provider: saved.provider } : prev,
         )
         setApiKey('')
         notifyConnectionChanged()
-      } else if (step === 4) {
+      } else if (step === 5) {
         const next = await postOnboardingTenant({ name: tenantName, slug: tenantSlug })
         setStatus(next)
         notifyFoundationsChanged()
-      } else if (step === 5) {
+      } else if (step === 6) {
         const next = await postOnboardingIntent({
           mode: intentMode,
           gitlab_url: gitlabUrl,
@@ -158,7 +191,7 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
   const last = step === STEPS.length - 1
   const nextLabel = busy
     ? 'Working…'
-    : step === 5
+    : step === 6
       ? 'Validate'
       : last
         ? 'Finish'
@@ -242,6 +275,95 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
 
       {step === 3 && (
         <div>
+          <p className="hint">
+            Discovered from the Proxmox host. Change the bridge or storage if
+            the default is wrong.
+          </p>
+          <label htmlFor="onboard-bridge" title={FOUNDATION_HINTS['network.bridge']}>
+            Bridge
+          </label>
+          {optionList(discovery?.bridges, bridge).length ? (
+            <select
+              id="onboard-bridge"
+              value={bridge}
+              title={FOUNDATION_HINTS['network.bridge']}
+              onChange={(e) => {
+                const nextBridge = e.target.value
+                setBridge(nextBridge)
+                const net = discovery?.networks?.[nextBridge]
+                if (net?.address) setAddress(net.address)
+                if (net?.gateway) setGateway(net.gateway)
+              }}
+            >
+              {optionList(discovery?.bridges, bridge).map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id="onboard-bridge"
+              value={bridge}
+              onChange={(e) => setBridge(e.target.value)}
+              title={FOUNDATION_HINTS['network.bridge']}
+              placeholder="vmbr0"
+              autoComplete="off"
+            />
+          )}
+          <label htmlFor="onboard-address" title={FOUNDATION_HINTS['network.address']}>
+            CIDR
+          </label>
+          <input
+            id="onboard-address"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            title={FOUNDATION_HINTS['network.address']}
+            placeholder="192.0.2.10/24"
+            autoComplete="off"
+          />
+          <label htmlFor="onboard-gateway" title={FOUNDATION_HINTS['network.gateway']}>
+            Gateway
+          </label>
+          <input
+            id="onboard-gateway"
+            value={gateway}
+            onChange={(e) => setGateway(e.target.value)}
+            title={FOUNDATION_HINTS['network.gateway']}
+            placeholder="192.0.2.1"
+            autoComplete="off"
+          />
+          <label htmlFor="onboard-pool" title={FOUNDATION_HINTS['storage.pool']}>
+            Storage
+          </label>
+          {optionList(discovery?.pools, pool).length ? (
+            <select
+              id="onboard-pool"
+              value={pool}
+              title={FOUNDATION_HINTS['storage.pool']}
+              onChange={(e) => setPool(e.target.value)}
+            >
+              {optionList(discovery?.pools, pool).map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id="onboard-pool"
+              value={pool}
+              onChange={(e) => setPool(e.target.value)}
+              title={FOUNDATION_HINTS['storage.pool']}
+              placeholder="local-lvm"
+              autoComplete="off"
+            />
+          )}
+        </div>
+      )}
+
+      {step === 4 && (
+        <div>
           <label htmlFor="onboard-provider">Provider</label>
           <select
             id="onboard-provider"
@@ -270,7 +392,7 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
         </div>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <div>
           <label htmlFor="onboard-name" title={FOUNDATION_HINTS['tenant.name']}>
             Tenant name
@@ -293,7 +415,7 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
         </div>
       )}
 
-      {step === 5 && (
+      {step === 6 && (
         <fieldset className="group">
           <legend>Install mode</legend>
           <label>
@@ -334,13 +456,15 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
         </fieldset>
       )}
 
-      {step === 6 && (
+      {step === 7 && (
         <div>
           <h3>{summaryOk ? 'Ready' : 'Check these results'}</h3>
           {discovery && (
             <p className="hint">
               Discovered {discovery.nodes.join(', ') || 'no nodes'}; bridges{' '}
-              {discovery.bridges.join(', ') || 'none'}; pools {discovery.pools.join(', ') || 'none'}.
+              {discovery.bridges.join(', ') || 'none'}; pools {discovery.pools.join(', ') || 'none'}
+              {discovery.address ? `; CIDR ${discovery.address}` : ''}
+              {discovery.gateway ? `; gateway ${discovery.gateway}` : ''}.
             </p>
           )}
           <ul className="wizard__checks" aria-label="onboarding summary">
@@ -357,7 +481,7 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
       {error && <p role="alert">{error}</p>}
 
       <div className="panel-actions">
-        {step > 0 && step < 6 && (
+        {step > 0 && step < 7 && (
           <button
             type="button"
             className="button-secondary"

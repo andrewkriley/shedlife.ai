@@ -17,6 +17,7 @@ from theshed.onboarding.service import (
     apply_tenant,
     bind_probe_host,
     check_host_reachable,
+    apply_network,
     discover_and_fill,
     has_llm_key,
     intent_from_choice,
@@ -39,6 +40,13 @@ class ProxmoxStep(BaseModel):
     api_token_secret: str | None = None
     api_token: str | None = None
     discover: bool = False
+
+
+class NetworkStep(BaseModel):
+    bridge: str = ""
+    address: str = ""
+    gateway: str = ""
+    pool: str = ""
 
 
 class ProviderStep(BaseModel):
@@ -150,6 +158,9 @@ async def post_proxmox_step(
                     "nodes": facts.get("nodes") or [],
                     "bridges": facts.get("bridges") or [],
                     "pools": facts.get("pools") or [],
+                    "networks": facts.get("networks") or {},
+                    "address": facts.get("address") or "",
+                    "gateway": facts.get("gateway") or "",
                 }
                 request.app.state.proxmox_facts = facts
                 doc = await save_foundations(db, doc)
@@ -160,6 +171,30 @@ async def post_proxmox_step(
     body_out["discovery"] = discovery
     body_out["probe"] = probe
     return body_out
+
+
+@router.post("/network", dependencies=[Depends(require_csrf)])
+async def post_network_step(
+    body: NetworkStep,
+    request: Request,
+    db: AsyncSession = Depends(get_session),
+    _user_id: str = Depends(get_current_user_id),
+) -> dict[str, Any]:
+    secrets = getattr(request.app.state, "secrets", None)
+    doc = await load_foundations(db)
+    try:
+        doc = apply_network(
+            doc,
+            bridge=body.bridge,
+            address=body.address,
+            gateway=body.gateway,
+            pool=body.pool,
+        )
+    except _STEP_ERRORS as exc:
+        _raise_step(exc)
+    saved = await save_foundations(db, doc)
+    await db.commit()
+    return present_status(saved, secrets)
 
 
 @router.post("/provider", dependencies=[Depends(require_csrf)])

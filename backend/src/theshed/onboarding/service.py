@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 from typing import Any
 
 from theshed.bootstrap.proxmox import fetch_proxmox_inventory, probe_proxmox_reachable
@@ -108,7 +109,7 @@ def intent_from_choice(mode: str, urls: dict[str, str] | None = None) -> dict[st
 
 
 def discovered_defaults(document: dict[str, Any], facts: dict[str, Any]) -> dict[str, Any]:
-    """Fill empty node / bridge / pool from inventory. Never overwrite a set value."""
+    """Fill empty node / bridge / CIDR / gateway / pool. Never overwrite a set value."""
     patch: dict[str, Any] = {}
     proxmox = dict(document.get("proxmox") or {})
     network = dict(document.get("network") or {})
@@ -116,16 +117,66 @@ def discovered_defaults(document: dict[str, Any], facts: dict[str, Any]) -> dict
     nodes = [str(n) for n in (facts.get("nodes") or []) if n]
     bridges = [str(b) for b in (facts.get("bridges") or []) if b]
     pools = [str(p) for p in (facts.get("pools") or []) if p]
+    networks = facts.get("networks") if isinstance(facts.get("networks"), dict) else {}
     if not (proxmox.get("node") or "").strip() and nodes:
         proxmox["node"] = nodes[0]
         patch["proxmox"] = proxmox
     if not (network.get("bridge") or "").strip() and bridges:
         network["bridge"] = "vmbr0" if "vmbr0" in bridges else bridges[0]
         patch["network"] = network
+    bridge = (network.get("bridge") or "").strip()
+    chosen = networks.get(bridge) if isinstance(networks.get(bridge), dict) else {}
+    address = (facts.get("address") or chosen.get("address") or "").strip()
+    gateway = (facts.get("gateway") or chosen.get("gateway") or "").strip()
+    if not (network.get("address") or "").strip() and address:
+        network["address"] = address
+        patch["network"] = network
+    if not (network.get("gateway") or "").strip() and gateway:
+        network["gateway"] = gateway
+        patch["network"] = network
     if not (storage.get("pool") or "").strip() and pools:
         storage["pool"] = "local-lvm" if "local-lvm" in pools else pools[0]
         patch["storage"] = storage
     return patch
+
+
+def apply_network(
+    document: dict[str, Any],
+    *,
+    bridge: str | None = None,
+    address: str | None = None,
+    gateway: str | None = None,
+    pool: str | None = None,
+) -> dict[str, Any]:
+    errors: dict[str, str] = {}
+    cleaned_address = (address or "").strip()
+    cleaned_gateway = (gateway or "").strip()
+    if cleaned_address:
+        try:
+            ipaddress.ip_network(cleaned_address, strict=False)
+        except ValueError:
+            errors["network.address"] = "must be CIDR (address/prefix)"
+    if cleaned_gateway:
+        try:
+            ipaddress.ip_address(cleaned_gateway)
+        except ValueError:
+            errors["network.gateway"] = "must be an IP address"
+    if errors:
+        raise OnboardingError(errors)
+    updated = dict(document)
+    network = dict(updated.get("network") or {})
+    if bridge is not None:
+        network["bridge"] = bridge.strip()
+    if address is not None:
+        network["address"] = cleaned_address
+    if gateway is not None:
+        network["gateway"] = cleaned_gateway
+    updated["network"] = network
+    if pool is not None:
+        storage = dict(updated.get("storage") or {})
+        storage["pool"] = pool.strip()
+        updated["storage"] = storage
+    return updated
 
 
 def apply_discovered_defaults(document: dict[str, Any], facts: dict[str, Any]) -> dict[str, Any]:
@@ -319,6 +370,8 @@ def present_status(document: dict[str, Any], secrets: Any) -> dict[str, Any]:
         },
         "network": {
             "bridge": (presented.get("network") or {}).get("bridge") or "",
+            "address": (presented.get("network") or {}).get("address") or "",
+            "gateway": (presented.get("network") or {}).get("gateway") or "",
         },
         "storage": {
             "pool": (presented.get("storage") or {}).get("pool") or "",

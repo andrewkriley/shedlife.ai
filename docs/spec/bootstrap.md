@@ -104,8 +104,8 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    through a `foundations.write` tool (no side effects beyond the store).
    It may enumerate the host and adopted URLs with the discovery
    tools below; those calls do not write the schema unless the operator
-   confirms. The wizard may write discovered node / bridge / pool when
-   those keys are still empty. The review panel
+   confirms. The wizard may write discovered node / bridge / CIDR /
+   gateway / pool when those keys are still empty. The review panel
    reflects the schema after each write.
 7. `validate-foundations`: runs without the model inventing rules; failures
    attach to fields.
@@ -234,10 +234,13 @@ New:
   review panel and `foundations.write` use; the agent does not write the
   table itself).
 - `GET /onboarding/status` — whether the wizard should open, plus
-  non-secret current values (host, tenant, token-set, vendor, intent).
+  non-secret current values (host, tenant, token-set, vendor, intent,
+  bridge / CIDR / gateway / pool).
 - `POST /onboarding/proxmox` — save host and/or Token ID + Secret,
-  probe `proxmox_api`, discover nodes / bridges / pools, fill empty
-  defaults.
+  probe `proxmox_api`, discover nodes / bridges (with CIDR + gateway
+  per interface) / all storage pools, fill empty defaults.
+- `POST /onboarding/network` — save the chosen bridge, CIDR, gateway,
+  and storage pool (operator may edit the discovered values).
 - `POST /onboarding/provider` — validate and save the LLM vendor + key
   (blank key on a re-run keeps the saved one).
 - `POST /onboarding/tenant` — name + slug.

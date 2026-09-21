@@ -8,7 +8,7 @@ const emptyStatus: api.OnboardingStatus = {
   needed: true,
   tenant: { name: '', slug: '' },
   proxmox: { host: '', node: '', api_token_id: '', api_token_set: false },
-  network: { bridge: '' },
+  network: { bridge: '', address: '', gateway: '' },
   storage: { pool: '' },
   provider: { vendor: null, api_key_set: false },
   intent: {
@@ -34,11 +34,29 @@ describe('OnboardingWizard', () => {
         api_token_id: body.api_token_id || '',
         api_token_set: Boolean(body.discover || body.api_token_id),
       },
-      network: { bridge: 'vmbr0' },
+      network: { bridge: 'vmbr0', address: '192.0.2.10/24', gateway: '192.0.2.1' },
+      storage: { pool: 'local-lvm' },
       discovery: body.discover
-        ? { version: '8.3', nodes: ['pve'], bridges: ['vmbr0'], pools: ['local-lvm'] }
+        ? {
+            version: '8.3',
+            nodes: ['pve'],
+            bridges: ['vmbr0', 'vmbr1'],
+            pools: ['local-lvm', 'local'],
+            networks: {
+              vmbr0: { address: '192.0.2.10/24', gateway: '192.0.2.1' },
+              vmbr1: { address: '10.0.0.2/24', gateway: '10.0.0.1' },
+            },
+            address: '192.0.2.10/24',
+            gateway: '192.0.2.1',
+          }
         : null,
     }))
+    const postNetwork = vi.spyOn(api, 'postOnboardingNetwork').mockResolvedValue({
+      ...emptyStatus,
+      proxmox: { host: '192.0.2.10', node: 'pve', api_token_id: 'root@pam!shed', api_token_set: true },
+      network: { bridge: 'vmbr1', address: '10.0.0.2/24', gateway: '10.0.0.1' },
+      storage: { pool: 'local' },
+    })
     vi.spyOn(api, 'postOnboardingProvider').mockResolvedValue({
       provider: { vendor: 'anthropic', api_key_set: true },
     })
@@ -89,6 +107,24 @@ describe('OnboardingWizard', () => {
       discover: true,
     })
 
+    expect(await screen.findByLabelText('Bridge')).toHaveValue('vmbr0')
+    expect(screen.getByLabelText('CIDR')).toHaveValue('192.0.2.10/24')
+    expect(screen.getByLabelText('Gateway')).toHaveValue('192.0.2.1')
+    expect(screen.getByLabelText('Storage')).toHaveValue('local-lvm')
+    expect(screen.getByRole('option', { name: 'vmbr1' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'local' })).toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('Bridge'), 'vmbr1')
+    expect(screen.getByLabelText('CIDR')).toHaveValue('10.0.0.2/24')
+    expect(screen.getByLabelText('Gateway')).toHaveValue('10.0.0.1')
+    await user.selectOptions(screen.getByLabelText('Storage'), 'local')
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(postNetwork).toHaveBeenCalledWith({
+      bridge: 'vmbr1',
+      address: '10.0.0.2/24',
+      gateway: '10.0.0.1',
+      pool: 'local',
+    })
+
     await user.type(await screen.findByLabelText('API key'), 'sk-ant-api03-test')
     await user.click(screen.getByRole('button', { name: 'Continue' }))
 
@@ -113,6 +149,8 @@ describe('OnboardingWizard', () => {
       needed: false,
       tenant: { name: 'Riley Lab', slug: 'riley-lab' },
       proxmox: { host: '192.0.2.10', node: 'pve', api_token_id: 'root@pam!shed', api_token_set: true },
+      network: { bridge: 'vmbr0', address: '192.0.2.10/24', gateway: '192.0.2.1' },
+      storage: { pool: 'local-lvm' },
       provider: { vendor: 'openai', api_key_set: true },
     })
     render(<OnboardingWizard onFinished={() => {}} />)

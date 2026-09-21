@@ -26,7 +26,11 @@ const onboardingDone: api.OnboardingStatus = {
   needed: false,
   tenant: foundations.tenant,
   proxmox: { host: foundations.proxmox.host, node: foundations.proxmox.node, api_token_set: true },
-  network: { bridge: foundations.network.bridge },
+  network: {
+    bridge: foundations.network.bridge,
+    address: foundations.network.address,
+    gateway: foundations.network.gateway,
+  },
   storage: { pool: foundations.storage.pool },
   provider: { vendor: 'anthropic', api_key_set: true },
   intent: { mode: 'build', services: foundations.intent },

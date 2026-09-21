@@ -16,6 +16,44 @@ from urllib.request import Request, urlopen
 HttpGet = Callable[..., tuple[int, str]]
 
 
+def _prefix_from_netmask(mask: str) -> int | None:
+    raw = (mask or "").strip()
+    if not raw:
+        return None
+    if raw.isdigit():
+        prefix = int(raw)
+        if 0 <= prefix <= 128:
+            return prefix
+        return None
+    parts = raw.split(".")
+    if len(parts) != 4:
+        return None
+    try:
+        bits = 0
+        for part in parts:
+            bits = (bits << 8) | int(part)
+    except ValueError:
+        return None
+    return bin(bits).count("1")
+
+
+def iface_network(item: dict[str, Any]) -> dict[str, str]:
+    """Public CIDR + gateway from a Proxmox /nodes/{node}/network row."""
+    gateway = str(item.get("gateway") or "").strip()
+    cidr = str(item.get("cidr") or "").strip()
+    address = str(item.get("address") or "").strip()
+    if "/" in cidr:
+        return {"address": cidr, "gateway": gateway}
+    if address and cidr.isdigit():
+        return {"address": f"{address}/{cidr}", "gateway": gateway}
+    prefix = _prefix_from_netmask(str(item.get("netmask") or ""))
+    if address and prefix is not None:
+        return {"address": f"{address}/{prefix}", "gateway": gateway}
+    if address:
+        return {"address": address, "gateway": gateway}
+    return {"address": "", "gateway": gateway}
+
+
 def proxmox_base_url(host: str) -> str:
     host = host.strip()
     if not host:
@@ -122,6 +160,7 @@ def fetch_proxmox_inventory(
                 disk_gb = max(disk_gb, disk // (1024**3))
     node = nodes[0] if nodes else None
     bridges: list[str] = []
+    networks: dict[str, dict[str, str]] = {}
     if node:
         net = get_data(f"/api2/json/nodes/{node}/network") or []
         if isinstance(net, list):
@@ -133,6 +172,7 @@ def fetch_proxmox_inventory(
                     item.get("type") == "bridge" or iface.startswith("vmbr")
                 ):
                     bridges.append(iface)
+                    networks[iface] = iface_network(item)
     storage = get_data("/api2/json/storage") or []
     pools: list[str] = []
     if isinstance(storage, list):
@@ -141,11 +181,16 @@ def fetch_proxmox_inventory(
                 name = str(item["storage"])
                 if name not in pools:
                     pools.append(name)
+    preferred_bridge = "vmbr0" if "vmbr0" in bridges else (bridges[0] if bridges else "")
+    preferred_net = networks.get(preferred_bridge) or {}
     return {
         "version": version,
         "nodes": nodes,
         "bridges": bridges,
         "pools": pools,
+        "networks": networks,
+        "address": preferred_net.get("address") or "",
+        "gateway": preferred_net.get("gateway") or "",
         "vcpu": vcpu,
         "ram_gb": ram_gb,
         "disk_gb": disk_gb,

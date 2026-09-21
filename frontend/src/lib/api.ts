@@ -362,7 +362,7 @@ export interface OnboardingStatus {
   needed: boolean
   tenant: { name: string; slug: string }
   proxmox: { host: string; node: string; api_token_id?: string; api_token_set: boolean }
-  network: { bridge: string }
+  network: { bridge: string; address: string; gateway: string }
   storage: { pool: string }
   provider: { vendor: string | null; api_key_set: boolean }
   intent: {
@@ -375,6 +375,9 @@ export interface OnboardingStatus {
     nodes: string[]
     bridges: string[]
     pools: string[]
+    networks?: Record<string, { address: string; gateway: string }>
+    address?: string
+    gateway?: string
   } | null
   probe?: { status: string; detail: string } | null
 }
@@ -417,6 +420,15 @@ export async function postOnboardingProxmox(body: {
   discover?: boolean
 }): Promise<OnboardingStatus> {
   return onboardingPost('proxmox', body)
+}
+
+export async function postOnboardingNetwork(body: {
+  bridge: string
+  address: string
+  gateway: string
+  pool: string
+}): Promise<OnboardingStatus> {
+  return onboardingPost('network', body)
 }
 
 export async function postOnboardingProvider(body: {

@@ -18,9 +18,9 @@ export const FOUNDATION_HINTS = {
   'network.bridge':
     'LAN bridge this CT and later VMs attach to, usually vmbr0 on a single host.',
   'network.address':
-    'Operator-facing address as CIDR (address/prefix) for later platform NICs. Leave blank until known.',
+    'Operator-facing address as CIDR (address/prefix) for later platform NICs. Filled from the chosen Proxmox bridge when discovered.',
   'network.gateway':
-    'Gateway IP for that address. Leave blank until known.',
+    'Gateway IP for that address. Filled from the chosen Proxmox bridge when discovered.',
   'network.ntp':
     'Time source. inherit uses the Proxmox host clock/NTP. Or list explicit NTP servers.',
   'storage.pool':

@@ -153,22 +153,27 @@ Steps, in order:
 1. Proxmox IP or API URL.
 2. Proxmox Token ID (`USER@REALM!tokenid`).
 3. Proxmox Token Secret — joined as `id=secret` into local secrets, then
-   `proxmox_api` plus host discovery (nodes, bridges, pools, version).
-   Empty node / bridge / pool are filled from what was found when the
-   operator has not already set them.
-4. AI provider (Anthropic | OpenAI | Gemini) and API key. A Claude
+   `proxmox_api` plus host discovery (nodes, bridges and their CIDR /
+   gateway, all storage pools, version). Empty node / bridge / CIDR /
+   gateway / pool are filled from what was found when the operator has
+   not already set them.
+4. Network and storage — confirm the discovered LAN bridge, CIDR,
+   gateway, and storage pool. Bridges and pools are listed from the
+   Proxmox API; changing the bridge refreshes CIDR and gateway from that
+   interface. The operator can edit any of these before they are saved.
+5. AI provider (Anthropic | OpenAI | Gemini) and API key. A Claude
    subscription is rejected with an explanation. Validated with a live,
    cheap provider call. On a re-run, a blank key keeps the saved one.
-5. Tenant name and slug.
-6. Fresh install (all-build / greenfield) **or** fresh install with
+6. Tenant name and slug.
+7. Fresh install (all-build / greenfield) **or** fresh install with
    adoption. Adopt then collects a URL per service the operator wants to
    keep (GitLab, Infisical, DNS, k3s) and runs a shallow reachability
    probe. The schema still stores per-dependency `intent.*` rows.
 
-Not in the wizard: network CIDR, gateway, domains, SSH key install,
-operator email, Galileo. Those stay on Foundations, chat, or later
-phases. The four playbooks remain; the wizard is a UI over collect /
-validate / probe, not a fifth playbook.
+Not in the wizard: domains, SSH key install, operator email, Galileo,
+NTP. Those stay on Foundations, chat, or later phases. The four
+playbooks remain; the wizard is a UI over collect / validate / probe,
+not a fifth playbook.
 
 ### Foundations interview
 

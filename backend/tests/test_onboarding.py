@@ -4,6 +4,7 @@ import pytest
 
 from theshed.bootstrap.proxmox import (
     fetch_proxmox_inventory,
+    iface_network,
     probe_proxmox_reachable,
     proxmox_base_url,
 )
@@ -12,6 +13,7 @@ from theshed.foundations.tokens import IncompleteProxmoxToken
 from theshed.onboarding.service import (
     IncompleteAdopt,
     OnboardingError,
+    apply_network,
     apply_tenant,
     discovered_defaults,
     intent_from_choice,
@@ -67,7 +69,13 @@ def test_inventory_lists_nodes_bridges_and_pools() -> None:
             return 200, json.dumps(
                 {
                     "data": [
-                        {"iface": "vmbr0", "type": "bridge"},
+                        {
+                            "iface": "vmbr0",
+                            "type": "bridge",
+                            "address": "192.0.2.10",
+                            "netmask": "255.255.255.0",
+                            "gateway": "192.0.2.1",
+                        },
                         {"iface": "eth0", "type": "eth"},
                     ]
                 }
@@ -84,6 +92,24 @@ def test_inventory_lists_nodes_bridges_and_pools() -> None:
     assert facts["vcpu"] == 8
     assert facts["ram_gb"] == 32
     assert facts["disk_gb"] == 200
+    assert facts["address"] == "192.0.2.10/24"
+    assert facts["gateway"] == "192.0.2.1"
+    assert facts["networks"]["vmbr0"] == {"address": "192.0.2.10/24", "gateway": "192.0.2.1"}
+
+
+def test_iface_network_reads_cidr_or_netmask() -> None:
+    assert iface_network({"cidr": "10.0.0.2/24", "gateway": "10.0.0.1"}) == {
+        "address": "10.0.0.2/24",
+        "gateway": "10.0.0.1",
+    }
+    assert iface_network({"address": "10.0.0.2", "cidr": "24", "gateway": "10.0.0.1"}) == {
+        "address": "10.0.0.2/24",
+        "gateway": "10.0.0.1",
+    }
+    assert iface_network({"address": "10.0.0.2", "netmask": "255.255.255.0"}) == {
+        "address": "10.0.0.2/24",
+        "gateway": "",
+    }
 
 
 def test_inventory_rejects_a_bad_token() -> None:
@@ -141,11 +167,61 @@ def test_intent_adopt_keeps_unspecified_services_on_build() -> None:
 def test_discovered_defaults_fill_empty_keys_only() -> None:
     doc = empty_foundations()
     doc["proxmox"]["node"] = "already"
-    facts = {"nodes": ["pve"], "bridges": ["vmbr0"], "pools": ["local-lvm"]}
+    facts = {
+        "nodes": ["pve"],
+        "bridges": ["vmbr0"],
+        "pools": ["local-lvm"],
+        "address": "192.0.2.10/24",
+        "gateway": "192.0.2.1",
+    }
     patch = discovered_defaults(doc, facts)
     assert "proxmox" not in patch
     assert patch["network"]["bridge"] == "vmbr0"
+    assert patch["network"]["address"] == "192.0.2.10/24"
+    assert patch["network"]["gateway"] == "192.0.2.1"
     assert patch["storage"]["pool"] == "local-lvm"
+
+
+def test_discovered_defaults_read_cidr_from_the_chosen_bridge() -> None:
+    facts = {
+        "nodes": ["pve"],
+        "bridges": ["vmbr1"],
+        "pools": ["tank"],
+        "networks": {
+            "vmbr1": {"address": "10.0.0.2/24", "gateway": "10.0.0.1"},
+        },
+    }
+    patch = discovered_defaults(empty_foundations(), facts)
+    assert patch["network"]["bridge"] == "vmbr1"
+    assert patch["network"]["address"] == "10.0.0.2/24"
+    assert patch["network"]["gateway"] == "10.0.0.1"
+    assert patch["storage"]["pool"] == "tank"
+
+
+def test_apply_network_saves_discovered_choices() -> None:
+    doc = apply_network(
+        empty_foundations(),
+        bridge="vmbr0",
+        address="192.0.2.10/24",
+        gateway="192.0.2.1",
+        pool="local-lvm",
+    )
+    assert doc["network"]["bridge"] == "vmbr0"
+    assert doc["network"]["address"] == "192.0.2.10/24"
+    assert doc["network"]["gateway"] == "192.0.2.1"
+    assert doc["storage"]["pool"] == "local-lvm"
+
+
+def test_apply_network_rejects_a_bad_cidr() -> None:
+    with pytest.raises(OnboardingError) as caught:
+        apply_network(empty_foundations(), address="not-a-cidr")
+    assert "network.address" in caught.value.errors
+
+
+def test_apply_network_rejects_a_bad_gateway() -> None:
+    with pytest.raises(OnboardingError) as caught:
+        apply_network(empty_foundations(), gateway="not-an-ip")
+    assert "network.gateway" in caught.value.errors
 
 
 def test_apply_tenant_rejects_a_bad_slug() -> None:

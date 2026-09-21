@@ -22,7 +22,19 @@ def _inventory_http(url: str, _timeout: float, _headers=None) -> tuple[int, str]
     if url.endswith("/nodes"):
         return 200, json.dumps({"data": [{"node": "pve", "maxcpu": 8, "maxmem": 0, "maxdisk": 0}]})
     if url.endswith("/network"):
-        return 200, json.dumps({"data": [{"iface": "vmbr0", "type": "bridge"}]})
+        return 200, json.dumps(
+            {
+                "data": [
+                    {
+                        "iface": "vmbr0",
+                        "type": "bridge",
+                        "address": "192.0.2.10",
+                        "netmask": "255.255.255.0",
+                        "gateway": "192.0.2.1",
+                    }
+                ]
+            }
+        )
     if url.endswith("/storage"):
         return 200, json.dumps({"data": [{"storage": "local-lvm"}]})
     return 200, json.dumps({"data": {}})
@@ -116,8 +128,25 @@ async def test_wizard_steps_and_summary(client: AsyncClient, authed: dict[str, s
     assert body["proxmox"]["api_token_set"] is True
     assert body["proxmox"]["api_token_id"] == "root@pam!shed"
     assert body["discovery"]["nodes"] == ["pve"]
+    assert body["discovery"]["pools"] == ["local-lvm"]
     assert body["network"]["bridge"] == "vmbr0"
+    assert body["network"]["address"] == "192.0.2.10/24"
+    assert body["network"]["gateway"] == "192.0.2.1"
+    assert body["storage"]["pool"] == "local-lvm"
     assert "secret-token" not in token.text
+
+    network = await client.post(
+        "/onboarding/network",
+        json={
+            "bridge": "vmbr0",
+            "address": "192.0.2.10/24",
+            "gateway": "192.0.2.1",
+            "pool": "local-lvm",
+        },
+        headers=authed,
+    )
+    assert network.status_code == 200, network.text
+    assert network.json()["storage"]["pool"] == "local-lvm"
 
     provider = await client.post(
         "/onboarding/provider",
