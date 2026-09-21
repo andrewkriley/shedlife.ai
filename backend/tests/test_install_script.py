@@ -224,6 +224,11 @@ def test_install_script_confirms_fresh_update_or_delete() -> None:
     assert "read -r" in text
     assert "THESHED_YES" in text
     assert "--yes" in text
+    assert "--ref" in text
+    assert "bash -s -- --ref" in text
+    parse = text.split("parse_args() {", 1)[1].split("\n}\n", 1)[0]
+    assert 'THESHED_REF="$1"' in parse
+    assert "--ref needs a branch or tag" in parse
     assert "fresh install" in text
     assert "UPDATE" in text
     assert "DESTROY" in text

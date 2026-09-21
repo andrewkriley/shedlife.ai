@@ -65,10 +65,11 @@ an existing CT or VM). Type `yes` to confirm the planned action.
 `--delete` destroys the chosen CT first. `THESHED_YES=1` (or `--yes`)
 skips prompts and upgrades the recorded CT. `THESHED_PARALLEL=1`
 creates a parallel CT.
-`THESHED_REF` overrides the ref the script clones (a branch or another
-release). Export it in the same shell — `curl | bash` without that
-variable installs the latest GitHub release. An in-place upgrade
-rebuilds the app image with `--no-cache`. The script does not ask for an API key. It prints the LAN URL
+`--ref` (or `export THESHED_REF=`) overrides the ref the script clones.
+`THESHED_REF=branch curl ... | bash` does **not** work: that variable
+applies to `curl` only, so bash installs the latest GitHub release.
+Use `curl ... | bash -s -- --ref cursor/improvements-bb2b`. An in-place
+upgrade rebuilds the app image with `--no-cache`. The script does not ask for an API key. It prints the LAN URL
 as soon as the CT has an address, then prints the generated `admin`
 password and the CT `root` password once the app is ready, and writes
 those same details to the CT notes field in the Proxmox UI.

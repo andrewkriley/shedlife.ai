@@ -5,7 +5,9 @@
 # Generates (does not prompt for) the operator login and the CT root password.
 #
 #   curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash
-# Override the cloned ref with THESHED_REF (a branch or another release).
+# Override the cloned ref with --ref or THESHED_REF (a branch or another release).
+# `THESHED_REF=branch curl ... | bash` does NOT work: the variable applies to
+# curl only. Use `curl ... | bash -s -- --ref branch` or `export THESHED_REF=`.
 #
 # Overrides (all optional):
 #   THESHED_REF          git ref to fetch (default: latest GitHub release, else main)
@@ -33,6 +35,7 @@
 #   curl -fsSL .../install.sh | bash -s -- --debug
 #   curl -fsSL .../install.sh | bash -s -- --yes
 #   curl -fsSL .../install.sh | bash -s -- --parallel
+#   curl -fsSL .../install.sh | bash -s -- --ref cursor/improvements-bb2b
 set -euo pipefail
 
 REPO="https://github.com/andrewkriley/shedlife.ai.git"
@@ -102,27 +105,43 @@ need_root() {
 }
 
 parse_args() {
-  local arg
-  for arg in "$@"; do
-    case "${arg}" in
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
       --delete) THESHED_DELETE=1 ;;
       --debug) THESHED_DEBUG=1 ;;
       --yes) THESHED_YES=1 ;;
       --parallel) THESHED_PARALLEL=1 ;;
+      --ref)
+        shift
+        if [[ $# -lt 1 || -z "${1}" ]]; then
+          echo "--ref needs a branch or tag" >&2
+          exit 1
+        fi
+        THESHED_REF="$1"
+        ;;
+      --ref=*)
+        THESHED_REF="${1#--ref=}"
+        if [[ -z "${THESHED_REF}" ]]; then
+          echo "--ref needs a branch or tag" >&2
+          exit 1
+        fi
+        ;;
       --help|-h)
-        echo "Usage: install.sh [--delete] [--debug] [--yes] [--parallel]"
+        echo "Usage: install.sh [--delete] [--debug] [--yes] [--parallel] [--ref <git-ref>]"
         echo "  --delete     destroy the chosen bootstrap CT, then install"
         echo "  --debug      enable the live debug console, container stdout, CT tty1, and GET /debug/logs"
         echo "  --yes        skip confirmation; upgrades the recorded CT (never creates a parallel one)"
         echo "  --parallel   install a new CT on the next free VMID, leaving existing CTs alone"
+        echo "  --ref        git branch or tag to clone (or set THESHED_REF). Do not prefix curl."
         exit 0
         ;;
       *)
-        echo "Unknown option: ${arg}" >&2
-        echo "Usage: install.sh [--delete] [--debug] [--yes] [--parallel]" >&2
+        echo "Unknown option: $1" >&2
+        echo "Usage: install.sh [--delete] [--debug] [--yes] [--parallel] [--ref <git-ref>]" >&2
         exit 1
         ;;
     esac
+    shift
   done
 }
 

@@ -25,7 +25,9 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
 
 1. Operator, as root on the Proxmox host, runs the install command pinned to
    a release tag (overrideable). Example shape:
-   `curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash`
+   `curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash`.
+   A branch or tag is `--ref` on bash (`curl ... | bash -s -- --ref <ref>`),
+   not `THESHED_REF=` prefixed on `curl`.
 2. The script lists Shed CTs it finds (state file and hostname `theshed` /
    `theshed-*`): VMID, hostname, status, IP, ref, whether
    `GET /api/setup/status` answers. It prints that table and a warning,
