@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from openai import OpenAI
 from redis.asyncio import Redis
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -23,6 +23,7 @@ from theshed.debug.routes import router as debug_router
 from theshed.foundations.routes import router as foundations_router
 from theshed.issues.routes import router as issues_router
 from theshed.observability.galileo import TurnTracer
+from theshed.onboarding.routes import router as onboarding_router
 from theshed.probes.host import DefaultProbeHost
 from theshed.profile import is_bootstrap_profile
 from theshed.secrets.client import EnvVarSecretsClient, LocalSecretsClient, SecretNotFoundError
@@ -205,12 +206,19 @@ app.include_router(debug_router)
 app.include_router(turns_router)
 app.include_router(settings_router)
 app.include_router(foundations_router)
+app.include_router(onboarding_router)
 app.include_router(issues_router)
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "ref": os.environ.get("THESHED_REF") or "unknown"}
+
+
+@app.get("/favicon.ico")
+@app.get("/favicon.svg")
+async def no_favicon() -> Response:
+    return Response(status_code=204)
 
 
 _frontend_dist = os.environ.get("THESHED_FRONTEND_DIST")

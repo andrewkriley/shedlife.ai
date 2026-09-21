@@ -5,12 +5,15 @@
 # Generates (does not prompt for) the operator login and the CT root password.
 #
 #   curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash
-# Override the cloned ref with THESHED_REF (a branch or another release).
+# Override the cloned ref with --ref or THESHED_REF (a branch or another release).
+# `THESHED_REF=branch curl ... | bash` does NOT work: the variable applies to
+# curl only. Use `curl ... | bash -s -- --ref branch` or `export THESHED_REF=`.
 #
 # Overrides (all optional):
 #   THESHED_REF          git ref to fetch (default: latest GitHub release, else main)
-#   THESHED_CTID         CT id (default: 9100)
-#   THESHED_HOSTNAME     CT name in Proxmox (default: theshed-deploy)
+#   THESHED_CTID         CT id (default: first free VMID at or above 9100,
+#                        confirmed free on this Proxmox cluster)
+#   THESHED_HOSTNAME     CT name in Proxmox (default: theshed)
 #   THESHED_BRIDGE       LAN bridge (default: vmbr0)
 #   THESHED_CT_IP        static CT address (CIDR). DHCP when unset.
 #   THESHED_GATEWAY      used only with THESHED_CT_IP
@@ -26,17 +29,30 @@
 #   THESHED_DELETE=1     same as --delete: destroy the bootstrap CT, then install
 #   THESHED_DEBUG=1      same as --debug: live debug console, CT stdout, tty1, GET /debug/logs
 #   THESHED_YES=1        same as --yes: skip the confirmation prompt
+#   THESHED_PARALLEL=1   same as --parallel: create a new CT on the next free VMID
 #
 #   curl -fsSL .../install.sh | bash -s -- --delete
 #   curl -fsSL .../install.sh | bash -s -- --debug
 #   curl -fsSL .../install.sh | bash -s -- --yes
+#   curl -fsSL .../install.sh | bash -s -- --parallel
+#   curl -fsSL .../install.sh | bash -s -- --ref cursor/improvements-bb2b
 set -euo pipefail
 
 REPO="https://github.com/andrewkriley/shedlife.ai.git"
 RAW_API="https://api.github.com/repos/andrewkriley/shedlife.ai/releases/latest"
 STATE_FILE="${THESHED_STATE_FILE:-/var/lib/theshed/install-state.yaml}"
-CTID="${THESHED_CTID:-9100}"
-CT_HOSTNAME="${THESHED_HOSTNAME:-theshed-deploy}"
+CTID_EXPLICIT=0
+HOSTNAME_EXPLICIT=0
+if [[ -n "${THESHED_CTID:-}" ]]; then
+  CTID_EXPLICIT=1
+fi
+if [[ -n "${THESHED_HOSTNAME:-}" ]]; then
+  HOSTNAME_EXPLICIT=1
+fi
+PREFERRED_CTID=9100
+CTID="${THESHED_CTID:-${PREFERRED_CTID}}"
+CT_HOSTNAME="${THESHED_HOSTNAME:-theshed}"
+PVE_ETC="${THESHED_PVE_ETC:-/etc/pve}"
 BRIDGE="${THESHED_BRIDGE:-vmbr0}"
 MEMORY="${THESHED_MEMORY:-4096}"
 CORES="${THESHED_CORES:-2}"
@@ -46,11 +62,13 @@ OPERATOR_USERNAME="${THESHED_OPERATOR_USERNAME:-${THESHED_OPERATOR_EMAIL:-admin}
 OPERATOR_PASSWORD=""
 CT_ROOT_PASSWORD=""
 APP_DIR="/opt/theshed"
+REF_FROM_ENV=0
 CT_EXISTS=0
 CT_STATUS="missing"
 APP_READY=0
 EXISTING_IP=""
 EXISTING_REF=""
+INSTALL_ACTION=""
 
 print_banner() {
   cat <<'EOF'
@@ -87,25 +105,43 @@ need_root() {
 }
 
 parse_args() {
-  local arg
-  for arg in "$@"; do
-    case "${arg}" in
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
       --delete) THESHED_DELETE=1 ;;
       --debug) THESHED_DEBUG=1 ;;
       --yes) THESHED_YES=1 ;;
+      --parallel) THESHED_PARALLEL=1 ;;
+      --ref)
+        shift
+        if [[ $# -lt 1 || -z "${1}" ]]; then
+          echo "--ref needs a branch or tag" >&2
+          exit 1
+        fi
+        THESHED_REF="$1"
+        ;;
+      --ref=*)
+        THESHED_REF="${1#--ref=}"
+        if [[ -z "${THESHED_REF}" ]]; then
+          echo "--ref needs a branch or tag" >&2
+          exit 1
+        fi
+        ;;
       --help|-h)
-        echo "Usage: install.sh [--delete] [--debug] [--yes]"
-        echo "  --delete   destroy the bootstrap CT, then install"
-        echo "  --debug    enable the live debug console, container stdout, CT tty1, and GET /debug/logs"
-        echo "  --yes      skip the confirmation prompt"
+        echo "Usage: install.sh [--delete] [--debug] [--yes] [--parallel] [--ref <git-ref>]"
+        echo "  --delete     destroy the chosen bootstrap CT, then install"
+        echo "  --debug      enable the live debug console, container stdout, CT tty1, and GET /debug/logs"
+        echo "  --yes        skip confirmation; upgrades the recorded CT (never creates a parallel one)"
+        echo "  --parallel   install a new CT on the next free VMID, leaving existing CTs alone"
+        echo "  --ref        git branch or tag to clone (or set THESHED_REF). Do not prefix curl."
         exit 0
         ;;
       *)
-        echo "Unknown option: ${arg}" >&2
-        echo "Usage: install.sh [--delete] [--debug] [--yes]" >&2
+        echo "Unknown option: $1" >&2
+        echo "Usage: install.sh [--delete] [--debug] [--yes] [--parallel] [--ref <git-ref>]" >&2
         exit 1
         ;;
     esac
+    shift
   done
 }
 
@@ -121,11 +157,185 @@ wants_yes() {
   [[ "${THESHED_YES:-}" == "1" || "${THESHED_YES:-}" == "true" ]]
 }
 
+wants_parallel() {
+  [[ "${THESHED_PARALLEL:-}" == "1" || "${THESHED_PARALLEL:-}" == "true" ]]
+}
+
+is_shed_hostname() {
+  local name="${1:-}"
+  [[ "${name}" == "theshed" || "${name}" == theshed-* ]]
+}
+
+# Guests on every cluster node: pmxcfs conf files plus .vmlist.
+cluster_listed_vmids() {
+  local f
+  for f in "${PVE_ETC}"/nodes/*/lxc/*.conf "${PVE_ETC}"/nodes/*/qemu-server/*.conf; do
+    [[ -f "${f}" ]] || continue
+    basename "${f}" .conf
+  done
+  if [[ -r "${PVE_ETC}/.vmlist" ]]; then
+    grep -oE '"[0-9]+":' "${PVE_ETC}/.vmlist" | tr -d '":' || true
+  fi
+  return 0
+}
+
+# Ask the live cluster whether this VMID is free (CTs and VMs, every node).
+# pvesh nextid --vmid returns the id only when it is unused cluster-wide.
+cluster_nextid_says_taken() {
+  local id="$1" out
+  command -v pvesh >/dev/null 2>&1 || return 1
+  if out="$(pvesh get /cluster/nextid --vmid "${id}" 2>&1)"; then
+    out="${out//[$'\t\r\n \"']/}"
+    if [[ "${out}" == "${id}" ]]; then
+      return 1
+    fi
+    return 0
+  fi
+  printf '%s' "${out}" | grep -qi 'already exists'
+}
+
+vmid_in_use() {
+  local id="$1" used
+  if pct status "${id}" >/dev/null 2>&1 || qm status "${id}" >/dev/null 2>&1; then
+    return 0
+  fi
+  # Do not `grep -q` a pipe: grep exits on the first match and SIGPIPE +
+  # pipefail would treat a listed VMID as free.
+  while read -r used; do
+    if [[ "${used}" == "${id}" ]]; then
+      return 0
+    fi
+  done < <(cluster_listed_vmids)
+  if cluster_nextid_says_taken "${id}"; then
+    return 0
+  fi
+  return 1
+}
+
+next_free_vmid() {
+  local id quiet="${1:-}"
+  if [[ "${CTID_EXPLICIT}" == "1" ]]; then
+    if vmid_in_use "${CTID}"; then
+      echo "THESHED_CTID=${CTID} is already in use on this Proxmox cluster." >&2
+      exit 1
+    fi
+    echo "${CTID}"
+    return
+  fi
+  id="${PREFERRED_CTID}"
+  while vmid_in_use "${id}"; do
+    if [[ "${quiet}" != "quiet" ]]; then
+      echo "VMID ${id} is already in use on this cluster; trying the next id." >&2
+    fi
+    id=$((id + 1))
+    if [[ "${id}" -gt 999999999 ]]; then
+      echo "Could not find a free VMID on this Proxmox cluster." >&2
+      exit 1
+    fi
+  done
+  echo "${id}"
+}
+
+hostname_for_new_ct() {
+  if [[ "${HOSTNAME_EXPLICIT}" == "1" ]]; then
+    echo "${CT_HOSTNAME}"
+    return
+  fi
+  echo "theshed"
+}
+
+list_shed_cts() {
+  local vmid status name
+  command -v pct >/dev/null 2>&1 || return 0
+  while read -r vmid status name; do
+    [[ -z "${vmid}" || "${vmid}" == "VMID" ]] && continue
+    if [[ -z "${name}" || "${name}" == "-" ]]; then
+      name="$(pct config "${vmid}" 2>/dev/null | awk '/^hostname:/{print $2}')"
+    fi
+    if is_shed_hostname "${name}"; then
+      printf '%s %s %s\n' "${vmid}" "${status}" "${name}"
+    fi
+  done < <(pct list 2>/dev/null | awk 'NR>1 {print $1, $2, $NF}')
+}
+
+first_listed_shed_vmid() {
+  list_shed_cts | awk '{print $1; exit}'
+}
+
+print_existing_installs() {
+  local vmid status name ip found=0
+  echo
+  echo "Existing The Shed installations"
+  while read -r vmid status name; do
+    found=1
+    ip=""
+    if [[ "${status}" == "running" ]]; then
+      ip="$(pct exec "${vmid}" -- hostname -I 2>/dev/null | awk '{print $1}' || true)"
+    fi
+    printf '  VMID %s  %s  %s' "${vmid}" "${name}" "${status}"
+    if [[ -n "${ip}" ]]; then
+      printf '  http://%s:%s' "${ip}" "${PORT}"
+    fi
+    echo
+  done < <(list_shed_cts)
+  if [[ "${found}" == "0" ]]; then
+    echo "  (none)"
+  fi
+  echo
+}
+
+select_ct() {
+  local vmid="$1"
+  CTID="${vmid}"
+  CT_EXISTS=0
+  CT_STATUS="missing"
+  APP_READY=0
+  EXISTING_IP=""
+  if ! pct status "${CTID}" >/dev/null 2>&1; then
+    return
+  fi
+  CT_EXISTS=1
+  CT_STATUS="$(pct status "${CTID}" 2>/dev/null | awk '/^status:/{print $2}')"
+  CT_HOSTNAME="$(pct config "${CTID}" 2>/dev/null | awk '/^hostname:/{print $2}')"
+  if [[ "${CT_STATUS}" == "running" ]]; then
+    EXISTING_IP="$(ct_ip 2>/dev/null || true)"
+    if [[ -n "${EXISTING_IP}" ]] && ct_ready_ok "${EXISTING_IP}"; then
+      APP_READY=1
+    fi
+  fi
+}
+
+prepare_new_ct() {
+  CTID="$(next_free_vmid)"
+  CT_HOSTNAME="$(hostname_for_new_ct)"
+  CT_EXISTS=0
+  CT_STATUS="missing"
+  APP_READY=0
+  EXISTING_IP=""
+  EXISTING_REF=""
+}
+
+read_tty_line() {
+  local reply
+  if [[ ! -r /dev/tty ]]; then
+    echo "No TTY. Re-run with --yes, --parallel, or THESHED_YES=1 / THESHED_PARALLEL=1." >&2
+    exit 1
+  fi
+  if ! read -r reply < /dev/tty; then
+    echo "Input failed." >&2
+    exit 1
+  fi
+  printf '%s\n' "${reply}"
+}
+
 inspect_existing() {
-  local recorded name ip
+  local recorded name ip listed
   recorded="$(read_state_ctid || true)"
+  listed="$(first_listed_shed_vmid || true)"
   if [[ -n "${recorded}" ]]; then
     CTID="${recorded}"
+  elif [[ -n "${listed}" ]]; then
+    CTID="${listed}"
   fi
   CT_EXISTS=0
   CT_STATUS="missing"
@@ -139,9 +349,18 @@ inspect_existing() {
     CT_EXISTS=1
     CT_STATUS="$(pct status "${CTID}" 2>/dev/null | awk '/^status:/{print $2}')"
     name="$(pct config "${CTID}" 2>/dev/null | awk '/^hostname:/{print $2}')"
-    if [[ -n "${name}" && "${name}" != "${CT_HOSTNAME}" && "${name}" != "theshed" ]]; then
-      echo "CT ${CTID} is hostname '${name}', not ${CT_HOSTNAME}." >&2
-      exit 1
+    if [[ -n "${name}" ]]; then
+      if ! is_shed_hostname "${name}"; then
+        if [[ "${CTID_EXPLICIT}" == "1" || -n "${recorded}" ]]; then
+          echo "CT ${CTID} is hostname '${name}', not a Shed CT." >&2
+          exit 1
+        fi
+        # Default 9100 belongs to someone else; allocate the next free VMID.
+        CT_EXISTS=0
+        CT_STATUS="missing"
+        return
+      fi
+      CT_HOSTNAME="${name}"
     fi
     if [[ "${CT_STATUS}" == "running" ]]; then
       ip="$(ct_ip 2>/dev/null || true)"
@@ -152,6 +371,35 @@ inspect_existing() {
         APP_READY=1
       fi
     fi
+    return
+  fi
+  # State file VMID is gone (a previous parallel attempt, or the CT was
+  # destroyed). Upgrade the Shed CT that is actually on this host.
+  if [[ -n "${listed}" ]]; then
+    select_ct "${listed}"
+  fi
+}
+
+select_upgrade_ct() {
+  local count vmid
+  count="$(list_shed_cts | wc -l | tr -d ' ')"
+  if [[ "${count}" == "0" ]]; then
+    echo "No Shed CT to upgrade." >&2
+    exit 1
+  fi
+  if [[ "${count}" -gt 1 ]]; then
+    echo "Enter the VMID to upgrade [${CTID}]:" >&2
+    vmid="$(read_tty_line)"
+    if [[ -n "${vmid}" ]]; then
+      select_ct "${vmid}"
+    fi
+  else
+    vmid="$(first_listed_shed_vmid)"
+    select_ct "${vmid}"
+  fi
+  if [[ "${CT_EXISTS}" != "1" ]]; then
+    echo "CT ${CTID} is not present; cannot upgrade." >&2
+    exit 1
   fi
 }
 
@@ -165,12 +413,72 @@ plan_action() {
   fi
 }
 
+choose_install_action() {
+  local count choice nextid listed
+  count="$(list_shed_cts | wc -l | tr -d ' ')"
+  if wants_delete; then
+    INSTALL_ACTION=delete
+    return
+  fi
+  if wants_parallel; then
+    prepare_new_ct
+    INSTALL_ACTION=fresh
+    return
+  fi
+  if [[ "${count}" == "0" && "${CT_EXISTS}" != "1" ]]; then
+    prepare_new_ct
+    INSTALL_ACTION=fresh
+    return
+  fi
+  if wants_yes; then
+    if [[ "${CT_EXISTS}" != "1" ]]; then
+      listed="$(first_listed_shed_vmid || true)"
+      if [[ -n "${listed}" ]]; then
+        select_ct "${listed}"
+      fi
+    fi
+    if [[ "${CT_EXISTS}" != "1" ]]; then
+      echo "No Shed CT to upgrade. Re-run without --yes, or use --parallel." >&2
+      exit 1
+    fi
+    INSTALL_ACTION=update
+    return
+  fi
+  nextid="$(
+    CTID_EXPLICIT=0
+    next_free_vmid quiet
+  )"
+  echo "An existing Shed CT was found." >&2
+  echo "  1) Upgrade an existing installation in place" >&2
+  echo "  2) Install a parallel instance for testing (next VMID ${nextid})" >&2
+  echo "Enter 1 or 2:" >&2
+  choice="$(read_tty_line)"
+  case "${choice}" in
+    1)
+      select_upgrade_ct
+      INSTALL_ACTION=update
+      ;;
+    2)
+      prepare_new_ct
+      INSTALL_ACTION=fresh
+      ;;
+    *)
+      echo "Aborted." >&2
+      exit 1
+      ;;
+  esac
+}
+
 print_plan() {
   local action="$1"
   echo
   echo "Installation status"
   echo "  Action:  ${action}"
   echo "  CT:      ${CTID} (${CT_HOSTNAME}) — ${CT_STATUS}"
+  echo "  Ref:     ${THESHED_REF}"
+  if [[ "${REF_FROM_ENV:-0}" != "1" ]]; then
+    echo "  Note:    no --ref given — defaulting to the latest release, not a branch."
+  fi
   if [[ "${APP_READY}" == "1" ]]; then
     echo "  App:     ready"
   else
@@ -178,9 +486,6 @@ print_plan() {
   fi
   if [[ -n "${EXISTING_IP}" ]]; then
     echo "  URL:     http://${EXISTING_IP}:${PORT}"
-  fi
-  if [[ -n "${EXISTING_REF}" ]]; then
-    echo "  Ref:     ${EXISTING_REF}"
   fi
   echo
   case "${action}" in
@@ -195,7 +500,11 @@ print_plan() {
       echo "WARNING: an existing installation is present. This will UPDATE CT ${CTID} (${CT_HOSTNAME}) in place. Operator login and data volumes are kept; the app clone and image are refreshed."
       ;;
     *)
-      echo "WARNING: this is a fresh install. It will create CT ${CTID} (${CT_HOSTNAME}) and start The Shed."
+      if list_shed_cts | grep -q .; then
+        echo "WARNING: this is a parallel install. It will create CT ${CTID} (${CT_HOSTNAME}) next to the existing Shed CT(s). Existing CTs are left running."
+      else
+        echo "WARNING: this is a fresh install. It will create CT ${CTID} (${CT_HOSTNAME}) and start The Shed."
+      fi
       ;;
   esac
   echo "Type yes to continue."
@@ -280,8 +589,8 @@ delete_existing_ct() {
     return
   fi
   name="$(pct config "${CTID}" 2>/dev/null | awk '/^hostname:/{print $2}')"
-  if [[ -n "${name}" && "${name}" != "${CT_HOSTNAME}" && "${name}" != "theshed" ]]; then
-    echo "CT ${CTID} is hostname '${name}', not ${CT_HOSTNAME}. Refusing --delete." >&2
+  if [[ -n "${name}" ]] && ! is_shed_hostname "${name}"; then
+    echo "CT ${CTID} is hostname '${name}', not a Shed CT. Refusing --delete." >&2
     exit 1
   fi
   echo "Deleting CT ${CTID} (${name:-unknown})"
@@ -292,15 +601,19 @@ delete_existing_ct() {
 
 resolve_ref() {
   if [[ -n "${THESHED_REF:-}" ]]; then
-    echo "${THESHED_REF}"
+    REF_FROM_ENV=1
     return
   fi
+  REF_FROM_ENV=0
   local tag
   tag="$(curl -fsSL "${RAW_API}" 2>/dev/null | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1 || true)"
   if [[ -n "${tag}" ]]; then
-    echo "${tag}"
+    echo "THESHED_REF is unset; using latest GitHub release ${tag}." >&2
+    echo "A branch test needs: curl ... | bash -s -- --ref <branch-or-tag>" >&2
+    THESHED_REF="${tag}"
   else
-    echo "main"
+    echo "THESHED_REF is unset; no GitHub release found, using main." >&2
+    THESHED_REF="main"
   fi
 }
 
@@ -314,6 +627,35 @@ ct_ready_ok() {
     return 0
   fi
   pct exec "${CTID}" -- curl -fsS --max-time 3 "http://127.0.0.1:${PORT}${READY_PATH}" >/dev/null 2>&1
+}
+
+assert_running_ref() {
+  local ip="$1" body
+  body="$(curl -fsS --max-time 5 "http://${ip}:${PORT}/api/health" 2>/dev/null || true)"
+  if [[ -z "${body}" ]]; then
+    body="$(pct exec "${CTID}" -- curl -fsS --max-time 5 "http://127.0.0.1:${PORT}/api/health" 2>/dev/null || true)"
+  fi
+  if printf '%s' "${body}" | grep -Eq "\"ref\"[[:space:]]*:[[:space:]]*\"${THESHED_REF}\""; then
+    echo "Running app ref ${THESHED_REF}"
+    return 0
+  fi
+  echo "Upgrade did not replace the running image." >&2
+  echo "Expected /api/health ref=${THESHED_REF}; got: ${body:-empty}" >&2
+  echo "The UI will keep the old Proxmox token field until this container is rebuilt." >&2
+  exit 1
+}
+
+cloned_reports_ref() {
+  pct exec "${CTID}" -- grep -q 'os.environ.get("THESHED_REF")' "${APP_DIR}/backend/src/theshed/main.py"
+}
+
+verify_running_image() {
+  local ip="$1"
+  if cloned_reports_ref; then
+    assert_running_ref "${ip}"
+    return
+  fi
+  echo "Ref ${THESHED_REF} does not publish /health ref; skipped image check."
 }
 
 read_state_ip() {
@@ -341,13 +683,8 @@ EOF
 
 print_url() {
   echo
-  echo "The Shed is at: http://${1}:${PORT}"
-  echo "Open that URL from a browser on this LAN. Setup happens there."
-  echo
-  echo "  Username: ${OPERATOR_USERNAME}"
-  echo "  Password: ${OPERATOR_PASSWORD}"
-  echo "  CT user:  root"
-  echo "  CT pass:  ${CT_ROOT_PASSWORD}"
+  echo "The Shed is starting at: http://${1}:${PORT}"
+  echo "Waiting for GET ${READY_PATH} ..."
 }
 
 write_ct_notes() {
@@ -391,7 +728,7 @@ print_summary() {
   fi
   echo
   echo "Open that URL from a browser on this LAN."
-  echo "Log in with username and password above, then add an API key if asked."
+  echo "Log in with username and password above, then finish the onboarding wizard."
   echo "Proxmox console / pct console: root and the CT pass."
   echo "These details are also on the CT notes in the Proxmox UI."
   echo "========================================"
@@ -427,10 +764,20 @@ follow_debug_to_tty() {
 }
 
 compose_up() {
+  local cache_flag="${1:-}"
   if [[ -n "${THESHED_IMAGE:-}" ]]; then
-    pct exec "${CTID}" -- bash -c "cd ${APP_DIR} && docker compose --env-file .env -f bootstrap/docker-compose.yml up -d"
+    pct exec "${CTID}" -- bash -c "cd ${APP_DIR} && docker compose --env-file .env -f bootstrap/docker-compose.yml up -d --force-recreate --no-build"
   else
-    pct exec "${CTID}" -- bash -c "cd ${APP_DIR} && docker compose --env-file .env -f bootstrap/docker-compose.yml up -d --build"
+    # A leftover THESHED_IMAGE= in .env would otherwise keep the previous
+    # image tag and skip a real rebuild of the UI. Upgrades pass
+    # --no-cache so a branch change cannot reuse theshed:bootstrap.
+    pct exec "${CTID}" -- bash -c "
+      set -euo pipefail
+      cd ${APP_DIR}
+      sed -i '/^THESHED_IMAGE=$/d' .env
+      docker compose --env-file .env -f bootstrap/docker-compose.yml build ${cache_flag} --build-arg THESHED_REF=${THESHED_REF} app
+      docker compose --env-file .env -f bootstrap/docker-compose.yml up -d --force-recreate --build
+    "
   fi
   follow_debug_to_tty
 }
@@ -472,6 +819,10 @@ upsert_ct_env() {
 
 update_existing_ct() {
   local ref="$1"
+  if [[ "${HOSTNAME_EXPLICIT}" != "1" ]]; then
+    CT_HOSTNAME="theshed"
+  fi
+  pct set "${CTID}" --hostname "${CT_HOSTNAME}"
   if [[ "${CT_STATUS}" == "stopped" ]]; then
     echo "Starting CT ${CTID}"
     pct start "${CTID}"
@@ -503,7 +854,8 @@ update_existing_ct() {
     "
   fi
   upsert_ct_env THESHED_REF "${ref}"
-  compose_up
+  echo "Rebuilding the app image for ${ref} (no cache)"
+  compose_up --no-cache
 }
 
 ensure_template() {
@@ -597,8 +949,8 @@ ct_ip() {
 
 create_ct() {
   local template="$1"
-  if pct status "${CTID}" >/dev/null 2>&1; then
-    echo "CT ${CTID} already exists but is not healthy. Abandoned-CT cleanup is manual this phase." >&2
+  if vmid_in_use "${CTID}"; then
+    echo "VMID ${CTID} is already in use on this Proxmox cluster. Re-run to pick the next free id, or set THESHED_CTID." >&2
     exit 1
   fi
   local net="name=eth0,bridge=${BRIDGE},ip=dhcp"
@@ -647,19 +999,21 @@ main() {
   parse_args "$@"
   print_banner
   need_root
-  THESHED_REF="$(resolve_ref)"
+  resolve_ref
   echo "The Shed installer — ref ${THESHED_REF}"
   inspect_existing
-  local action
-  action="$(plan_action)"
-  print_plan "${action}"
+  print_existing_installs
+  # Must not run in $(...): prepare_new_ct sets CTID for the new VMID.
+  choose_install_action
+  print_plan "${INSTALL_ACTION}"
   confirm_install
-  if [[ "${action}" == "delete" ]]; then
+  if [[ "${INSTALL_ACTION}" == "delete" ]]; then
     delete_existing_ct
-    action="fresh"
+    prepare_new_ct
+    INSTALL_ACTION=fresh
   fi
   local ip
-  if [[ "${action}" == "update" ]]; then
+  if [[ "${INSTALL_ACTION}" == "update" ]]; then
     update_existing_ct "${THESHED_REF}"
     load_operator_from_ct
     if [[ -z "${CT_ROOT_PASSWORD}" ]]; then
@@ -672,8 +1026,8 @@ main() {
       exit 1
     fi
     print_url "${ip}"
-    echo "Waiting for GET ${READY_PATH} ..."
     wait_ready "${ip}"
+    verify_running_image "${ip}"
     write_state "${ip}" "${THESHED_REF}"
     print_summary "${ip}"
     return 0
@@ -692,8 +1046,8 @@ main() {
     exit 1
   fi
   print_url "${ip}"
-  echo "Waiting for GET ${READY_PATH} ..."
   wait_ready "${ip}"
+  verify_running_image "${ip}"
   write_state "${ip}" "${THESHED_REF}"
   print_summary "${ip}"
 }

@@ -5,14 +5,12 @@ import { Setup } from './Setup'
 import * as api from '../lib/api'
 
 describe('Setup', () => {
-  it('submits provider, API key, and the first operator account', async () => {
+  it('submits the first operator account', async () => {
     const completeSetup = vi.spyOn(api, 'completeSetup').mockResolvedValue()
     const onComplete = vi.fn()
     const user = userEvent.setup()
     render(<Setup onComplete={onComplete} />)
 
-    await user.selectOptions(screen.getByLabelText('Provider'), 'anthropic')
-    await user.type(screen.getByLabelText('API key'), 'sk-ant-api03-test')
     await user.type(screen.getByLabelText('Username'), 'admin')
     await user.type(screen.getByLabelText('Password'), 'correct-horse-battery-staple')
     await user.type(screen.getByLabelText('Confirm password'), 'correct-horse-battery-staple')
@@ -21,28 +19,8 @@ describe('Setup', () => {
     expect(completeSetup).toHaveBeenCalledWith({
       username: 'admin',
       password: 'correct-horse-battery-staple',
-      provider: 'anthropic',
-      api_key: 'sk-ant-api03-test',
-      galileo_api_key: undefined,
-      galileo_console_url: undefined,
     })
     expect(onComplete).toHaveBeenCalled()
-  })
-
-  it('shows a subscription rejection on the gate', async () => {
-    vi.spyOn(api, 'completeSetup').mockRejectedValue(
-      new Error('A Claude subscription will not work. Use an Anthropic, OpenAI, or Gemini API key.'),
-    )
-    const user = userEvent.setup()
-    render(<Setup onComplete={() => {}} />)
-
-    await user.type(screen.getByLabelText('API key'), 'claude subscription')
-    await user.type(screen.getByLabelText('Username'), 'admin')
-    await user.type(screen.getByLabelText('Password'), 'x')
-    await user.type(screen.getByLabelText('Confirm password'), 'x')
-    await user.click(screen.getByRole('button', { name: 'Create operator' }))
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('subscription will not work')
   })
 
   it('does not submit when the password fields do not match', async () => {
@@ -50,7 +28,6 @@ describe('Setup', () => {
     const user = userEvent.setup()
     render(<Setup onComplete={() => {}} />)
 
-    await user.type(screen.getByLabelText('API key'), 'sk-ant-api03-test')
     await user.type(screen.getByLabelText('Username'), 'admin')
     await user.type(screen.getByLabelText('Password'), 'correct-horse-battery-staple')
     await user.type(screen.getByLabelText('Confirm password'), 'different-password')
@@ -60,22 +37,10 @@ describe('Setup', () => {
     expect(completeSetup).not.toHaveBeenCalled()
   })
 
-  it('asks only for the API key when the installer already created the operator', async () => {
-    const completeSetup = vi.spyOn(api, 'completeSetup').mockResolvedValue()
-    const user = userEvent.setup()
-    render(<Setup onComplete={() => {}} hasOperator />)
-
-    expect(screen.queryByLabelText('Username')).not.toBeInTheDocument()
-    await user.type(screen.getByLabelText('API key'), 'sk-ant-api03-test')
-    await user.click(screen.getByRole('button', { name: 'Save API key' }))
-
-    expect(completeSetup).toHaveBeenCalledWith({
-      username: undefined,
-      password: undefined,
-      provider: 'anthropic',
-      api_key: 'sk-ant-api03-test',
-      galileo_api_key: undefined,
-      galileo_console_url: undefined,
-    })
+  it('does not collect an API key or Galileo on this gate', () => {
+    render(<Setup onComplete={() => {}} />)
+    expect(screen.queryByLabelText('API key')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Galileo/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Provider')).not.toBeInTheDocument()
   })
 })

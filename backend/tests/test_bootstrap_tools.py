@@ -45,7 +45,8 @@ async def test_foundations_write_stores_a_proxmox_api_token(
                     "patch": {
                         "proxmox": {
                             "host": "192.0.2.10",
-                            "api_token": "root@pam!shed=secret-token",
+                            "api_token_id": "root@pam!shed",
+                            "api_token_secret": "secret-token",
                         }
                     }
                 },

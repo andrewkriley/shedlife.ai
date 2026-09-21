@@ -73,7 +73,8 @@ async def test_put_get_validate_and_export(
     doc["proxmox"] = {
         "host": "192.0.2.10",
         "node": "pve",
-        "api_token": "root@pam!shed=secret-token",
+        "api_token_id": "root@pam!shed",
+        "api_token_secret": "secret-token",
         "ssh_key_fingerprint": None,
     }
 
@@ -100,9 +101,18 @@ async def test_put_get_validate_and_export(
     assert "local://proxmox/api_token" in yaml_text
     stored = await client.get("/foundations")
     assert stored.json()["proxmox"]["api_token_set"] is True
+    assert stored.json()["proxmox"]["api_token_id"] == "root@pam!shed"
     assert "api_token" not in stored.json()["proxmox"] or stored.json()["proxmox"].get(
         "api_token"
     ) in {None, ""}
+    assert stored.json()["proxmox"].get("api_token_secret") in {None, ""}
+
+    round_trip = await client.put(
+        "/foundations", json={"document": stored.json()}, headers=authed
+    )
+    assert round_trip.status_code == 200
+    assert round_trip.json()["proxmox"]["api_token_id"] == "root@pam!shed"
+    assert round_trip.json()["proxmox"]["api_token_set"] is True
 
 
 @pytest.mark.asyncio

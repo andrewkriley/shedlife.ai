@@ -34,6 +34,10 @@ has to exist before Git, Kubernetes, or a secrets backend do.
 ## Non-goals (this phase)
 
 - Installing Proxmox VE on bare metal — a human pre-task.
+- Running Proxmox host package / PVE updates on the first host —
+  operator pre-task or Deploy. Bootstrap does not `apt`/`pveupgrade`
+  the node. Subscription and repo settings are not collected, and
+  host upgrades are not one of the four playbooks.
 - Forming a Proxmox cluster (3/5 hosts) — Build-phase grill.
 - Provisioning or adopting GitLab, Infisical, PowerDNS, k3s, Flux, Let's
   Encrypt, Traefik, Cloudflared, Grafana, Prometheus — Deploy-phase grill.
@@ -50,12 +54,16 @@ has to exist before Git, Kubernetes, or a secrets backend do.
 ## Success criteria
 
 - From one Proxmox host with an API key the operator has not yet typed
-  anywhere: they run the pinned install command, open the printed URL, complete
-  the setup gate, and finish a foundations interview that ends in a visible
-  schema of collected / valid / failing fields plus probe results.
-- Re-running the install command against the same host does not create a
-  second CT if the first one is healthy; it reprints the URL.
-- Re-running a probe or changing one field does not require starting over.
+  anywhere: they run the pinned install command, open the printed URL, log in,
+  and finish a short onboarding wizard that ends in a visible summary of
+  collected / valid / failing fields plus probe results. Chat, debug, the
+  assistant status, Settings, and Foundations remain available.
+- Re-running the install command lists every Shed CT it finds and asks
+  whether to upgrade one in place or create a parallel CT on the next
+  cluster-free VMID. `--yes` upgrades the recorded CT and does not invent
+  a parallel instance.
+- Re-running the wizard or a probe, or changing one field, does not require
+  starting over.
 - No platform service listed in Non-goals has been created.
 - An unexpected probe crash produces a local issue the operator can see; a
   typo in a CIDR does not.
@@ -73,17 +81,28 @@ has to exist before Git, Kubernetes, or a secrets backend do.
 - Does not collect the LLM API key, the Proxmox *host* root password, or
   tenant facts. Those belong to the web app. It *does* generate the first
   operator username (`admin`) + password and a CT `root` password, print
-  them next to   the URL (including the early "The Shed is at" line, before
-  `/api/setup/status` returns), write the same completion details (URL,
+  the LAN URL as soon as the CT has an address, then print the login
+  details once in the completion summary after `/api/setup/status`
+  returns. Write the same completion details (URL,
   Username / Password, CT user / CT pass) to the CT Proxmox notes field,
   set the CT password so the Proxmox console can log in, and seed the
   operator identity so the web UI accepts `admin`.
-- Before changing anything, the installer inspects whether a bootstrap CT
-  is already present and whether the app answers. It prints that status,
-  a warning for the planned action, and waits for `yes` on the TTY
-  (`THESHED_YES=1` / `--yes` skips the prompt). Fresh: create a new CT.
-  Existing: update that CT in place (keep login and volumes). `--delete`:
-  destroy the CT, then a fresh install.
+- Before changing anything, the installer scans for Shed CTs (state file
+  plus hostname `theshed` / `theshed-*`) and prints a table: VMID,
+  hostname, status, IP, ref, app ready. Fresh and parallel creates ask the
+  live Proxmox cluster (`pvesh get /cluster/nextid` plus the cluster guest
+  list) so the VMID cannot overlap a CT or VM on any node. If none exist
+  and `9100` is free: create `9100` / `theshed`; if `9100` is taken,
+  take the next free id. New CTs use hostname `theshed` (the name shown
+  in Proxmox). If any Shed CTs exist, the TTY
+  asks (1) upgrade an existing CT in place (keep login and volumes;
+  rebuilds the app image with `--no-cache`) or (2)
+  install a parallel instance on the next free cluster VMID
+  (also hostname `theshed`). `--yes` / `THESHED_YES=1` skips prompts and upgrades
+  the recorded CT. `THESHED_PARALLEL=1` forces a parallel CT. `--delete`:
+  destroy the chosen CT, then a fresh install on a cluster-free VMID.
+  `THESHED_CTID` still pins a specific id and is refused if that id is in
+  use.
 - `--debug` (or `THESHED_DEBUG=1`) starts the CT with the live debug
   console on: HTTP requests (including start of a long SSE turn), UI
   clicks, chat submit/SSE, provider connection attempts, model
@@ -98,7 +117,8 @@ has to exist before Git, Kubernetes, or a secrets backend do.
 ### Bootstrap profile
 
 - The process in the LXC *is* The Shed, not a second app. Same API, same
-  chat, same turn loop, same auth cookies, same Galileo hook.
+  chat, same turn loop, same auth cookies. Bootstrap does not collect or
+  configure Galileo; the turn tracer stays a no-op in this phase.
 - Registry contains one sub-agent: `bootstrap.intake` (Assist job).
   Classification short-circuits.
 - Persistence (database, session store) runs inside the LXC. Data does not
@@ -106,33 +126,66 @@ has to exist before Git, Kubernetes, or a secrets backend do.
 - Secrets use the same client interface as the rest of the product, backed by
   a local store. See Secrets Management.
 
-### Setup gate (before chat)
+### Setup gate (identity only)
 
-- Provider: Anthropic | OpenAI | Gemini. A Claude subscription is rejected
-  with an explanation, not retried as a key.
-- API key, validated with a live, cheap provider call. Failure stays on this
-  screen.
 - Operator username + password: username is `admin`. The installer
   generates the password and prints Username / Password plus CT user
-  `root` / CT pass with the URL. If the CT has no identity yet (dev / no
-  installer seed), the gate still collects username + password typed
-  twice. This *is* the first user — not a later Fleet apply.
-- Optional Galileo key / console URL; omitted means the existing no-op
-  tracer. Settings later shows the current project, host, log stream,
-  and key (set/unset) and can update all four so turns send traces
-  without re-running setup.
+  `root` / CT pass in the completion summary. If the CT has no identity yet (dev / no
+  installer seed), this gate collects username + password typed twice.
+  This *is* the first user — not a later Fleet apply.
 - Gate is skippable on later visits once an operator identity exists
-  (login). Changing the provider key later is a settings action, not a
-  re-install.
+  (login). It does not collect an LLM key, Proxmox facts, or Galileo.
+  Changing the provider key later is a Settings action or a wizard re-run.
+
+### Onboarding wizard
+
+After login, a step-through wizard collects the minimum the operator must
+type, validates each step, discovers the rest from the Proxmox API, and
+ends on a pass / warn / fail summary. First login opens it when those
+facts are missing. **Onboarding** in the header re-runs it any time
+(existing values pre-fill, including the Proxmox Token ID; the Token
+Secret stays a blank field with a visible “saved” status — GET never
+returns the secret value). Chat, debug,
+the assistant status, Settings, and Foundations stay in the chrome.
+
+Steps, in order:
+
+1. Proxmox IP or API URL.
+2. Proxmox Token ID (`USER@REALM!tokenid`).
+3. Proxmox Token Secret — joined as `id=secret` into local secrets, then
+   `proxmox_api` plus host discovery (nodes, bridges and their CIDR /
+   gateway, all storage pools, version). Empty node / bridge / CIDR /
+   gateway / pool are filled from what was found when the operator has
+   not already set them.
+4. Network and storage — confirm the discovered LAN bridge, CIDR,
+   gateway, and storage pool. Bridges and pools are listed from the
+   Proxmox API; changing the bridge refreshes CIDR and gateway from that
+   interface. The operator can edit any of these before they are saved.
+5. AI provider (Anthropic | OpenAI | Gemini) and API key. A Claude
+   subscription is rejected with an explanation. Validated with a live,
+   cheap provider call. On a re-run, a blank key keeps the saved one.
+6. Tenant name and slug.
+7. Fresh install (all-build / greenfield) **or** fresh install with
+   adoption. Adopt then collects a URL per service the operator wants to
+   keep (GitLab, Infisical, DNS, k3s) and runs a shallow reachability
+   probe. The schema still stores per-dependency `intent.*` rows.
+
+Not in the wizard: domains, SSH key install, operator email, Galileo,
+NTP. Those stay on Foundations, chat, or later phases. The four
+playbooks remain; the wizard is a UI over collect / validate / probe,
+not a fifth playbook.
 
 ### Foundations interview
 
-Driven by chat, stored as a schema (see SPEC). The UI shows schema state
-next to the conversation, grouped the same way as the field list below.
+The wizard is the first-run path. Chat can still fill remaining schema
+fields through `foundations.write`. The UI shows schema state next to the
+conversation, grouped the same way as the field list below.
 The working chrome fits one browser window: the transcript scrolls inside
-the chat pane, Foundations / Issues share a tabbed review column, and
+the chat pane, Foundations / Issues share a tabbed review column about
+**30% of the browser width**, and
 the debug log (when on) sits under those panes instead of covering them,
-newest events first, each line stamped in system local time.
+newest events first, each line stamped in system local time with an
+explicit timezone (`UTC` or `UTC±offset`).
 Buttons depress and show a busy label while work is in flight. The header
 shows **AI Assistant is Connected · provider · model · ref**
 once `/health` is ok and a sub-agent is registered, naming the live
@@ -153,11 +206,14 @@ Field groups:
 
 - **Tenant**: display name and slug.
 - **Proxmox**: API/URL or host address, node name if more than one node is
-  already there (intent only), and a Proxmox API token (fillable field;
-  value in the local secrets store, `api_token_ref` on the schema). Root
-  password is collected once, used to install a dedicated SSH key, then
-  discarded — never persisted, never logged, never written into the YAML
-  bundle.
+  already there (intent only), and an API token stored in local secrets
+  (`api_token_ref` on the schema). The panel shows the saved **Proxmox
+  Token ID** (`USER@REALM!tokenid`) in the field and collects **Proxmox
+  Token Secret** separately; the app joins them as `id=secret`. The
+  assistant may still send a combined `api_token`.
+  Root password is collected once, used to install a dedicated SSH key,
+  then discarded — never persisted, never logged, never written into the
+  YAML bundle.
 - **Network**: bridge name, operator-facing address as CIDR + gateway, NTP
   (`inherit` from the Proxmox host by default).
 - **Storage**: a storage pool name for later VM disks. Single-host only.
@@ -166,11 +222,13 @@ Field groups:
   would find in a workshop shed — tools, electronics, test gear — as the
   left-most label (`scope`, `bench`, `solder`, …), never generic
   `server01` / `web` / `app` names.
-- **Build-vs-Adopt intent** (uniform question per dependency, no aggregate
-  shortcut): GitLab, Infisical, DNS, k3s. Adopt collects URL + how the
-  token will be supplied; Build records "create later." Nothing is created
-  or contacted except as a *probe* (reachability), and only when the
-  operator has chosen adopt.
+- **Build-vs-Adopt intent**: the wizard asks once — all-build, or adopt
+  some services. All-build writes `build` / `greenfield` on every
+  dependency. Adopt collects a URL per chosen service (GitLab, Infisical,
+  DNS, k3s) and writes `adopt` / `brownfield` only for those; the rest
+  stay build. Nothing is created or contacted except as a *probe*
+  (reachability), and only when the operator has chosen adopt. The
+  Foundations panel can still edit each dependency.
 
 Explicitly not collected: Proxmox subscription/repo settings; cluster
 node lists to form. The Proxmox API token *is* collected — intake jobs
@@ -254,8 +312,10 @@ Probes are rerunnable. Results hang off the schema, not the chat transcript.
 
 ### Idempotency / failure recovery
 
-- Re-run the install script: after confirmation, an existing CT is
-  updated in place. `--delete` destroys it first, after confirmation.
+- Re-run the install script: after confirmation, upgrade a listed CT in
+  place (the guest shown in the table, not a missing VMID left in the
+  state file), or create a parallel CT on the next cluster-free VMID.
+  `--delete` destroys the chosen CT first, after confirmation.
 - Re-run a playbook or probe: completed work is skipped after live
   verification, same hybrid model as before (local state + live check).
 - Abandoned-CT cleanup is still manual this phase. The installer's state

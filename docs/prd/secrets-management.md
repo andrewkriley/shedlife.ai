@@ -81,7 +81,8 @@ never be picked up). Expiry triggers a re-fetch, not a manual refresh action.
 ### Secret zero's runtime home
 
 **Bootstrap profile (current MVP):** the LXC's local secrets store. The LLM
-API key, optional Galileo key, and the dedicated SSH private key live there.
+API key, Proxmox API token, and the dedicated SSH private key live there.
+Bootstrap does not collect a Galileo key.
 References use `local://<path>`. Not a file in the product repo. File
 permissions and "never log it" are the controls; encryption-at-rest on the
 CT disk is desirable but not a Phase 1 blocker.

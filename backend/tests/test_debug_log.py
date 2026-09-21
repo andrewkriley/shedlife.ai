@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -54,9 +54,30 @@ def test_record_stores_a_system_local_timestamp(monkeypatch) -> None:
     recorded = datetime.fromisoformat(entry["at"])
     assert recorded.tzinfo is not None
     assert recorded.utcoffset() == datetime.now().astimezone().utcoffset()
+    assert entry["stamp"] == debug_log.format_local_timestamp(entry["at"])
+    assert "UTC" in entry["stamp"]
+    assert "T" not in entry["stamp"][:19]
+    assert "." in entry["at"]
+    fraction = entry["at"].split(".", 1)[1]
+    assert len(fraction.split("+")[0].split("-")[0]) == 3
 
 
-def test_console_line_shows_system_local_clock_time() -> None:
+def test_timezone_label_for_utc() -> None:
+    moment = datetime(2026, 9, 20, 0, 0, tzinfo=UTC)
+    assert debug_log.format_timezone_label(moment) == "UTC"
+
+
+def test_timezone_label_for_positive_offset() -> None:
+    moment = datetime(2026, 9, 20, 10, 0, tzinfo=timezone(timedelta(hours=10)))
+    assert debug_log.format_timezone_label(moment) == "UTC+10"
+
+
+def test_timezone_label_for_negative_offset_with_minutes() -> None:
+    moment = datetime(2026, 9, 20, 10, 0, tzinfo=timezone(timedelta(hours=-5, minutes=-30)))
+    assert debug_log.format_timezone_label(moment) == "UTC-05:30"
+
+
+def test_console_line_shows_system_local_clock_time_with_timezone() -> None:
     entry = {
         "at": "2026-09-20T00:00:00+00:00",
         "level": "info",
@@ -65,11 +86,14 @@ def test_console_line_shows_system_local_clock_time() -> None:
         "message": "Save",
         "detail": None,
     }
-    local = datetime.fromisoformat(entry["at"]).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+    stamp = debug_log.format_local_timestamp(entry["at"])
     line = debug_log.format_console_line(entry)
-    assert local in line
+    assert stamp in line
+    assert "UTC" in stamp
     assert "T00:00:00" not in line
-    assert "+00:00" not in line
+    local = datetime.fromisoformat(entry["at"]).astimezone()
+    assert local.strftime("%Y-%m-%d %H:%M:%S") in stamp
+    assert stamp.endswith(debug_log.format_timezone_label(local))
 
 
 def test_record_prints_redacted_line_to_stdout(monkeypatch, capsys) -> None:
@@ -172,6 +196,39 @@ async def test_http_middleware_records_start_before_the_response(
     assert any(item["event"] == "request" for item in debug_log.snapshot())
 
 
+@pytest.mark.asyncio
+async def test_http_middleware_skips_favicon(monkeypatch) -> None:
+    monkeypatch.setenv("THESHED_DEBUG", "1")
+
+    async def app(scope, receive, send):
+        response = PlainTextResponse("ok")
+        await response(scope, receive, send)
+
+    middleware = DebugHttpMiddleware(app)
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/favicon.ico",
+        "raw_path": b"/favicon.ico",
+        "query_string": b"",
+        "headers": [],
+        "client": ("test", 123),
+        "server": ("test", 80),
+    }
+
+    async def receive() -> dict:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: dict) -> None:
+        return None
+
+    await middleware(scope, receive, send)
+    assert debug_log.snapshot() == []
+
+
 def test_log_llm_error_records_the_failure(monkeypatch) -> None:
     monkeypatch.setenv("THESHED_DEBUG", "1")
     started = debug_log.log_llm_start("openai", "gpt-5.4")
@@ -191,6 +248,7 @@ def test_debug_dock_css_is_in_page_flow_not_fixed() -> None:
     assert "grid-column: 1 / -1" in dock
     assert "position: fixed" not in dock
     assert "grid-template-rows: auto minmax(0, 1fr) auto" in shell
+    assert "minmax(0, 1fr) minmax(280px, 30%)" in shell
     assert "display: contents" in shell
     assert ".workspace--hidden" in shell
     assert "padding-bottom: 56px" not in css

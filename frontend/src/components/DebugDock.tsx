@@ -6,7 +6,7 @@ import {
   setDebugEnabled,
   type DebugEvent,
 } from '../lib/api'
-import { formatDebugTimestamp } from '../lib/debugTime'
+import { formatDebugLine } from '../lib/debugTime'
 
 export function DebugDock() {
   const [enabled, setEnabled] = useState(false)
@@ -90,7 +90,7 @@ export function DebugDock() {
           aria-pressed={enabled}
           onClick={() => void toggle()}
         >
-          {enabled ? 'Debug on' : 'Debug off'}
+          {enabled ? 'Debug Off' : 'Debug On'}
         </button>
       </div>
       {enabled && (
@@ -100,11 +100,8 @@ export function DebugDock() {
           ) : (
             <ol>
               {[...events].reverse().map((item, index) => (
-                <li key={`${item.at}-${index}`} data-level={item.level}>
-                  <span className="debug-console__meta">
-                    {formatDebugTimestamp(item.at)} · {item.source} · {item.event}
-                  </span>
-                  {item.message}
+                <li key={`${item.stamp ?? item.at ?? 'event'}-${index}`} data-level={item.level}>
+                  {formatDebugLine(item)}
                 </li>
               ))}
             </ol>

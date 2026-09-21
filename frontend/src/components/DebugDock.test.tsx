@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { DebugDock } from './DebugDock'
-import { formatDebugTimestamp } from '../lib/debugTime'
+import { formatDebugLine } from '../lib/debugTime'
 import * as api from '../lib/api'
 
 const sampleLogs = {
@@ -10,6 +10,7 @@ const sampleLogs = {
   events: [
     {
       at: '2026-09-20T00:00:00Z',
+      stamp: '2026-09-20 10:00:00 UTC+10',
       level: 'error',
       source: 'provider',
       event: 'error',
@@ -27,30 +28,41 @@ describe('DebugDock', () => {
     const user = userEvent.setup()
     render(<DebugDock />)
 
-    const toggle = await screen.findByRole('button', { name: 'Debug off' })
+    const toggle = await screen.findByRole('button', { name: 'Debug On' })
     expect(toggle).toHaveAttribute('aria-pressed', 'false')
     expect(toggle).toHaveClass('debug-dock__toggle--off')
     expect(screen.queryByLabelText('debug console')).not.toBeInTheDocument()
 
     await user.click(toggle)
     expect(setDebugEnabled).toHaveBeenCalledWith(true)
-    expect(await screen.findByRole('button', { name: 'Debug on' })).toHaveClass('debug-dock__toggle--on')
+    expect(await screen.findByRole('button', { name: 'Debug Off' })).toHaveClass('debug-dock__toggle--on')
     expect(await screen.findByLabelText('debug console')).toBeInTheDocument()
     expect(screen.getByText(/anthropic rejected the key/)).toBeInTheDocument()
-    expect(
-      screen.getByText(formatDebugTimestamp('2026-09-20T00:00:00Z'), { exact: false }),
-    ).toBeInTheDocument()
+    const line = screen.getByRole('listitem')
+    expect(line.textContent).toBe(formatDebugLine(sampleLogs.events[0]))
+    expect(line.textContent?.startsWith('2026-09-20 10:00:00 UTC+10')).toBe(true)
   })
 
-  it('formats timestamps as a local clock without a UTC designator', () => {
-    const formatted = formatDebugTimestamp('2026-09-20T14:05:06.123Z')
-    const date = new Date('2026-09-20T14:05:06.123Z')
-    const pad = (value: number) => String(value).padStart(2, '0')
-    expect(formatted).toBe(
-      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`,
+  it('still prints a server stamp when at is omitted', async () => {
+    vi.spyOn(api, 'getDebugStatus').mockResolvedValue({ enabled: true })
+    vi.spyOn(api, 'getDebugLogs').mockResolvedValue({
+      enabled: true,
+      events: [
+        {
+          stamp: '2026-09-21 16:51:03 UTC+10',
+          level: 'info',
+          source: 'http',
+          event: 'request',
+          message: 'GET /settings/connection → 200 (1ms)',
+        },
+      ],
+    })
+
+    render(<DebugDock />)
+    const line = await screen.findByRole('listitem')
+    expect(line.textContent).toBe(
+      '2026-09-21 16:51:03 UTC+10  http · request  GET /settings/connection → 200 (1ms)',
     )
-    expect(formatted).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
-    expect(formatted).not.toMatch(/Z|T|\+/)
   })
 
   it('lists the newest debug event first', async () => {
@@ -89,12 +101,12 @@ describe('DebugDock', () => {
     const user = userEvent.setup()
     render(<DebugDock />)
 
-    expect(await screen.findByRole('button', { name: 'Debug on' })).toHaveClass('debug-dock__toggle--on')
+    expect(await screen.findByRole('button', { name: 'Debug Off' })).toHaveClass('debug-dock__toggle--on')
     expect(await screen.findByLabelText('debug console')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Debug on' }))
+    await user.click(screen.getByRole('button', { name: 'Debug Off' }))
     expect(setDebugEnabled).toHaveBeenCalledWith(false)
-    expect(await screen.findByRole('button', { name: 'Debug off' })).toHaveClass('debug-dock__toggle--off')
+    expect(await screen.findByRole('button', { name: 'Debug On' })).toHaveClass('debug-dock__toggle--off')
     expect(screen.queryByLabelText('debug console')).not.toBeInTheDocument()
   })
 })

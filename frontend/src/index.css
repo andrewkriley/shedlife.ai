@@ -83,6 +83,12 @@ label {
   margin: var(--space-sm) 0 var(--space-xs);
 }
 
+label[title] {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
 input,
 select,
 textarea,
@@ -211,7 +217,7 @@ code {
 
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 30%);
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100dvh;
   max-height: 100dvh;
@@ -238,10 +244,61 @@ code {
   background: var(--bg-panel);
 }
 
+.app-header__actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-left: auto;
+}
+
 .app-header h1 {
   margin: 0;
   font-size: 20px;
   line-height: 28px;
+}
+
+.wizard {
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-xl);
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+}
+
+.wizard__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding: 0;
+  margin: 0 0 var(--space-lg);
+  list-style: none;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.wizard__steps .is-current {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.wizard__steps .is-done {
+  color: var(--accent-success);
+}
+
+.wizard__checks {
+  padding-left: 1.2em;
+}
+
+.wizard__checks li[data-status='pass'] {
+  color: var(--accent-success);
+}
+
+.wizard__checks li[data-status='warn'] {
+  color: var(--accent-warning);
+}
+
+.wizard__checks li[data-status='fail'],
+.wizard__checks li[data-status='error'] {
+  color: var(--accent-danger);
 }
 
 .assistant-status {
@@ -573,19 +630,16 @@ fieldset > legend {
 }
 
 .debug-dock__toggle--off {
-  background: var(--bg-canvas);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+  background: var(--accent-success);
+  color: var(--on-accent);
 }
 
 .debug-dock__toggle--off:hover:not(:disabled) {
-  filter: none;
-  background: var(--bg-panel);
-  color: var(--text-primary);
+  filter: brightness(1.08);
 }
 
 .debug-dock__toggle--on {
-  background: var(--accent-success);
+  background: var(--accent-danger);
   color: var(--on-accent);
 }
 
@@ -611,10 +665,10 @@ fieldset > legend {
   gap: var(--space-xs);
 }
 
-.debug-console__meta {
+.debug-console li {
   display: block;
-  color: var(--text-muted);
-  font-size: 11px;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
 }
 
 .debug-console li[data-level='error'] {

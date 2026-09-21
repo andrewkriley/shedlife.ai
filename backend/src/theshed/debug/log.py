@@ -13,7 +13,7 @@ import sys
 import threading
 import time
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from theshed.secrets.client import LocalSecretsClient, SecretNotFoundError, SecretsClient
@@ -86,8 +86,10 @@ def record(
 ) -> dict[str, Any] | None:
     if not is_enabled():
         return None
+    at = datetime.now().astimezone().isoformat(timespec="milliseconds")
     entry = {
-        "at": datetime.now().astimezone().isoformat(),
+        "at": at,
+        "stamp": format_local_timestamp(at),
         "level": level,
         "source": source,
         "event": event,
@@ -100,20 +102,40 @@ def record(
     return entry
 
 
+def format_timezone_label(moment: datetime) -> str:
+    """UTC, or UTC±offset, for a timezone-aware datetime."""
+    offset = moment.utcoffset()
+    if offset is None:
+        moment = moment.astimezone()
+        offset = moment.utcoffset() or timedelta(0)
+    total_seconds = int(offset.total_seconds())
+    if total_seconds == 0:
+        return "UTC"
+    sign = "+" if total_seconds > 0 else "-"
+    total_minutes = abs(total_seconds) // 60
+    hours, minutes = divmod(total_minutes, 60)
+    if minutes:
+        return f"UTC{sign}{hours:02d}:{minutes:02d}"
+    return f"UTC{sign}{hours}"
+
+
 def format_local_timestamp(value: str) -> str:
-    """Clock time in the process timezone — the CT / host local time."""
+    """Clock time in the process timezone — the CT / host local time — with zone."""
     try:
         moment = datetime.fromisoformat(value)
     except ValueError:
         return value
     if moment.tzinfo is None:
         moment = moment.astimezone()
-    return moment.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+    local = moment.astimezone()
+    clock = local.strftime("%Y-%m-%d %H:%M:%S")
+    return f"{clock} {format_timezone_label(local)}"
 
 
 def format_console_line(entry: dict[str, Any]) -> str:
+    stamp = str(entry.get("stamp") or format_local_timestamp(str(entry.get("at", ""))))
     line = (
-        f"[debug] {format_local_timestamp(str(entry['at']))} {entry['level']} "
+        f"[debug] {stamp} {entry['level']} "
         f"{entry['source']}.{entry['event']}: {entry['message']}"
     )
     if entry.get("detail") is not None:

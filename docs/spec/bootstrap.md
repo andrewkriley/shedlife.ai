@@ -12,8 +12,9 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
   the URL. Not an orchestrator.
 - **Bootstrap LXC** — durable for this phase. Runs The Shed (bootstrap
   profile) plus its local database and session store.
-- **Setup gate** — first-run screen; creates secret-zero (LLM key) and the
-  first local-password identity.
+- **Setup gate** — first-run identity screen when no operator exists yet.
+- **Onboarding wizard** — step-through collect / validate / discover /
+  summary after login; re-runnable from the header.
 - **`bootstrap.intake`** — the only registered sub-agent. Assist job.
   Playbooks below are its only tools besides ordinary conversation.
 - **Foundations store** — schema rows + probe results + exportable YAML.
@@ -24,31 +25,54 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
 
 1. Operator, as root on the Proxmox host, runs the install command pinned to
    a release tag (overrideable). Example shape:
-   `curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash`
-2. The script inspects the recorded CT (if any): present / running /
-   stopped, and whether `GET /api/setup/status` answers. It prints that
-   status and a warning, then requires `yes` on the TTY unless
-   `--yes` / `THESHED_YES=1`. Fresh → create. Existing → update in
-   place (keep `.env` and compose volumes, refresh the clone and
-   image). `--delete` → destroy the CT, then fresh. New CTs get a
+   `curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash`.
+   A branch or tag is `--ref` on bash (`curl ... | bash -s -- --ref <ref>`),
+   not `THESHED_REF=` prefixed on `curl`.
+2. The script lists Shed CTs it finds (state file and hostname `theshed` /
+   `theshed-*`): VMID, hostname, status, IP, ref, whether
+   `GET /api/setup/status` answers. It prints that table and a warning,
+   then requires a choice on the TTY unless `--yes` / `THESHED_YES=1`.
+   Fresh and parallel creates confirm the VMID is free on the live
+   cluster (`pvesh get /cluster/nextid --vmid` plus `/etc/pve/.vmlist`
+   and guest conf on every node) so it cannot overlap a CT or VM.
+   Fresh (no Shed CT, `9100` free) → create `9100` / `theshed`;
+   if `9100` is taken, the next free id. New CTs use hostname `theshed`.
+   Existing → (1) update the listed Shed CT in place (keep `.env` and compose
+   volumes, refresh the clone and rebuild the app image with `--no-cache`) — not a VMID from a stale state
+   file if that guest is gone — or (2) parallel on the next free
+   cluster VMID (hostname `theshed`). `--yes` upgrades the recorded CT when
+   it is still present, otherwise the listed one, and never
+   invents a parallel instance. `THESHED_PARALLEL=1` forces parallel.
+   `--delete` → destroy the chosen CT, then fresh on a cluster-free VMID.
+   `THESHED_CTID` pins an id and is refused if that id is in use. New CTs get a
    generated `admin` password and CT `root` password
-   (`pct create --password`). Prints the URL plus Username / Password /
-   CT user / CT pass immediately, then waits until
-   `GET /api/setup/status` succeeds (from the host, or `pct exec` to
-   localhost). Do not wait on `GET /health`. `--debug` writes
+   (`pct create --password`). Prints the LAN URL as soon as the CT has
+   an address, waits until `GET /api/setup/status` succeeds (from the
+   host, or `pct exec` to localhost), then prints Username / Password /
+   CT user / CT pass once in the completion summary. Do not wait on
+   `GET /health`. `--debug` writes
    `THESHED_DEBUG=1`. The same completion details (URL, Username /
    Password, CT user / CT pass, CT id, ref) are written to the CT
    Proxmox notes field (`pct set --description`) so they stay visible
    on the guest in the Proxmox UI after the installer exits.
 3. Operator opens the URL. Seeded identity exists → login with username
-   `admin` and the printed password, then setup if no LLM key yet. No
-   identity → setup gate.
-4. Setup gate: provider + API key (live validate). Username + password
-   (typed twice) only when no operator identity exists yet.
-   Writes `local://providers/llm/api_key` (and optional Galileo refs).
-   Creates `users` / `identities` rows. Sets the session cookie
-   (`Secure` off).
-5. Chat UI loads in a single-window shell (header + chat + tabbed review).
+   `admin` and the printed password. No identity → setup gate (username
+   + password typed twice). The gate does not collect an LLM key or
+   Galileo.
+4. After login, `GET /onboarding/status`. If foundations are incomplete
+   or the LLM key is missing, the onboarding wizard opens in the chat
+   column (header, debug, Foundations / Issues stay). Steps: Proxmox
+   host → Token ID → Token Secret → provider + API key → tenant name
+   and slug → all-build or adopt (URLs when adopting). Each step
+   validates before the next. Host discovery fills empty node / bridge /
+   pool. The last screen is a probe summary. Completing writes
+   foundations + secrets. Header **Onboarding** re-runs the wizard
+   (pre-filled, including Token ID; the secret stays a blank field with a
+   visible “saved” status). Writes
+   `local://providers/llm/api_key` and `local://proxmox/api_token`.
+   Settings still changes the provider key later.
+5. Chat UI loads in a single-window shell (header + chat + tabbed review
+   at about 30% of the browser width).
    The header polls `GET /health` and `GET /settings/sub-agents` and shows
    **AI Assistant is Connected · provider · model · ref** when both succeed
    and at least one agent is registered, using `GET /settings/connection`
@@ -75,10 +99,13 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    flush a leftover event when the stream ends without a trailing
    blank line, or an `error` / `done` is dropped and the UI looks
    dead.
-6. `collect-foundations`: the agent asks for schema fields, writes them
+6. `collect-foundations`: the wizard is the primary collect path. The
+   agent may still ask for remaining schema fields and write them
    through a `foundations.write` tool (no side effects beyond the store).
-   It may first enumerate the host and adopted URLs with the discovery
-   tools below; those calls do not write the schema. The review panel
+   It may enumerate the host and adopted URLs with the discovery
+   tools below; those calls do not write the schema unless the operator
+   confirms. The wizard may write discovered node / bridge / CIDR /
+   gateway / pool when those keys are still empty. The review panel
    reflects the schema after each write.
 7. `validate-foundations`: runs without the model inventing rules; failures
    attach to fields.
@@ -86,7 +113,9 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    pauses for approval, generates the dedicated key in the CT, installs it
    via the still-held root password, discards the password, stores only the
    fingerprint. Other probes are read-only. Discovery tools are not
-   probes and are not a fifth playbook.
+   probes and are not a fifth playbook. Host package / PVE updates on the
+   first Proxmox node are not a playbook either — operator pre-task or
+   Deploy; Bootstrap does not upgrade the host.
 9. `export-state`: produces the YAML bundle (references, not values). The
    operator can download it. It is also kept on the CT.
 10. The LXC stays up. Handoff to Deploy is "foundations valid + probes
@@ -104,7 +133,8 @@ image_ref: <tag or digest>
 health: { last_ok: <timestamp> }
 ```
 
-Used only to decide "create vs. reprint URL." Not the foundations store.
+Used to remember which CT the last install run touched. Listing
+existing Shed CTs also scans `pct list` hostnames. Not the foundations store.
 
 ### Foundations schema (illustrative)
 
@@ -149,11 +179,17 @@ probes:
 
 Secret *values* are only in the local secrets store, referenced as
 `local://<path>` (see Secrets Management). The exportable bundle is this
-document plus those references. The Foundations panel has a Proxmox API
-token field; saving it writes `local://proxmox/api_token` and leaves only
-the ref on the schema. `foundations_write` does the same if the assistant
-is handed `proxmox.api_token`. GET never returns the raw token — only
-`api_token_set`. `proxmox_api` authenticates with `PVEAPIToken=`.
+document plus those references. The Foundations panel has **Proxmox Token ID** and **Proxmox Token
+Secret** fields with hover descriptions on every schema field. The Token
+ID is shown in the input after save; the secret stays a blank field with
+a visible “saved” status. Saving joins them as
+`USER@REALM!tokenid=secret` into `local://proxmox/api_token` and keeps
+the public Token ID plus the ref on the schema. `foundations_write` does
+the same if the assistant is handed `proxmox.api_token` (combined) or
+the two parts. GET returns the Token ID (`USER@REALM!tokenid`) and
+`api_token_set`; it never returns the secret or the combined `id=secret`
+value. PUT of a GET body keeps the saved token.
+`proxmox_api` authenticates with `PVEAPIToken=`.
 
 ### Sub-agent registry (bootstrap profile seed)
 
@@ -197,6 +233,21 @@ New:
 - `GET` / `PUT /foundations` — read/replace the schema (PUT is what the
   review panel and `foundations.write` use; the agent does not write the
   table itself).
+- `GET /onboarding/status` — whether the wizard should open, plus
+  non-secret current values (host, tenant, token-set, vendor, intent,
+  bridge / CIDR / gateway / pool).
+- `POST /onboarding/proxmox` — save host and/or Token ID + Secret,
+  probe `proxmox_api`, discover nodes / bridges (with CIDR + gateway
+  per interface) / all storage pools, fill empty defaults.
+- `POST /onboarding/network` — save the chosen bridge, CIDR, gateway,
+  and storage pool (operator may edit the discovered values).
+- `POST /onboarding/provider` — validate and save the LLM vendor + key
+  (blank key on a re-run keeps the saved one).
+- `POST /onboarding/tenant` — name + slug.
+- `POST /onboarding/intent` — `build` or `adopt` plus optional service
+  URLs.
+- `POST /onboarding/complete` — run the wizard probe set and return the
+  summary. Does not run `ssh_key_installed`.
 - `POST /foundations/validate` — playbook 2, deterministic.
 - `POST /probes/{id}` — run one probe; `ssh_key_installed` goes through the
   existing approval event if invoked from a turn.
@@ -209,13 +260,9 @@ New:
   refused once an identity exists.
 
 Settings (`GET /settings/models`, `GET /settings/connection`,
-`POST /settings/provider`, model overrides, `GET`/`POST /settings/galileo`)
-stay; they are how the operator changes provider and Galileo after the
-gate. `GET /settings/galileo` returns the current project, host (console
-URL), log stream, and whether an API key is saved — never the key.
-`POST /settings/galileo` writes `local://observability/galileo_*`,
-applies `GALILEO_*` env for the SDK, and enables the tracer when a key
-is present (otherwise the no-op tracer stays). `GET /settings/connection`
+`POST /settings/provider`, model overrides)
+stay; they are how the operator changes provider after the
+wizard. Bootstrap does not collect Galileo. `GET /settings/connection`
 is the live vendor and the resolved model chat / verify will actually
 call for `bootstrap.intake` (or the first override). Apply / save-key
 refreshes the header immediately. The page always lists Anthropic /
@@ -253,13 +300,15 @@ console). `--debug` also tails compose logs onto `tty1`. Interfaces:
 - `GET /debug/logs` — `{enabled, events[]}`
 - `POST /debug/events` — UI clicks / client errors
 
-The UI toggle is green when debug is on and muted when off. The log
-panel is shown only while debug is enabled, in the page flow under the
-chat — not as a fixed overlay. Each event shows its timestamp in the
-system local clock (`YYYY-MM-DD HH:MM:SS`), not UTC. The panel lists
-newest events first; `GET /debug/logs` and the CT console stay
-chronological (oldest first). The console line uses the same local
-clock. The stored `at` is timezone-aware ISO in the process timezone.
+The UI toggle is an action label: green **Debug On** when debug is off
+(press to enable), red **Debug Off** when debug is on (press to disable).
+The log panel is shown only while debug is enabled, in the page flow under the
+chat — not as a fixed overlay. Each recorded event includes `stamp`
+(`YYYY-MM-DD HH:MM:SS UTC` or `UTC±offset` in the process timezone) and
+`at` (millisecond ISO). The dock prints `stamp` at the start of the same
+line as `source · event` and the message — one text node, matching the
+CT console. Newest events first in the panel; `GET /debug/logs` and the
+console stay chronological (oldest first).
 
 ## Security model
 

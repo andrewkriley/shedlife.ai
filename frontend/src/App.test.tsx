@@ -22,12 +22,28 @@ const foundations: FoundationsDocument = {
   probes: {},
 }
 
+const onboardingDone: api.OnboardingStatus = {
+  needed: false,
+  tenant: foundations.tenant,
+  proxmox: { host: foundations.proxmox.host, node: foundations.proxmox.node, api_token_set: true },
+  network: {
+    bridge: foundations.network.bridge,
+    address: foundations.network.address,
+    gateway: foundations.network.gateway,
+  },
+  storage: { pool: foundations.storage.pool },
+  provider: { vendor: 'anthropic', api_key_set: true },
+  intent: { mode: 'build', services: foundations.intent },
+  probes: {},
+}
+
 describe('App', () => {
   it('shows the setup gate when no operator exists yet', async () => {
     vi.spyOn(api, 'getSetupStatus').mockResolvedValue({ needed: true })
     render(<App />)
-    expect(await screen.findByLabelText('API key')).toBeInTheDocument()
+    expect(await screen.findByLabelText('Username')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Create operator' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('API key')).not.toBeInTheDocument()
   })
 
   it('shows login once setup is complete', async () => {
@@ -59,6 +75,7 @@ describe('App', () => {
     vi.spyOn(api, 'getIssues').mockResolvedValue([])
     vi.spyOn(api, 'getLiveModels').mockResolvedValue({ anthropic: ['claude-haiku-4-5'] })
     vi.spyOn(api, 'getDebugStatus').mockResolvedValue({ enabled: false })
+    vi.spyOn(api, 'getOnboardingStatus').mockResolvedValue(onboardingDone)
 
     const user = userEvent.setup()
     render(<App />)
@@ -69,6 +86,7 @@ describe('App', () => {
     expect(document.querySelector('.app-shell')).toHaveAttribute('data-layout', 'single-window')
     expect(document.querySelector('.app-shell')?.contains(document.querySelector('.debug-dock'))).toBe(true)
     expect(await screen.findByText('AI Assistant is Connected')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Onboarding' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Foundations' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Issues' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Tenant' })).toBeInTheDocument()
@@ -80,6 +98,28 @@ describe('App', () => {
     expect(await screen.findByRole('group', { name: 'Change the model' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Back to chat' }))
     expect(screen.getByLabelText('Message')).toBeInTheDocument()
+  })
+
+  it('opens the onboarding wizard after login when facts are missing', async () => {
+    vi.spyOn(api, 'getSetupStatus').mockResolvedValue({ needed: false })
+    vi.spyOn(api, 'login').mockResolvedValue()
+    vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
+    vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue([])
+    vi.spyOn(api, 'getFoundations').mockResolvedValue(foundations)
+    vi.spyOn(api, 'getIssues').mockResolvedValue([])
+    vi.spyOn(api, 'getDebugStatus').mockResolvedValue({ enabled: false })
+    vi.spyOn(api, 'getOnboardingStatus').mockResolvedValue({ ...onboardingDone, needed: true })
+
+    const user = userEvent.setup()
+    render(<App />)
+    await user.type(await screen.findByLabelText('Username'), 'admin')
+    await user.type(screen.getByLabelText('Password'), 'secret')
+    await user.click(screen.getByRole('button', { name: 'Log in' }))
+
+    expect(await screen.findByRole('region', { name: 'Onboarding' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Proxmox IP or API URL')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Foundations' })).toBeInTheDocument()
+    expect(document.querySelector('.app-shell')?.contains(document.querySelector('.debug-dock'))).toBe(true)
   })
 
   it('keeps the chat transcript after opening and leaving Settings', async () => {
@@ -102,6 +142,7 @@ describe('App', () => {
     vi.spyOn(api, 'getIssues').mockResolvedValue([])
     vi.spyOn(api, 'getLiveModels').mockResolvedValue({ openai: ['gpt-5.4'] })
     vi.spyOn(api, 'getDebugStatus').mockResolvedValue({ enabled: false })
+    vi.spyOn(api, 'getOnboardingStatus').mockResolvedValue(onboardingDone)
     vi.spyOn(api, 'getConnection').mockResolvedValue({
       provider: 'openai',
       model: 'gpt-5.4',
