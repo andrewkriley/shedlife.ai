@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -57,7 +57,7 @@ def test_record_stores_a_system_local_timestamp(monkeypatch) -> None:
 
 
 def test_timezone_label_for_utc() -> None:
-    moment = datetime(2026, 9, 20, 0, 0, tzinfo=timezone.utc)
+    moment = datetime(2026, 9, 20, 0, 0, tzinfo=UTC)
     assert debug_log.format_timezone_label(moment) == "UTC"
 
 

@@ -46,7 +46,7 @@ describe('DebugDock', () => {
   it('formats timestamps as a local clock with a timezone label', () => {
     const formatted = formatDebugTimestamp('2026-09-20T14:05:06.123Z')
     expect(formatted).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC([+-]\d{1,2}(:\d{2})?)?$/)
-    expect(formatted).not.toMatch(/T/)
+    expect(formatted).not.toMatch(/^\d{4}-\d{2}-\d{2}T/)
     expect(formatted.endsWith('Z')).toBe(false)
   })
 
