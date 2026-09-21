@@ -91,6 +91,38 @@ describe('AssistantStatus', () => {
     ).toBeInTheDocument()
   })
 
+  it('names the installed ref when health reports one', async () => {
+    vi.spyOn(api, 'getHealth').mockResolvedValue({
+      status: 'ok',
+      ref: 'cursor/health-install-ref-8f92',
+    })
+    vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue([
+      {
+        id: 'bootstrap.intake',
+        macro_category: 'assist',
+        description: 'Bootstrap intake',
+        default_provider: 'openai',
+        default_model: 'gpt-5.4',
+        provider: 'openai',
+        model: 'gpt-5.4',
+        overridden: false,
+      },
+    ])
+    vi.spyOn(api, 'getConnection').mockResolvedValue({
+      provider: 'openai',
+      model: 'gpt-5.4',
+      configured: true,
+    })
+
+    render(<AssistantStatus />)
+
+    expect(
+      await screen.findByText(
+        'AI Assistant is Connected · openai · gpt-5.4 · cursor/health-install-ref-8f92',
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('shows disconnected when the health check fails', async () => {
     vi.spyOn(api, 'getHealth').mockRejectedValue(new Error('down'))
     vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue([])

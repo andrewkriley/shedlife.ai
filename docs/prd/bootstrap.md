@@ -134,10 +134,12 @@ the chat pane, Foundations / Issues share a tabbed review column, and
 the debug log (when on) sits under those panes instead of covering them,
 newest events first, each line stamped in system local time.
 Buttons depress and show a busy label while work is in flight. The header
-shows **AI Assistant is Connected · provider · model**
+shows **AI Assistant is Connected · provider · model · ref**
 once `/health` is ok and a sub-agent is registered, naming the live
-provider and model chat will call — so the operator can tell the
-assistant is live before sending a message. Sending a message on the
+provider and model chat will call and the git ref this CT was
+installed from (`THESHED_REF`) — so the operator can tell the
+assistant is live, and which branch or tag is running, before sending
+a message. Sending a message on the
 printed LAN HTTP URL must show a reply or an error in the transcript;
 a click that does nothing is a product bug (the page is not a secure
 context). A Settings model override is what chat, the header, and verify call

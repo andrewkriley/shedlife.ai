@@ -50,9 +50,10 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    (`Secure` off).
 5. Chat UI loads in a single-window shell (header + chat + tabbed review).
    The header polls `GET /health` and `GET /settings/sub-agents` and shows
-   **AI Assistant is Connected · provider · model** when both succeed
+   **AI Assistant is Connected · provider · model · ref** when both succeed
    and at least one agent is registered, using `GET /settings/connection`
-   for the live vendor and the model chat will actually call. Registry
+   for the live vendor and the model chat will actually call, and the
+   `ref` from `/health` (`THESHED_REF`, or omitted when `unknown`). Registry
    has one row (`bootstrap.intake`); the turn path short-circuits
    classification and opens that agent. The registry default is OpenAI
    `gpt-4.1-mini`. If the configured key is a different vendor, chat uses
@@ -186,7 +187,8 @@ Reused from the living harness:
 - `POST /auth/login`, `POST /auth/logout` — Auth SPEC, with `Secure` off.
 - `POST /turns`, `POST /turns/{id}/approvals`, `POST /turns/{id}/verify` —
   Core Agentic Loop SPEC.
-- `GET /health` — UI connected indicator. Registered before the static
+- `GET /health` — `{status, ref}` UI connected indicator plus the
+  install ref (`THESHED_REF`, or `unknown`). Registered before the static
   mount so it is not swallowed.
 - `GET /api/setup/status` — installer wait loop and reuse check.
 

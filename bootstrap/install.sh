@@ -448,11 +448,26 @@ write_fresh_env() {
 POSTGRES_PASSWORD=${db_pass}
 THESHED_IMAGE=${THESHED_IMAGE:-}
 THESHED_DEBUG=${debug_flag}
+THESHED_REF=${THESHED_REF}
 THESHED_OPERATOR_USERNAME=${OPERATOR_USERNAME}
 THESHED_OPERATOR_EMAIL=${OPERATOR_USERNAME}
 THESHED_OPERATOR_PASSWORD=${OPERATOR_PASSWORD}
 THESHED_CT_ROOT_PASSWORD=${CT_ROOT_PASSWORD}
 EOF"
+}
+
+upsert_ct_env() {
+  local key="$1"
+  local value="$2"
+  pct exec "${CTID}" -- bash -c "
+    set -euo pipefail
+    [[ -f ${APP_DIR}/.env ]] || exit 0
+    if grep -q '^${key}=' ${APP_DIR}/.env; then
+      sed -i 's#^${key}=.*#${key}=${value}#' ${APP_DIR}/.env
+    else
+      echo '${key}=${value}' >> ${APP_DIR}/.env
+    fi
+  "
 }
 
 update_existing_ct() {
@@ -487,6 +502,7 @@ update_existing_ct() {
       fi
     "
   fi
+  upsert_ct_env THESHED_REF "${ref}"
   compose_up
 }
 

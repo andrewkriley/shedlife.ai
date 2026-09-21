@@ -5,6 +5,16 @@ SCRIPT = ROOT / "bootstrap" / "install.sh"
 README = ROOT / "README.md"
 
 
+def test_install_script_writes_theshed_ref_into_ct_env() -> None:
+    text = SCRIPT.read_text()
+    assert "THESHED_REF=${THESHED_REF}" in text
+    assert "upsert_ct_env" in text
+    update = text.split("update_existing_ct() {", 1)[1].split("\n}\n", 1)[0]
+    assert "upsert_ct_env THESHED_REF" in update
+    compose = (ROOT / "bootstrap" / "docker-compose.yml").read_text()
+    assert "THESHED_REF: ${THESHED_REF:-}" in compose
+
+
 def test_install_script_exists_and_is_thin() -> None:
     text = SCRIPT.read_text()
     assert SCRIPT.is_file()
