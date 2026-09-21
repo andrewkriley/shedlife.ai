@@ -34,7 +34,7 @@ def _prefix_from_netmask(mask: str) -> int | None:
             bits = (bits << 8) | int(part)
     except ValueError:
         return None
-    return bin(bits).count("1")
+    return bits.bit_count()
 
 
 def iface_network(item: dict[str, Any]) -> dict[str, str]:

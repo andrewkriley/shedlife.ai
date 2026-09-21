@@ -117,7 +117,8 @@ def discovered_defaults(document: dict[str, Any], facts: dict[str, Any]) -> dict
     nodes = [str(n) for n in (facts.get("nodes") or []) if n]
     bridges = [str(b) for b in (facts.get("bridges") or []) if b]
     pools = [str(p) for p in (facts.get("pools") or []) if p]
-    networks = facts.get("networks") if isinstance(facts.get("networks"), dict) else {}
+    raw_networks = facts.get("networks")
+    networks = raw_networks if isinstance(raw_networks, dict) else {}
     if not (proxmox.get("node") or "").strip() and nodes:
         proxmox["node"] = nodes[0]
         patch["proxmox"] = proxmox
@@ -125,7 +126,8 @@ def discovered_defaults(document: dict[str, Any], facts: dict[str, Any]) -> dict
         network["bridge"] = "vmbr0" if "vmbr0" in bridges else bridges[0]
         patch["network"] = network
     bridge = (network.get("bridge") or "").strip()
-    chosen = networks.get(bridge) if isinstance(networks.get(bridge), dict) else {}
+    raw_chosen = networks.get(bridge)
+    chosen = raw_chosen if isinstance(raw_chosen, dict) else {}
     address = (facts.get("address") or chosen.get("address") or "").strip()
     gateway = (facts.get("gateway") or chosen.get("gateway") or "").strip()
     if not (network.get("address") or "").strip() and address:

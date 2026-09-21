@@ -13,11 +13,11 @@ from theshed.foundations.tokens import IncompleteProxmoxToken
 from theshed.onboarding.service import (
     IncompleteAdopt,
     OnboardingError,
+    apply_network,
     apply_proxmox_host,
     apply_tenant,
     bind_probe_host,
     check_host_reachable,
-    apply_network,
     discover_and_fill,
     has_llm_key,
     intent_from_choice,
