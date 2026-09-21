@@ -178,13 +178,15 @@ probes:
 Secret *values* are only in the local secrets store, referenced as
 `local://<path>` (see Secrets Management). The exportable bundle is this
 document plus those references. The Foundations panel has **Proxmox Token ID** and **Proxmox Token
-Secret** fields with hover descriptions on every schema field. Saving
-joins them as `USER@REALM!tokenid=secret` into `local://proxmox/api_token`
-and leaves only the ref on the schema. `foundations_write` does the
-same if the assistant is handed `proxmox.api_token` (combined) or the
-two parts. GET returns the Token ID (`USER@REALM!tokenid`) and
+Secret** fields with hover descriptions on every schema field. The Token
+ID is shown in the input after save; the secret stays a blank field with
+a visible “saved” status. Saving joins them as
+`USER@REALM!tokenid=secret` into `local://proxmox/api_token` and keeps
+the public Token ID plus the ref on the schema. `foundations_write` does
+the same if the assistant is handed `proxmox.api_token` (combined) or
+the two parts. GET returns the Token ID (`USER@REALM!tokenid`) and
 `api_token_set`; it never returns the secret or the combined `id=secret`
-value.
+value. PUT of a GET body keeps the saved token.
 `proxmox_api` authenticates with `PVEAPIToken=`.
 
 ### Sub-agent registry (bootstrap profile seed)

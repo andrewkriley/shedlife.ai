@@ -201,9 +201,10 @@ Field groups:
 - **Tenant**: display name and slug.
 - **Proxmox**: API/URL or host address, node name if more than one node is
   already there (intent only), and an API token stored in local secrets
-  (`api_token_ref` on the schema). The panel collects **Proxmox Token ID**
-  (`USER@REALM!tokenid`) and **Proxmox Token Secret**; the app joins them
-  as `id=secret`. The assistant may still send a combined `api_token`.
+  (`api_token_ref` on the schema). The panel shows the saved **Proxmox
+  Token ID** (`USER@REALM!tokenid`) in the field and collects **Proxmox
+  Token Secret** separately; the app joins them as `id=secret`. The
+  assistant may still send a combined `api_token`.
   Root password is collected once, used to install a dedicated SSH key,
   then discarded — never persisted, never logged, never written into the
   YAML bundle.

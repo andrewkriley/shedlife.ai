@@ -1,8 +1,9 @@
 """Peel Proxmox API tokens off the foundations document.
 
-The value lives in the local secrets store. The schema keeps only
-`api_token_ref`. The UI collects Token ID and Token Secret; the app
-combines them as `USER@REALM!tokenid=secret`. See docs/spec/bootstrap.md.
+The value lives in the local secrets store. The schema keeps
+`api_token_ref` and the public Token ID. The UI collects Token ID and
+Token Secret; the app combines them as `USER@REALM!tokenid=secret`.
+See docs/spec/bootstrap.md.
 """
 
 from __future__ import annotations
@@ -67,13 +68,26 @@ def take_proxmox_api_token(document: dict[str, Any]) -> tuple[dict[str, Any], st
     token_id = proxmox.pop("api_token_id", None)
     token_secret = proxmox.pop("api_token_secret", None)
     proxmox.pop("api_token_set", None)
-    token = assemble_proxmox_api_token(
-        api_token=str(raw) if raw else None,
-        api_token_id=str(token_id) if token_id else None,
-        api_token_secret=str(token_secret) if token_secret else None,
-    )
+    id_text = str(token_id).strip() if token_id else ""
+    secret_text = str(token_secret).strip() if token_secret else ""
+    raw_text = str(raw).strip() if raw else ""
+    has_ref = bool((proxmox.get("api_token_ref") or "").strip())
+    presented_only = bool(id_text and not secret_text and not raw_text and has_ref)
+    if presented_only:
+        token = None
+    else:
+        token = assemble_proxmox_api_token(
+            api_token=raw_text or None,
+            api_token_id=id_text or None,
+            api_token_secret=secret_text or None,
+        )
     if token:
         proxmox["api_token_ref"] = PROXMOX_API_TOKEN_REF
+        public_id = public_proxmox_token_id(token)
+        if public_id:
+            proxmox["api_token_id"] = public_id
+    elif id_text:
+        proxmox["api_token_id"] = id_text
     cleaned["proxmox"] = proxmox
     return cleaned, token
 
@@ -98,7 +112,7 @@ def present_foundations(document: dict[str, Any], secrets: Any = None) -> dict[s
         except SecretNotFoundError:
             saved_value = ""
     proxmox["api_token_set"] = bool(saved_value)
-    token_id = public_proxmox_token_id(saved_value)
+    token_id = public_proxmox_token_id(saved_value) or (proxmox.get("api_token_id") or "")
     if token_id:
         proxmox["api_token_id"] = token_id
     else:
