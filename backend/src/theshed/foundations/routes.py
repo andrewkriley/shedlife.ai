@@ -10,6 +10,7 @@ from theshed.auth.dependencies import get_current_user_id, require_csrf
 from theshed.db.session import get_session
 from theshed.foundations.store import load_foundations, record_probe_result, save_foundations
 from theshed.foundations.tokens import (
+    IncompleteProxmoxToken,
     persist_proxmox_api_token,
     present_foundations,
     take_proxmox_api_token,
@@ -45,7 +46,10 @@ async def put_foundations(
     _user_id: str = Depends(get_current_user_id),
 ) -> dict[str, Any]:
     secrets = getattr(request.app.state, "secrets", None)
-    document = persist_proxmox_api_token(body.document, secrets)
+    try:
+        document = persist_proxmox_api_token(body.document, secrets)
+    except IncompleteProxmoxToken as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, exc.errors) from exc
     saved = await save_foundations(db, document)
     await db.commit()
     return present_foundations(saved, secrets)

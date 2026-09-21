@@ -83,6 +83,12 @@ label {
   margin: var(--space-sm) 0 var(--space-xs);
 }
 
+label[title] {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
 input,
 select,
 textarea,
@@ -211,7 +217,7 @@ code {
 
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 30%);
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100dvh;
   max-height: 100dvh;
@@ -573,19 +579,16 @@ fieldset > legend {
 }
 
 .debug-dock__toggle--off {
-  background: var(--bg-canvas);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+  background: var(--accent-success);
+  color: var(--on-accent);
 }
 
 .debug-dock__toggle--off:hover:not(:disabled) {
-  filter: none;
-  background: var(--bg-panel);
-  color: var(--text-primary);
+  filter: brightness(1.08);
 }
 
 .debug-dock__toggle--on {
-  background: var(--accent-success);
+  background: var(--accent-danger);
   color: var(--on-accent);
 }
 

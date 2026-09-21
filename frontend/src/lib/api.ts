@@ -327,6 +327,8 @@ export interface FoundationsDocument {
     api_token_ref?: string
     api_token_set?: boolean
     api_token?: string
+    api_token_id?: string
+    api_token_secret?: string
   }
   network: { bridge: string; address: string; gateway: string; ntp: string }
   storage: { pool: string }

@@ -248,6 +248,7 @@ def test_debug_dock_css_is_in_page_flow_not_fixed() -> None:
     assert "grid-column: 1 / -1" in dock
     assert "position: fixed" not in dock
     assert "grid-template-rows: auto minmax(0, 1fr) auto" in shell
+    assert "minmax(0, 1fr) minmax(280px, 30%)" in shell
     assert "display: contents" in shell
     assert ".workspace--hidden" in shell
     assert "padding-bottom: 56px" not in css

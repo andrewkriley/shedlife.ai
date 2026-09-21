@@ -90,7 +90,7 @@ export function DebugDock() {
           aria-pressed={enabled}
           onClick={() => void toggle()}
         >
-          {enabled ? 'Debug on' : 'Debug off'}
+          {enabled ? 'Debug Off' : 'Debug On'}
         </button>
       </div>
       {enabled && (

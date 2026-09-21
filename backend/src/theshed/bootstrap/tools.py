@@ -11,6 +11,7 @@ from theshed.bootstrap.discovery import DISCOVERY_TOOLS, host_for, run_discovery
 from theshed.bootstrap.hostnames import DEFAULT_COUNT, propose_hostnames
 from theshed.foundations.store import load_foundations, patch_foundations, record_probe_result
 from theshed.foundations.tokens import (
+    IncompleteProxmoxToken,
     persist_proxmox_api_token,
     present_foundations,
     take_proxmox_api_token,
@@ -48,7 +49,10 @@ def make_bootstrap_tool_executor(db: Any, probe_host: Any) -> ToolExecutor:
         args = call.arguments or {}
         if name == "foundations_write":
             secrets = getattr(probe_host, "_secrets", None)
-            patch = persist_proxmox_api_token(args.get("patch") or {}, secrets)
+            try:
+                patch = persist_proxmox_api_token(args.get("patch") or {}, secrets)
+            except IncompleteProxmoxToken as exc:
+                return json.dumps({"ok": False, "errors": exc.errors})
             doc = await patch_foundations(db, patch)
             await db.commit()
             return json.dumps(present_foundations(doc, secrets))

@@ -73,7 +73,8 @@ async def test_put_get_validate_and_export(
     doc["proxmox"] = {
         "host": "192.0.2.10",
         "node": "pve",
-        "api_token": "root@pam!shed=secret-token",
+        "api_token_id": "root@pam!shed",
+        "api_token_secret": "secret-token",
         "ssh_key_fingerprint": None,
     }
 

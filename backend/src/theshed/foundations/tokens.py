@@ -1,7 +1,8 @@
 """Peel Proxmox API tokens off the foundations document.
 
 The value lives in the local secrets store. The schema keeps only
-`api_token_ref`. See docs/spec/bootstrap.md.
+`api_token_ref`. The UI collects Token ID and Token Secret; the app
+combines them as `USER@REALM!tokenid=secret`. See docs/spec/bootstrap.md.
 """
 
 from __future__ import annotations
@@ -13,6 +14,40 @@ from theshed.foundations.schema import PROXMOX_API_TOKEN_REF
 from theshed.secrets.client import LocalSecretsClient, SecretNotFoundError
 
 
+class IncompleteProxmoxToken(ValueError):
+    """One of Token ID / Token Secret was sent without the other."""
+
+    def __init__(self, errors: dict[str, str]) -> None:
+        super().__init__("Proxmox token id and secret must be saved together")
+        self.errors = errors
+
+
+def assemble_proxmox_api_token(
+    *,
+    api_token: str | None = None,
+    api_token_id: str | None = None,
+    api_token_secret: str | None = None,
+) -> str | None:
+    """Join Token ID + Token Secret, or pass through a combined `api_token`."""
+    combined = (api_token or "").strip()
+    token_id = (api_token_id or "").strip()
+    secret = (api_token_secret or "").strip()
+    if combined:
+        return combined
+    if token_id and secret:
+        if "=" in token_id:
+            token_id = token_id.split("=", 1)[0]
+        return f"{token_id}={secret}"
+    if token_id or secret:
+        raise IncompleteProxmoxToken(
+            {
+                "proxmox.api_token_id": "required with the token secret",
+                "proxmox.api_token_secret": "required with the token id",
+            }
+        )
+    return None
+
+
 def take_proxmox_api_token(document: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
     """Return (document without the raw token, token or None)."""
     cleaned = deepcopy(document)
@@ -21,12 +56,18 @@ def take_proxmox_api_token(document: dict[str, Any]) -> tuple[dict[str, Any], st
         return cleaned, None
     proxmox = dict(proxmox)
     raw = proxmox.pop("api_token", None)
+    token_id = proxmox.pop("api_token_id", None)
+    token_secret = proxmox.pop("api_token_secret", None)
     proxmox.pop("api_token_set", None)
-    token = str(raw).strip() if raw else ""
+    token = assemble_proxmox_api_token(
+        api_token=str(raw) if raw else None,
+        api_token_id=str(token_id) if token_id else None,
+        api_token_secret=str(token_secret) if token_secret else None,
+    )
     if token:
         proxmox["api_token_ref"] = PROXMOX_API_TOKEN_REF
     cleaned["proxmox"] = proxmox
-    return cleaned, token or None
+    return cleaned, token
 
 
 def persist_proxmox_api_token(document: dict[str, Any], secrets: Any) -> dict[str, Any]:

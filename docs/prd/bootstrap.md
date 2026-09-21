@@ -34,6 +34,10 @@ has to exist before Git, Kubernetes, or a secrets backend do.
 ## Non-goals (this phase)
 
 - Installing Proxmox VE on bare metal — a human pre-task.
+- Running Proxmox host package / PVE updates on the first host —
+  operator pre-task or Deploy. Bootstrap does not `apt`/`pveupgrade`
+  the node. Subscription and repo settings are not collected, and
+  host upgrades are not one of the four playbooks.
 - Forming a Proxmox cluster (3/5 hosts) — Build-phase grill.
 - Provisioning or adopting GitLab, Infisical, PowerDNS, k3s, Flux, Let's
   Encrypt, Traefik, Cloudflared, Grafana, Prometheus — Deploy-phase grill.
@@ -130,7 +134,8 @@ has to exist before Git, Kubernetes, or a secrets backend do.
 Driven by chat, stored as a schema (see SPEC). The UI shows schema state
 next to the conversation, grouped the same way as the field list below.
 The working chrome fits one browser window: the transcript scrolls inside
-the chat pane, Foundations / Issues share a tabbed review column, and
+the chat pane, Foundations / Issues share a tabbed review column about
+**30% of the browser width**, and
 the debug log (when on) sits under those panes instead of covering them,
 newest events first, each line stamped in system local time with an
 explicit timezone (`UTC` or `UTC±offset`).
@@ -154,11 +159,13 @@ Field groups:
 
 - **Tenant**: display name and slug.
 - **Proxmox**: API/URL or host address, node name if more than one node is
-  already there (intent only), and a Proxmox API token (fillable field;
-  value in the local secrets store, `api_token_ref` on the schema). Root
-  password is collected once, used to install a dedicated SSH key, then
-  discarded — never persisted, never logged, never written into the YAML
-  bundle.
+  already there (intent only), and an API token stored in local secrets
+  (`api_token_ref` on the schema). The panel collects **Proxmox Token ID**
+  (`USER@REALM!tokenid`) and **Proxmox Token Secret**; the app joins them
+  as `id=secret`. The assistant may still send a combined `api_token`.
+  Root password is collected once, used to install a dedicated SSH key,
+  then discarded — never persisted, never logged, never written into the
+  YAML bundle.
 - **Network**: bridge name, operator-facing address as CIDR + gateway, NTP
   (`inherit` from the Proxmox host by default).
 - **Storage**: a storage pool name for later VM disks. Single-host only.

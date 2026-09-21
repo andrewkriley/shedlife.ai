@@ -48,7 +48,8 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    Writes `local://providers/llm/api_key` (and optional Galileo refs).
    Creates `users` / `identities` rows. Sets the session cookie
    (`Secure` off).
-5. Chat UI loads in a single-window shell (header + chat + tabbed review).
+5. Chat UI loads in a single-window shell (header + chat + tabbed review
+   at about 30% of the browser width).
    The header polls `GET /health` and `GET /settings/sub-agents` and shows
    **AI Assistant is Connected · provider · model · ref** when both succeed
    and at least one agent is registered, using `GET /settings/connection`
@@ -86,7 +87,9 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    pauses for approval, generates the dedicated key in the CT, installs it
    via the still-held root password, discards the password, stores only the
    fingerprint. Other probes are read-only. Discovery tools are not
-   probes and are not a fifth playbook.
+   probes and are not a fifth playbook. Host package / PVE updates on the
+   first Proxmox node are not a playbook either — operator pre-task or
+   Deploy; Bootstrap does not upgrade the host.
 9. `export-state`: produces the YAML bundle (references, not values). The
    operator can download it. It is also kept on the CT.
 10. The LXC stays up. Handoff to Deploy is "foundations valid + probes
@@ -149,11 +152,13 @@ probes:
 
 Secret *values* are only in the local secrets store, referenced as
 `local://<path>` (see Secrets Management). The exportable bundle is this
-document plus those references. The Foundations panel has a Proxmox API
-token field; saving it writes `local://proxmox/api_token` and leaves only
-the ref on the schema. `foundations_write` does the same if the assistant
-is handed `proxmox.api_token`. GET never returns the raw token — only
-`api_token_set`. `proxmox_api` authenticates with `PVEAPIToken=`.
+document plus those references. The Foundations panel has **Proxmox Token ID** and **Proxmox Token
+Secret** fields with hover descriptions on every schema field. Saving
+joins them as `USER@REALM!tokenid=secret` into `local://proxmox/api_token`
+and leaves only the ref on the schema. `foundations_write` does the
+same if the assistant is handed `proxmox.api_token` (combined) or the
+two parts. GET never returns the raw token — only `api_token_set`.
+`proxmox_api` authenticates with `PVEAPIToken=`.
 
 ### Sub-agent registry (bootstrap profile seed)
 
@@ -253,8 +258,9 @@ console). `--debug` also tails compose logs onto `tty1`. Interfaces:
 - `GET /debug/logs` — `{enabled, events[]}`
 - `POST /debug/events` — UI clicks / client errors
 
-The UI toggle is green when debug is on and muted when off. The log
-panel is shown only while debug is enabled, in the page flow under the
+The UI toggle is an action label: green **Debug On** when debug is off
+(press to enable), red **Debug Off** when debug is on (press to disable).
+The log panel is shown only while debug is enabled, in the page flow under the
 chat — not as a fixed overlay. Each recorded event includes `stamp`
 (`YYYY-MM-DD HH:MM:SS UTC` or `UTC±offset` in the process timezone) and
 `at` (millisecond ISO). The dock prints `stamp` at the start of the same

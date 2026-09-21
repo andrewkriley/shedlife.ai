@@ -28,14 +28,14 @@ describe('DebugDock', () => {
     const user = userEvent.setup()
     render(<DebugDock />)
 
-    const toggle = await screen.findByRole('button', { name: 'Debug off' })
+    const toggle = await screen.findByRole('button', { name: 'Debug On' })
     expect(toggle).toHaveAttribute('aria-pressed', 'false')
     expect(toggle).toHaveClass('debug-dock__toggle--off')
     expect(screen.queryByLabelText('debug console')).not.toBeInTheDocument()
 
     await user.click(toggle)
     expect(setDebugEnabled).toHaveBeenCalledWith(true)
-    expect(await screen.findByRole('button', { name: 'Debug on' })).toHaveClass('debug-dock__toggle--on')
+    expect(await screen.findByRole('button', { name: 'Debug Off' })).toHaveClass('debug-dock__toggle--on')
     expect(await screen.findByLabelText('debug console')).toBeInTheDocument()
     expect(screen.getByText(/anthropic rejected the key/)).toBeInTheDocument()
     const line = screen.getByRole('listitem')
@@ -101,12 +101,12 @@ describe('DebugDock', () => {
     const user = userEvent.setup()
     render(<DebugDock />)
 
-    expect(await screen.findByRole('button', { name: 'Debug on' })).toHaveClass('debug-dock__toggle--on')
+    expect(await screen.findByRole('button', { name: 'Debug Off' })).toHaveClass('debug-dock__toggle--on')
     expect(await screen.findByLabelText('debug console')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Debug on' }))
+    await user.click(screen.getByRole('button', { name: 'Debug Off' }))
     expect(setDebugEnabled).toHaveBeenCalledWith(false)
-    expect(await screen.findByRole('button', { name: 'Debug off' })).toHaveClass('debug-dock__toggle--off')
+    expect(await screen.findByRole('button', { name: 'Debug On' })).toHaveClass('debug-dock__toggle--off')
     expect(screen.queryByLabelText('debug console')).not.toBeInTheDocument()
   })
 })
