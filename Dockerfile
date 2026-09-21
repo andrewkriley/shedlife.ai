@@ -17,7 +17,9 @@ COPY backend/alembic ./alembic
 COPY --from=frontend /frontend/dist /app/frontend-dist
 COPY bootstrap/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
+ARG THESHED_REF=unknown
 ENV THESHED_FRONTEND_DIST=/app/frontend-dist
 ENV THESHED_PROFILE=bootstrap
+ENV THESHED_REF=${THESHED_REF}
 EXPOSE 8080
 ENTRYPOINT ["/app/entrypoint.sh"]

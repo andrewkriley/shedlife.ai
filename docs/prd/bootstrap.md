@@ -95,7 +95,8 @@ has to exist before Git, Kubernetes, or a secrets backend do.
   and `9100` is free: create `9100` / `theshed`; if `9100` is taken,
   take the next free id. New CTs use hostname `theshed` (the name shown
   in Proxmox). If any Shed CTs exist, the TTY
-  asks (1) upgrade an existing CT in place (keep login and volumes) or (2)
+  asks (1) upgrade an existing CT in place (keep login and volumes;
+  rebuilds the app image with `--no-cache`) or (2)
   install a parallel instance on the next free cluster VMID
   (also hostname `theshed`). `--yes` / `THESHED_YES=1` skips prompts and upgrades
   the recorded CT. `THESHED_PARALLEL=1` forces a parallel CT. `--delete`:

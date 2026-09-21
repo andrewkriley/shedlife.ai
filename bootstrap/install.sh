@@ -59,6 +59,7 @@ OPERATOR_USERNAME="${THESHED_OPERATOR_USERNAME:-${THESHED_OPERATOR_EMAIL:-admin}
 OPERATOR_PASSWORD=""
 CT_ROOT_PASSWORD=""
 APP_DIR="/opt/theshed"
+REF_FROM_ENV=0
 CT_EXISTS=0
 CT_STATUS="missing"
 APP_READY=0
@@ -456,6 +457,9 @@ print_plan() {
   echo "  Action:  ${action}"
   echo "  CT:      ${CTID} (${CT_HOSTNAME}) — ${CT_STATUS}"
   echo "  Ref:     ${THESHED_REF}"
+  if [[ "${REF_FROM_ENV:-0}" != "1" ]]; then
+    echo "  Note:    THESHED_REF was unset — this is the latest release, not a branch."
+  fi
   if [[ "${APP_READY}" == "1" ]]; then
     echo "  App:     ready"
   else
@@ -578,14 +582,19 @@ delete_existing_ct() {
 
 resolve_ref() {
   if [[ -n "${THESHED_REF:-}" ]]; then
+    REF_FROM_ENV=1
     echo "${THESHED_REF}"
     return
   fi
+  REF_FROM_ENV=0
   local tag
   tag="$(curl -fsSL "${RAW_API}" 2>/dev/null | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1 || true)"
   if [[ -n "${tag}" ]]; then
+    echo "THESHED_REF is unset; using latest GitHub release ${tag}." >&2
+    echo "A branch test needs: export THESHED_REF=<branch-or-tag>" >&2
     echo "${tag}"
   else
+    echo "THESHED_REF is unset; no GitHub release found, using main." >&2
     echo "main"
   fi
 }
@@ -616,6 +625,19 @@ assert_running_ref() {
   echo "Expected /api/health ref=${THESHED_REF}; got: ${body:-empty}" >&2
   echo "The UI will keep the old Proxmox token field until this container is rebuilt." >&2
   exit 1
+}
+
+cloned_reports_ref() {
+  pct exec "${CTID}" -- grep -q 'os.environ.get("THESHED_REF")' "${APP_DIR}/backend/src/theshed/main.py"
+}
+
+verify_running_image() {
+  local ip="$1"
+  if cloned_reports_ref; then
+    assert_running_ref "${ip}"
+    return
+  fi
+  echo "Ref ${THESHED_REF} does not publish /health ref; skipped image check."
 }
 
 read_state_ip() {
@@ -724,16 +746,18 @@ follow_debug_to_tty() {
 }
 
 compose_up() {
+  local cache_flag="${1:-}"
   if [[ -n "${THESHED_IMAGE:-}" ]]; then
     pct exec "${CTID}" -- bash -c "cd ${APP_DIR} && docker compose --env-file .env -f bootstrap/docker-compose.yml up -d --force-recreate --no-build"
   else
     # A leftover THESHED_IMAGE= in .env would otherwise keep the previous
-    # image tag and skip a real rebuild of the UI.
+    # image tag and skip a real rebuild of the UI. Upgrades pass
+    # --no-cache so a branch change cannot reuse theshed:bootstrap.
     pct exec "${CTID}" -- bash -c "
       set -euo pipefail
       cd ${APP_DIR}
       sed -i '/^THESHED_IMAGE=$/d' .env
-      docker compose --env-file .env -f bootstrap/docker-compose.yml build app
+      docker compose --env-file .env -f bootstrap/docker-compose.yml build ${cache_flag} --build-arg THESHED_REF=${THESHED_REF} app
       docker compose --env-file .env -f bootstrap/docker-compose.yml up -d --force-recreate --build
     "
   fi
@@ -812,7 +836,8 @@ update_existing_ct() {
     "
   fi
   upsert_ct_env THESHED_REF "${ref}"
-  compose_up
+  echo "Rebuilding the app image for ${ref} (no cache)"
+  compose_up --no-cache
 }
 
 ensure_template() {
@@ -984,7 +1009,7 @@ main() {
     fi
     print_url "${ip}"
     wait_ready "${ip}"
-    assert_running_ref "${ip}"
+    verify_running_image "${ip}"
     write_state "${ip}" "${THESHED_REF}"
     print_summary "${ip}"
     return 0
@@ -1004,7 +1029,7 @@ main() {
   fi
   print_url "${ip}"
   wait_ready "${ip}"
-  assert_running_ref "${ip}"
+  verify_running_image "${ip}"
   write_state "${ip}" "${THESHED_REF}"
   print_summary "${ip}"
 }

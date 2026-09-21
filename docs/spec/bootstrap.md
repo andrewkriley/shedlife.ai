@@ -36,7 +36,7 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    Fresh (no Shed CT, `9100` free) → create `9100` / `theshed`;
    if `9100` is taken, the next free id. New CTs use hostname `theshed`.
    Existing → (1) update the listed Shed CT in place (keep `.env` and compose
-   volumes, refresh the clone and image) — not a VMID from a stale state
+   volumes, refresh the clone and rebuild the app image with `--no-cache`) — not a VMID from a stale state
    file if that guest is gone — or (2) parallel on the next free
    cluster VMID (hostname `theshed`). `--yes` upgrades the recorded CT when
    it is still present, otherwise the listed one, and never

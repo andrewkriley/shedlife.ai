@@ -189,6 +189,9 @@ def test_install_script_writes_theshed_ref_into_ct_env() -> None:
     assert 'CT_HOSTNAME="theshed"' in update
     compose = (ROOT / "bootstrap" / "docker-compose.yml").read_text()
     assert "THESHED_REF: ${THESHED_REF:-}" in compose
+    assert "args:" in compose
+    dockerfile = (ROOT / "Dockerfile").read_text()
+    assert "ARG THESHED_REF=unknown" in dockerfile
 
 
 def test_install_script_exists_and_is_thin() -> None:
@@ -415,17 +418,21 @@ def test_install_script_follows_debug_logs_to_tty1() -> None:
     compose = text.split("compose_up() {", 1)[1].split("write_fresh_env() {", 1)[0]
     assert "follow_debug_to_tty" in compose
     assert "--force-recreate" in compose
-    assert "docker compose --env-file .env -f bootstrap/docker-compose.yml build app" in compose
+    assert "build ${cache_flag} --build-arg THESHED_REF=${THESHED_REF} app" in compose
+    update = text.split("update_existing_ct() {", 1)[1].split("\n}\n", 1)[0]
+    assert "compose_up --no-cache" in update
 
 
 def test_install_script_refuses_a_stale_running_image() -> None:
     text = SCRIPT.read_text()
     assert "assert_running_ref" in text
+    assert "verify_running_image" in text
     main = text.split("main() {", 1)[1]
-    assert main.index("wait_ready") < main.index("assert_running_ref")
+    assert main.index("wait_ready") < main.index("verify_running_image")
     check = text.split("assert_running_ref() {", 1)[1].split("\n}\n", 1)[0]
     assert "/api/health" in check
     assert "THESHED_REF" in check
+    assert "THESHED_REF is unset" in text
 
 
 def test_next_free_vmid_keeps_9100_when_cluster_is_clear(tmp_path: Path) -> None:

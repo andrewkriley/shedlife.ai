@@ -30,6 +30,8 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+      args:
+        THESHED_REF: ${THESHED_REF:-}
     environment:
       THESHED_PROFILE: bootstrap
       DATABASE_URL: postgresql+asyncpg://theshed:${POSTGRES_PASSWORD}@postgres:5432/theshed
