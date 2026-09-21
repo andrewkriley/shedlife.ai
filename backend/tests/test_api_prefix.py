@@ -12,4 +12,6 @@ async def test_api_prefix_reaches_health() -> None:
         prefixed = await client.get("/api/health")
     assert unprefixed.status_code == 200
     assert prefixed.status_code == 200
-    assert unprefixed.json() == prefixed.json() == {"status": "ok"}
+    assert unprefixed.json()["status"] == prefixed.json()["status"] == "ok"
+    assert "ref" in unprefixed.json()
+    assert unprefixed.json() == prefixed.json()

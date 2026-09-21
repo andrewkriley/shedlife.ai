@@ -18,10 +18,20 @@ export function AssistantStatus() {
         if (!cancelled) {
           const connected = health.status === 'ok' && agents.length > 0
           setState(connected ? 'connected' : 'disconnected')
+          const ref =
+            health.ref && health.ref !== 'unknown' ? health.ref : null
           if (connected && connection?.configured && connection.provider && connection.model) {
-            setDetail(`${connection.provider} · ${connection.model}`)
+            setDetail(
+              ref
+                ? `${connection.provider} · ${connection.model} · ${ref}`
+                : `${connection.provider} · ${connection.model}`,
+            )
           } else if (connected) {
-            setDetail(connection?.configured === false ? 'no provider key' : null)
+            if (connection?.configured === false) {
+              setDetail(ref ? `no provider key · ${ref}` : 'no provider key')
+            } else {
+              setDetail(ref)
+            }
           } else {
             setDetail(null)
           }
