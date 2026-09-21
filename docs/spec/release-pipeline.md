@@ -33,14 +33,41 @@ workflow this extends rather than replaces.
 
 ## Branch protection (two GitHub Rulesets on `main`, not one)
 
+These are repository settings (Settings → Rules → Rulesets), not a workflow
+file. This worker cannot flip them.
+
 | Ruleset | Rules | Bypass |
 |---|---|---|
-| A | Require signed commits; require all CI status checks to pass (test, lint, type-check, `commitlint`, CodeQL, image scan); require linear history (squash merge only, PR title as commit message) | None, for anyone |
-| B | Require pull request before merging; require 1 approval, not from the PR author | Repository Admin role only |
+| A — `main: CI and signing` | Block force pushes and deletions; require signed commits; require linear history (squash merge only); required status checks (see below) must pass | None, for anyone |
+| B — `main: PR and approval` | Require a pull request; 1 approval, not from the PR author; require review from Code Owners | Repository Admin role only |
 
 Two rulesets, not one, so admin bypass can be scoped to just the peer-approval
 requirement (Ruleset B) — signing and the full CI gate (Ruleset A) apply
 unconditionally, including to an admin's own merge.
+
+A solo maintainer does not need a second collaborator. Agent-opened PRs are
+approved by the maintainer in the GitHub UI (the maintainer is not the author).
+PRs the maintainer opens themselves cannot be self-approved by GitHub; use the
+Ruleset B admin bypass after Ruleset A is green.
+
+### Required status checks (Ruleset A)
+
+Must match the GitHub Actions **job name** exactly. Do not require checks that
+do not exist yet (CodeQL, image scan) or that are report-only (`trivy`).
+
+| Check | Workflow |
+|---|---|
+| `backend (pytest, ruff, mypy)` | `ci.yml` |
+| `frontend (vitest, oxlint, tsc)` | `ci.yml` |
+| `commitlint (PR title)` | `commitlint.yml` |
+| `gitleaks` | `gitleaks.yml` |
+| `release-please authority` | `release-authority.yml` |
+
+`release-please authority` always runs. Feature PRs that do not touch
+`CHANGELOG.md` or `.release-please-manifest.json` pass. Those files may change
+only on a `release-please--branches--*` PR opened by `github-actions[bot]`
+(the manual Actions → release-please run). A handmade version bump fails the
+check, so it cannot merge while Ruleset A is on.
 
 ## Sequence (release, happy path)
 
@@ -85,6 +112,8 @@ only durable artifacts are the published images in GHCR (versioned by tag), the
   same job that cuts the GitHub Release, because `GITHUB_TOKEN` cannot start
   a follow-on workflow),
   `attach-install-script.yml` (fallback for UI-published releases),
+  `release-authority.yml` (required check: version files only from
+  release-please),
   `release.yml` (build + scan + publish, on tag), alongside the existing
   `gitleaks.yml`.
 - Two Rulesets on `main` (GitHub repository settings, not a workflow file).

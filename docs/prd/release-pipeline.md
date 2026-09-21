@@ -118,19 +118,30 @@ An agent merging its own work to `main` does not get to ship a version.
 ### Branch protection on `main`
 
 Two separate rulesets, not one, so a bypass can be scoped narrowly rather than
-granted as a blanket exception:
+granted as a blanket exception. They live in GitHub settings; turning them on
+is a maintainer click, not a commit.
 
-- **No bypass, for anyone, ever**: signed commits required; all CI status checks
-  (test gate, lint, type-check, CodeQL, image scan) must pass; linear history
-  (squash merge only, PR title as the resulting commit message).
-- **Bypassable by the Repository Admin role only**: PR required (no direct pushes),
-  1 approval required and not from the PR's author.
+- **No bypass, for anyone, ever**: signed commits required; the required
+  status checks must pass (test gate, lint, type-check, `commitlint`,
+  `gitleaks`, and `release-please authority`); linear history (squash merge
+  only). CodeQL and the container image scan are not required until those
+  jobs exist.
+- **Bypassable by the Repository Admin role only**: PR required (no direct
+  pushes), 1 approval required and not from the PR's author, Code Owner
+  review when `CODEOWNERS` files change.
 
-The split matters: a maintainer merging their own solo work can skip waiting for a
-second human's approval, but cannot skip signed commits or a failing check by virtue
-of being admin — those guarantees hold unconditionally, for everyone, always. As real
-contributors join, the bypass becomes something the maintainer simply stops using,
-not a rule that needs restructuring.
+The split matters: a maintainer merging their own solo work can skip waiting
+for a second human's approval, but cannot skip signed commits or a failing
+check by virtue of being admin — those guarantees hold unconditionally, for
+everyone, always. Approving an agent-opened PR does not need a collaborator;
+the maintainer is the reviewer. As real contributors join, the bypass
+becomes something the maintainer simply stops using, not a rule that needs
+restructuring.
+
+`release-please authority` is how versioning stays on the manual
+release-please path: a PR that edits `CHANGELOG.md` or
+`.release-please-manifest.json` fails unless it *is* the Release PR
+release-please opened.
 
 ### Additional CI
 

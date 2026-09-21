@@ -36,6 +36,31 @@ no force — the process above is still the rule.
 `.github/CODEOWNERS`. Enable **require review from Code Owners** on `main` so
 the Release PR cannot merge without that human review.
 
+The `release-please authority` check is required on `main` (Ruleset A). It
+fails any PR that edits those files unless the branch is
+`release-please--branches--*` and the author is `github-actions[bot]`. That
+is the CI proof the version bump came from the manual Actions run, not a
+handmade commit.
+
+## Protecting `main`
+
+This worker cannot enable GitHub rulesets. In the repo, as the owner:
+
+1. Settings → Rules → Rulesets → New ruleset (branch).
+2. **`main: CI and signing`** — target `main`. Block force pushes and
+   deletions. Require signed commits. Require linear history. Require these
+   status checks, with **no bypass**:
+   `backend (pytest, ruff, mypy)`, `frontend (vitest, oxlint, tsc)`,
+   `commitlint (PR title)`, `gitleaks`, `release-please authority`.
+3. **`main: PR and approval`** — target `main`. Require a pull request, 1
+   approval, require Code Owner review. Bypass: **Repository admin** only.
+   That is how you approve and merge without adding a collaborator. GitHub
+   will not let you approve a PR you opened yourself; agent-opened PRs you
+   approve in the UI. For your own PRs, use the admin bypass after the
+   Ruleset A checks are green.
+
+Do not add `trivy (filesystem)` as a required check — it is report-only.
+
 ## How it works
 
 1. Every PR that merges to `main` has a [Conventional Commits](https://www.conventionalcommits.org/)

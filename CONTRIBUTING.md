@@ -60,11 +60,13 @@ continues.
 
 Every PR runs: the test suites (backend `pytest`, frontend Vitest), linting (`ruff`,
 `oxlint`), type-checking (`mypy`, `tsc --noEmit`), `commitlint` against the PR title,
-`gitleaks` (secret scanning), and a Trivy filesystem scan (known-vulnerability
-scanning of dependencies, report-only for now). All of these must pass before merge —
-this is enforced unconditionally, for every contributor, with no bypass, once branch
-protection is actually turned on (see "Branch protection" in
-`docs/spec/release-pipeline.md` — not yet enabled as of this writing).
+`gitleaks` (secret scanning), `release-please authority` (version files only
+change on a release-please PR), and a Trivy filesystem scan (known-vulnerability
+scanning of dependencies, report-only for now). Once the rulesets in
+`docs/spec/release-pipeline.md` are on, the required checks on `main` are
+`backend (pytest, ruff, mypy)`, `frontend (vitest, oxlint, tsc)`,
+`commitlint (PR title)`, `gitleaks`, and `release-please authority` — no
+bypass, including the maintainer. Trivy stays report-only.
 
 CodeQL (static analysis for code-level vulnerabilities) is part of the intended design
 (see the SPEC) but isn't running yet: GitHub code scanning needs Advanced Security,
@@ -74,11 +76,12 @@ Revisit once that changes.
 ## Review and merge
 
 Every PR needs **one approval from someone other than its author** before it can
-merge. This applies to everyone — including the maintainer — with one narrow
-exception: a repository admin can bypass *only* the approval requirement, for the
-practical reason that a single-maintainer project has no peer available to provide
-one yet. That bypass never extends to signed commits or CI passing — those apply to
-every merge, no exceptions, regardless of who's merging.
+merge. A solo maintainer does not need a collaborator: approve agent-opened
+PRs in the GitHub UI (you are not the author). GitHub will not let you
+approve a PR you opened yourself — the repository admin may bypass *only*
+that approval requirement. That bypass never extends to signed commits or CI
+passing — those apply to every merge, no exceptions, regardless of who's
+merging. See "Protecting `main`" in `RELEASING.md`.
 
 **Release PRs are different.** A PR titled `chore(main): release theshed …` (the
 standing `release-please` PR) is merged only by a maintainer in the GitHub UI.

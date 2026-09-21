@@ -22,3 +22,5 @@ def test_release_please_attaches_install_script_in_the_same_job() -> None:
     assert "steps.release.outputs.tag_name" in text
     assert "gh release upload" in text
     assert "bootstrap/install.sh" in text
+    assert "environment: release" in text
+    assert "workflow_dispatch:" in text

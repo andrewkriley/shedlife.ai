@@ -1,0 +1,31 @@
+name: release-authority
+
+# Required check on `main` (Ruleset A). Feature PRs pass. Version file
+# edits pass only if this is the standing release-please PR. See RELEASING.md.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  release-authority:
+    name: release-please authority
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Allow version bumps only from release-please
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REF: ${{ github.head_ref }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          git fetch --depth=1 origin "${BASE_SHA}"
+          git diff --name-only "${BASE_SHA}" "${HEAD_SHA}" \
+            | python3 .github/scripts/release_authority.py \
+              --head-ref "${HEAD_REF}" \
+              --author "${AUTHOR}"
