@@ -414,6 +414,18 @@ def test_install_script_follows_debug_logs_to_tty1() -> None:
     assert "theshed-debug-tty.pid" in text
     compose = text.split("compose_up() {", 1)[1].split("write_fresh_env() {", 1)[0]
     assert "follow_debug_to_tty" in compose
+    assert "--force-recreate" in compose
+    assert "docker compose --env-file .env -f bootstrap/docker-compose.yml build app" in compose
+
+
+def test_install_script_refuses_a_stale_running_image() -> None:
+    text = SCRIPT.read_text()
+    assert "assert_running_ref" in text
+    main = text.split("main() {", 1)[1]
+    assert main.index("wait_ready") < main.index("assert_running_ref")
+    check = text.split("assert_running_ref() {", 1)[1].split("\n}\n", 1)[0]
+    assert "/api/health" in check
+    assert "THESHED_REF" in check
 
 
 def test_next_free_vmid_keeps_9100_when_cluster_is_clear(tmp_path: Path) -> None:

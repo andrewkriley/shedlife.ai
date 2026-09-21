@@ -602,6 +602,22 @@ ct_ready_ok() {
   pct exec "${CTID}" -- curl -fsS --max-time 3 "http://127.0.0.1:${PORT}${READY_PATH}" >/dev/null 2>&1
 }
 
+assert_running_ref() {
+  local ip="$1" body
+  body="$(curl -fsS --max-time 5 "http://${ip}:${PORT}/api/health" 2>/dev/null || true)"
+  if [[ -z "${body}" ]]; then
+    body="$(pct exec "${CTID}" -- curl -fsS --max-time 5 "http://127.0.0.1:${PORT}/api/health" 2>/dev/null || true)"
+  fi
+  if printf '%s' "${body}" | grep -Eq "\"ref\"[[:space:]]*:[[:space:]]*\"${THESHED_REF}\""; then
+    echo "Running app ref ${THESHED_REF}"
+    return 0
+  fi
+  echo "Upgrade did not replace the running image." >&2
+  echo "Expected /api/health ref=${THESHED_REF}; got: ${body:-empty}" >&2
+  echo "The UI will keep the old Proxmox token field until this container is rebuilt." >&2
+  exit 1
+}
+
 read_state_ip() {
   [[ -f "${STATE_FILE}" ]] || return 1
   awk '/^ct_ip:/{print $2}' "${STATE_FILE}" | tr -d '"'
@@ -709,9 +725,17 @@ follow_debug_to_tty() {
 
 compose_up() {
   if [[ -n "${THESHED_IMAGE:-}" ]]; then
-    pct exec "${CTID}" -- bash -c "cd ${APP_DIR} && docker compose --env-file .env -f bootstrap/docker-compose.yml up -d"
+    pct exec "${CTID}" -- bash -c "cd ${APP_DIR} && docker compose --env-file .env -f bootstrap/docker-compose.yml up -d --force-recreate --no-build"
   else
-    pct exec "${CTID}" -- bash -c "cd ${APP_DIR} && docker compose --env-file .env -f bootstrap/docker-compose.yml up -d --build"
+    # A leftover THESHED_IMAGE= in .env would otherwise keep the previous
+    # image tag and skip a real rebuild of the UI.
+    pct exec "${CTID}" -- bash -c "
+      set -euo pipefail
+      cd ${APP_DIR}
+      sed -i '/^THESHED_IMAGE=$/d' .env
+      docker compose --env-file .env -f bootstrap/docker-compose.yml build app
+      docker compose --env-file .env -f bootstrap/docker-compose.yml up -d --force-recreate --build
+    "
   fi
   follow_debug_to_tty
 }
@@ -960,6 +984,7 @@ main() {
     fi
     print_url "${ip}"
     wait_ready "${ip}"
+    assert_running_ref "${ip}"
     write_state "${ip}" "${THESHED_REF}"
     print_summary "${ip}"
     return 0
@@ -979,6 +1004,7 @@ main() {
   fi
   print_url "${ip}"
   wait_ready "${ip}"
+  assert_running_ref "${ip}"
   write_state "${ip}" "${THESHED_REF}"
   print_summary "${ip}"
 }
