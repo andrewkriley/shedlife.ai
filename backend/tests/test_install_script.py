@@ -243,6 +243,8 @@ def test_install_script_confirms_fresh_update_or_delete() -> None:
     assert main.index("confirm_install") < main.index("create_ct")
     assert 'action="$(choose_install_action)"' not in text
     assert "INSTALL_ACTION" in main
+    assert 'THESHED_REF="$(resolve_ref)"' not in main
+    assert "resolve_ref" in main
     assert "prepare_new_ct" in text
     assert "select_upgrade_ct" in text
     assert "first_listed_shed_vmid" in text
@@ -253,6 +255,36 @@ def test_install_script_confirms_fresh_update_or_delete() -> None:
     assert "vmid_in_use" in text
     create = text.split("create_ct() {", 1)[1].split("bootstrap_ct() {", 1)[0]
     assert "vmid_in_use" in create
+
+
+def test_print_plan_keeps_an_explicit_ref(tmp_path: Path) -> None:
+    lib = _install_lib(tmp_path)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f"""
+set -euo pipefail
+source "{lib}"
+CTID=9100
+CT_HOSTNAME=theshed
+CT_STATUS=running
+APP_READY=1
+EXISTING_IP=
+parse_args --ref cursor/improvements-bb2b
+resolve_ref
+print_plan update
+""",
+        ],
+        capture_output=True,
+        text=True,
+        env={key: value for key, value in os.environ.items() if not key.startswith("THESHED_")},
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Ref:     cursor/improvements-bb2b" in result.stdout
+    assert "unset" not in result.stdout
+    assert "latest release" not in result.stdout
 
 
 def test_readme_install_is_a_one_line_latest_release() -> None:

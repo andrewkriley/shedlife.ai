@@ -477,7 +477,7 @@ print_plan() {
   echo "  CT:      ${CTID} (${CT_HOSTNAME}) — ${CT_STATUS}"
   echo "  Ref:     ${THESHED_REF}"
   if [[ "${REF_FROM_ENV:-0}" != "1" ]]; then
-    echo "  Note:    THESHED_REF was unset — this is the latest release, not a branch."
+    echo "  Note:    no --ref given — defaulting to the latest release, not a branch."
   fi
   if [[ "${APP_READY}" == "1" ]]; then
     echo "  App:     ready"
@@ -602,7 +602,6 @@ delete_existing_ct() {
 resolve_ref() {
   if [[ -n "${THESHED_REF:-}" ]]; then
     REF_FROM_ENV=1
-    echo "${THESHED_REF}"
     return
   fi
   REF_FROM_ENV=0
@@ -610,11 +609,11 @@ resolve_ref() {
   tag="$(curl -fsSL "${RAW_API}" 2>/dev/null | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1 || true)"
   if [[ -n "${tag}" ]]; then
     echo "THESHED_REF is unset; using latest GitHub release ${tag}." >&2
-    echo "A branch test needs: export THESHED_REF=<branch-or-tag>" >&2
-    echo "${tag}"
+    echo "A branch test needs: curl ... | bash -s -- --ref <branch-or-tag>" >&2
+    THESHED_REF="${tag}"
   else
     echo "THESHED_REF is unset; no GitHub release found, using main." >&2
-    echo "main"
+    THESHED_REF="main"
   fi
 }
 
@@ -1000,7 +999,7 @@ main() {
   parse_args "$@"
   print_banner
   need_root
-  THESHED_REF="$(resolve_ref)"
+  resolve_ref
   echo "The Shed installer — ref ${THESHED_REF}"
   inspect_existing
   print_existing_installs
