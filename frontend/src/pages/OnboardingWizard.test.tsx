@@ -124,4 +124,16 @@ describe('OnboardingWizard', () => {
     expect(screen.getByText('Token ID: root@pam!shed')).toBeInTheDocument()
     expect(screen.getByText(/Token secret is saved/)).toBeInTheDocument()
   })
+
+  it('shows the API error when a step fails', async () => {
+    vi.spyOn(api, 'getOnboardingStatus').mockResolvedValue(emptyStatus)
+    vi.spyOn(api, 'postOnboardingProxmox').mockRejectedValue(
+      new Error('Proxmox host is required'),
+    )
+    const user = userEvent.setup()
+    render(<OnboardingWizard onFinished={() => {}} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Continue' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Proxmox host is required')
+  })
 })
