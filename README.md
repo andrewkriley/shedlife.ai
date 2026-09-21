@@ -60,9 +60,11 @@ curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/
 
 The script lists existing Shed CTs, prints their status, and asks
 whether to upgrade one in place or install a parallel instance on the
-next VMID. Type `yes` to confirm the planned action. `--delete` destroys
-the chosen CT first. `THESHED_YES=1` (or `--yes`) skips prompts and
-upgrades the recorded CT. `THESHED_PARALLEL=1` creates a parallel CT.
+next VMID (confirmed free on the Proxmox cluster so it cannot overlap
+an existing CT or VM). Type `yes` to confirm the planned action.
+`--delete` destroys the chosen CT first. `THESHED_YES=1` (or `--yes`)
+skips prompts and upgrades the recorded CT. `THESHED_PARALLEL=1`
+creates a parallel CT.
 `THESHED_REF` overrides the ref the script clones (a branch or another
 release). The script does not ask for an API key. It prints the LAN URL
 as soon as the CT has an address, then prints the generated `admin`

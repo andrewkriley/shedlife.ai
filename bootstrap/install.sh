@@ -9,7 +9,8 @@
 #
 # Overrides (all optional):
 #   THESHED_REF          git ref to fetch (default: latest GitHub release, else main)
-#   THESHED_CTID         CT id (default: 9100)
+#   THESHED_CTID         CT id (default: first free VMID at or above 9100,
+#                        confirmed free on this Proxmox cluster)
 #   THESHED_HOSTNAME     CT name in Proxmox (default: theshed-deploy)
 #   THESHED_BRIDGE       LAN bridge (default: vmbr0)
 #   THESHED_CT_IP        static CT address (CIDR). DHCP when unset.
@@ -45,8 +46,10 @@ fi
 if [[ -n "${THESHED_HOSTNAME:-}" ]]; then
   HOSTNAME_EXPLICIT=1
 fi
-CTID="${THESHED_CTID:-9100}"
+PREFERRED_CTID=9100
+CTID="${THESHED_CTID:-${PREFERRED_CTID}}"
 CT_HOSTNAME="${THESHED_HOSTNAME:-theshed-deploy}"
+PVE_ETC="${THESHED_PVE_ETC:-/etc/pve}"
 BRIDGE="${THESHED_BRIDGE:-vmbr0}"
 MEMORY="${THESHED_MEMORY:-4096}"
 CORES="${THESHED_CORES:-2}"
@@ -61,6 +64,7 @@ CT_STATUS="missing"
 APP_READY=0
 EXISTING_IP=""
 EXISTING_REF=""
+INSTALL_ACTION=""
 
 print_banner() {
   cat <<'EOF'
@@ -142,24 +146,70 @@ is_shed_hostname() {
   [[ "${name}" == "theshed" || "${name}" == theshed-* ]]
 }
 
-ct_id_taken() {
-  local id="$1"
-  pct status "${id}" >/dev/null 2>&1 || qm status "${id}" >/dev/null 2>&1
+# Guests on every cluster node: pmxcfs conf files plus .vmlist.
+cluster_listed_vmids() {
+  local f
+  for f in "${PVE_ETC}"/nodes/*/lxc/*.conf "${PVE_ETC}"/nodes/*/qemu-server/*.conf; do
+    [[ -f "${f}" ]] || continue
+    basename "${f}" .conf
+  done
+  if [[ -r "${PVE_ETC}/.vmlist" ]]; then
+    grep -oE '"[0-9]+":' "${PVE_ETC}/.vmlist" | tr -d '":' || true
+  fi
+  return 0
+}
+
+# Ask the live cluster whether this VMID is free (CTs and VMs, every node).
+# pvesh nextid --vmid returns the id only when it is unused cluster-wide.
+cluster_nextid_says_taken() {
+  local id="$1" out
+  command -v pvesh >/dev/null 2>&1 || return 1
+  if out="$(pvesh get /cluster/nextid --vmid "${id}" 2>&1)"; then
+    out="${out//[$'\t\r\n \"']/}"
+    if [[ "${out}" == "${id}" ]]; then
+      return 1
+    fi
+    return 0
+  fi
+  printf '%s' "${out}" | grep -qi 'already exists'
+}
+
+vmid_in_use() {
+  local id="$1" used
+  if pct status "${id}" >/dev/null 2>&1 || qm status "${id}" >/dev/null 2>&1; then
+    return 0
+  fi
+  # Do not `grep -q` a pipe: grep exits on the first match and SIGPIPE +
+  # pipefail would treat a listed VMID as free.
+  while read -r used; do
+    if [[ "${used}" == "${id}" ]]; then
+      return 0
+    fi
+  done < <(cluster_listed_vmids)
+  if cluster_nextid_says_taken "${id}"; then
+    return 0
+  fi
+  return 1
 }
 
 next_free_vmid() {
   local id
   if [[ "${CTID_EXPLICIT}" == "1" ]]; then
-    if ct_id_taken "${CTID}"; then
-      echo "THESHED_CTID=${CTID} is already in use." >&2
+    if vmid_in_use "${CTID}"; then
+      echo "THESHED_CTID=${CTID} is already in use on this Proxmox cluster." >&2
       exit 1
     fi
     echo "${CTID}"
     return
   fi
-  id=9100
-  while ct_id_taken "${id}"; do
+  id="${PREFERRED_CTID}"
+  while vmid_in_use "${id}"; do
+    echo "VMID ${id} is already in use on this cluster; trying the next id." >&2
     id=$((id + 1))
+    if [[ "${id}" -gt 999999999 ]]; then
+      echo "Could not find a free VMID on this Proxmox cluster." >&2
+      exit 1
+    fi
   done
   echo "${id}"
 }
@@ -169,7 +219,7 @@ hostname_for_new_ct() {
     echo "${CT_HOSTNAME}"
     return
   fi
-  if [[ "${CTID}" == "9100" ]]; then
+  if [[ "${CTID}" == "${PREFERRED_CTID}" ]]; then
     echo "theshed-deploy"
     return
   fi
@@ -233,13 +283,14 @@ select_ct() {
   fi
 }
 
-prepare_parallel() {
+prepare_new_ct() {
   CTID="$(next_free_vmid)"
   CT_HOSTNAME="$(hostname_for_new_ct)"
   CT_EXISTS=0
   CT_STATUS="missing"
   APP_READY=0
   EXISTING_IP=""
+  EXISTING_REF=""
 }
 
 read_tty_line() {
@@ -275,8 +326,14 @@ inspect_existing() {
     name="$(pct config "${CTID}" 2>/dev/null | awk '/^hostname:/{print $2}')"
     if [[ -n "${name}" ]]; then
       if ! is_shed_hostname "${name}"; then
-        echo "CT ${CTID} is hostname '${name}', not a Shed CT." >&2
-        exit 1
+        if [[ "${CTID_EXPLICIT}" == "1" || -n "${recorded}" ]]; then
+          echo "CT ${CTID} is hostname '${name}', not a Shed CT." >&2
+          exit 1
+        fi
+        # Default 9100 belongs to someone else; allocate the next free VMID.
+        CT_EXISTS=0
+        CT_STATUS="missing"
+        return
       fi
       CT_HOSTNAME="${name}"
     fi
@@ -306,20 +363,21 @@ choose_install_action() {
   local count choice vmid nextid
   count="$(list_shed_cts | wc -l | tr -d ' ')"
   if wants_delete; then
-    echo delete
+    INSTALL_ACTION=delete
     return
   fi
   if wants_parallel; then
-    prepare_parallel
-    echo fresh
+    prepare_new_ct
+    INSTALL_ACTION=fresh
     return
   fi
   if [[ "${count}" == "0" && "${CT_EXISTS}" != "1" ]]; then
-    echo fresh
+    prepare_new_ct
+    INSTALL_ACTION=fresh
     return
   fi
   if wants_yes; then
-    echo update
+    INSTALL_ACTION=update
     return
   fi
   nextid="$(
@@ -340,11 +398,11 @@ choose_install_action() {
           select_ct "${vmid}"
         fi
       fi
-      echo update
+      INSTALL_ACTION=update
       ;;
     2)
-      prepare_parallel
-      echo fresh
+      prepare_new_ct
+      INSTALL_ACTION=fresh
       ;;
     *)
       echo "Aborted." >&2
@@ -359,6 +417,7 @@ print_plan() {
   echo "Installation status"
   echo "  Action:  ${action}"
   echo "  CT:      ${CTID} (${CT_HOSTNAME}) — ${CT_STATUS}"
+  echo "  Ref:     ${THESHED_REF}"
   if [[ "${APP_READY}" == "1" ]]; then
     echo "  App:     ready"
   else
@@ -366,9 +425,6 @@ print_plan() {
   fi
   if [[ -n "${EXISTING_IP}" ]]; then
     echo "  URL:     http://${EXISTING_IP}:${PORT}"
-  fi
-  if [[ -n "${EXISTING_REF}" ]]; then
-    echo "  Ref:     ${EXISTING_REF}"
   fi
   echo
   case "${action}" in
@@ -784,8 +840,8 @@ ct_ip() {
 
 create_ct() {
   local template="$1"
-  if pct status "${CTID}" >/dev/null 2>&1; then
-    echo "CT ${CTID} already exists but is not healthy. Abandoned-CT cleanup is manual this phase." >&2
+  if vmid_in_use "${CTID}"; then
+    echo "VMID ${CTID} is already in use on this Proxmox cluster. Re-run to pick the next free id, or set THESHED_CTID." >&2
     exit 1
   fi
   local net="name=eth0,bridge=${BRIDGE},ip=dhcp"
@@ -838,16 +894,17 @@ main() {
   echo "The Shed installer — ref ${THESHED_REF}"
   inspect_existing
   print_existing_installs
-  local action
-  action="$(choose_install_action)"
-  print_plan "${action}"
+  # Must not run in $(...): prepare_new_ct sets CTID for the new VMID.
+  choose_install_action
+  print_plan "${INSTALL_ACTION}"
   confirm_install
-  if [[ "${action}" == "delete" ]]; then
+  if [[ "${INSTALL_ACTION}" == "delete" ]]; then
     delete_existing_ct
-    action="fresh"
+    prepare_new_ct
+    INSTALL_ACTION=fresh
   fi
   local ip
-  if [[ "${action}" == "update" ]]; then
+  if [[ "${INSTALL_ACTION}" == "update" ]]; then
     update_existing_ct "${THESHED_REF}"
     load_operator_from_ct
     if [[ -z "${CT_ROOT_PASSWORD}" ]]; then

@@ -1,8 +1,144 @@
+import os
+import stat
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "bootstrap" / "install.sh"
 README = ROOT / "README.md"
+
+
+def _write_exec(path: Path, contents: str) -> None:
+    path.write_text(contents)
+    path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IRUSR | stat.S_IWUSR)
+
+
+def _install_lib(tmp_path: Path) -> Path:
+    text = SCRIPT.read_text()
+    if not text.rstrip().endswith('main "$@"'):
+        raise AssertionError('install.sh must end with main "$@" so tests can source helpers')
+    lib = tmp_path / "install-lib.sh"
+    lib.write_text(text.rsplit('main "$@"', 1)[0])
+    return lib
+
+
+def _run_vmid_helpers(
+    tmp_path: Path,
+    body: str,
+    *,
+    taken_pct: tuple[str, ...] = (),
+    taken_qm: tuple[str, ...] = (),
+    nextid_taken: tuple[str, ...] = (),
+    vmlist_ids: tuple[str, ...] = (),
+    conf_ids: tuple[tuple[str, str], ...] = (),
+    extra_env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    work = tmp_path / "vmid"
+    bindir = work / "bin"
+    pve = work / "pve"
+    bindir.mkdir(parents=True)
+    pve.mkdir(parents=True)
+
+    pct_ids = " ".join(taken_pct)
+    qm_ids = " ".join(taken_qm)
+    nextid_ids = " ".join(nextid_taken)
+    _write_exec(
+        bindir / "pct",
+        f"""#!/usr/bin/env bash
+cmd="${{1:-}}"
+id="${{2:-}}"
+taken="{pct_ids}"
+case "${{cmd}}" in
+  status)
+    for t in $taken; do
+      [[ "${{id}}" == "${{t}}" ]] && exit 0
+    done
+    exit 1
+    ;;
+  list) exit 0 ;;
+  *) exit 0 ;;
+esac
+""",
+    )
+    _write_exec(
+        bindir / "qm",
+        f"""#!/usr/bin/env bash
+cmd="${{1:-}}"
+id="${{2:-}}"
+taken="{qm_ids}"
+case "${{cmd}}" in
+  status)
+    for t in $taken; do
+      [[ "${{id}}" == "${{t}}" ]] && exit 0
+    done
+    exit 1
+    ;;
+  *) exit 0 ;;
+esac
+""",
+    )
+    _write_exec(
+        bindir / "pvesh",
+        f"""#!/usr/bin/env bash
+vmid=""
+taken="{nextid_ids}"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --vmid)
+      vmid="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+for t in $taken; do
+  if [[ "${{vmid}}" == "${{t}}" ]]; then
+    echo "VM ${{vmid}} already exists" >&2
+    exit 1
+  fi
+done
+if [[ -n "${{vmid}}" ]]; then
+  echo "${{vmid}}"
+  exit 0
+fi
+exit 1
+""",
+    )
+    if vmlist_ids:
+        entries = ",".join(
+            f'"{vid}":{{"node":"other","type":"qemu","version":1}}' for vid in vmlist_ids
+        )
+        (pve / ".vmlist").write_text(f'{{"version":1,"ids":{{{entries}}}}}\n')
+    for kind, vid in conf_ids:
+        folder = "lxc" if kind == "lxc" else "qemu-server"
+        conf_dir = pve / "nodes" / "other" / folder
+        conf_dir.mkdir(parents=True, exist_ok=True)
+        (conf_dir / f"{vid}.conf").write_text("name: overlap\n")
+
+    lib = _install_lib(tmp_path)
+    script = work / "run.sh"
+    script.write_text(
+        f"""#!/usr/bin/env bash
+set -euo pipefail
+export PATH="{bindir}:$PATH"
+export THESHED_PVE_ETC="{pve}"
+source "{lib}"
+{body}
+"""
+    )
+    env = {key: value for key, value in os.environ.items() if not key.startswith("THESHED_")}
+    if extra_env:
+        env.update(extra_env)
+    env.setdefault("PATH", os.environ.get("PATH", "/usr/bin:/bin"))
+    return subprocess.run(
+        ["bash", str(script)],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
 
 
 def test_install_script_writes_theshed_ref_into_ct_env() -> None:
@@ -57,6 +193,15 @@ def test_install_script_confirms_fresh_update_or_delete() -> None:
     assert main.index("choose_install_action") < main.index("print_plan")
     assert main.index("print_plan") < main.index("confirm_install")
     assert main.index("confirm_install") < main.index("create_ct")
+    assert 'action="$(choose_install_action)"' not in text
+    assert "INSTALL_ACTION" in main
+    assert "prepare_new_ct" in text
+    fresh = text.split("choose_install_action() {", 1)[1].split("\n}\n", 1)[0]
+    assert fresh.index("count") < fresh.index("prepare_new_ct")
+    assert "pvesh get /cluster/nextid" in text
+    assert "vmid_in_use" in text
+    create = text.split("create_ct() {", 1)[1].split("bootstrap_ct() {", 1)[0]
+    assert "vmid_in_use" in create
 
 
 def test_readme_install_is_a_one_line_latest_release() -> None:
@@ -222,6 +367,86 @@ def test_install_script_follows_debug_logs_to_tty1() -> None:
     assert "theshed-debug-tty.pid" in text
     compose = text.split("compose_up() {", 1)[1].split("write_fresh_env() {", 1)[0]
     assert "follow_debug_to_tty" in compose
+
+
+def test_next_free_vmid_keeps_9100_when_cluster_is_clear(tmp_path: Path) -> None:
+    result = _run_vmid_helpers(tmp_path, "next_free_vmid")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "9100"
+
+
+def test_next_free_vmid_skips_local_ct_and_vm(tmp_path: Path) -> None:
+    result = _run_vmid_helpers(
+        tmp_path,
+        "next_free_vmid",
+        taken_pct=("9100",),
+        taken_qm=("9101",),
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "9102"
+    assert "VMID 9100 is already in use" in result.stderr
+    assert "VMID 9101 is already in use" in result.stderr
+
+
+def test_next_free_vmid_skips_ids_listed_on_another_node(tmp_path: Path) -> None:
+    result = _run_vmid_helpers(
+        tmp_path,
+        "next_free_vmid",
+        vmlist_ids=("9100", "9101"),
+        conf_ids=(("qemu", "9102"), ("lxc", "9103")),
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "9104"
+
+
+def test_next_free_vmid_trusts_cluster_nextid(tmp_path: Path) -> None:
+    result = _run_vmid_helpers(
+        tmp_path,
+        "next_free_vmid",
+        nextid_taken=("9100", "9101"),
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "9102"
+
+
+def test_fresh_prepare_uses_cluster_free_vmid(tmp_path: Path) -> None:
+    result = _run_vmid_helpers(
+        tmp_path,
+        'prepare_new_ct\nprintf "CTID=%s HOST=%s\\n" "${CTID}" "${CT_HOSTNAME}"\n',
+        vmlist_ids=("9100",),
+    )
+    assert result.returncode == 0, result.stderr
+    assert "CTID=9101 HOST=theshed-9101" in result.stdout
+
+
+def test_fresh_prepare_keeps_theshed_deploy_when_9100_is_free(tmp_path: Path) -> None:
+    result = _run_vmid_helpers(
+        tmp_path,
+        'prepare_new_ct\nprintf "CTID=%s HOST=%s\\n" "${CTID}" "${CT_HOSTNAME}"\n',
+    )
+    assert result.returncode == 0, result.stderr
+    assert "CTID=9100 HOST=theshed-deploy" in result.stdout
+
+
+def test_explicit_ctid_refuses_cluster_overlap(tmp_path: Path) -> None:
+    result = _run_vmid_helpers(
+        tmp_path,
+        "next_free_vmid",
+        taken_qm=("9200",),
+        extra_env={"THESHED_CTID": "9200"},
+    )
+    assert result.returncode != 0
+    assert "THESHED_CTID=9200 is already in use on this Proxmox cluster." in result.stderr
+
+
+def test_create_ct_rechecks_vmid_against_the_cluster(tmp_path: Path) -> None:
+    result = _run_vmid_helpers(
+        tmp_path,
+        'CTID=9100\nif vmid_in_use "${CTID}"; then echo TAKEN; else echo FREE; fi\n',
+        nextid_taken=("9100",),
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "TAKEN"
 
 
 def test_install_script_prints_banner_first() -> None:

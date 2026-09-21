@@ -59,8 +59,9 @@ has to exist before Git, Kubernetes, or a secrets backend do.
   collected / valid / failing fields plus probe results. Chat, debug, the
   assistant status, Settings, and Foundations remain available.
 - Re-running the install command lists every Shed CT it finds and asks
-  whether to upgrade one in place or create a parallel CT on the next VMID.
-  `--yes` upgrades the recorded CT and does not invent a parallel instance.
+  whether to upgrade one in place or create a parallel CT on the next
+  cluster-free VMID. `--yes` upgrades the recorded CT and does not invent
+  a parallel instance.
 - Re-running the wizard or a probe, or changing one field, does not require
   starting over.
 - No platform service listed in Non-goals has been created.
@@ -88,13 +89,18 @@ has to exist before Git, Kubernetes, or a secrets backend do.
   operator identity so the web UI accepts `admin`.
 - Before changing anything, the installer scans for Shed CTs (state file
   plus hostname `theshed` / `theshed-*`) and prints a table: VMID,
-  hostname, status, IP, ref, app ready. If none exist: create the default
-  CT (`9100` / `theshed-deploy`). If any exist, the TTY asks (1) upgrade an
-  existing CT in place (keep login and volumes) or (2) install a parallel
-  instance on the next free VMID (`theshed-<vmid>`). `--yes` /
-  `THESHED_YES=1` skips prompts and upgrades the recorded CT. `THESHED_PARALLEL=1`
-  forces a parallel CT. `--delete`: destroy the chosen CT, then a fresh
-  install. `THESHED_CTID` still pins a specific id.
+  hostname, status, IP, ref, app ready. Fresh and parallel creates ask the
+  live Proxmox cluster (`pvesh get /cluster/nextid` plus the cluster guest
+  list) so the VMID cannot overlap a CT or VM on any node. If none exist
+  and `9100` is free: create `9100` / `theshed-deploy`; if `9100` is taken,
+  take the next free id (`theshed-<vmid>`). If any Shed CTs exist, the TTY
+  asks (1) upgrade an existing CT in place (keep login and volumes) or (2)
+  install a parallel instance on the next free cluster VMID
+  (`theshed-<vmid>`). `--yes` / `THESHED_YES=1` skips prompts and upgrades
+  the recorded CT. `THESHED_PARALLEL=1` forces a parallel CT. `--delete`:
+  destroy the chosen CT, then a fresh install on a cluster-free VMID.
+  `THESHED_CTID` still pins a specific id and is refused if that id is in
+  use.
 - `--debug` (or `THESHED_DEBUG=1`) starts the CT with the live debug
   console on: HTTP requests (including start of a long SSE turn), UI
   clicks, chat submit/SSE, provider connection attempts, model
@@ -297,8 +303,8 @@ Probes are rerunnable. Results hang off the schema, not the chat transcript.
 ### Idempotency / failure recovery
 
 - Re-run the install script: after confirmation, upgrade a listed CT in
-  place, or create a parallel CT on the next VMID. `--delete` destroys the
-  chosen CT first, after confirmation.
+  place, or create a parallel CT on the next cluster-free VMID.
+  `--delete` destroys the chosen CT first, after confirmation.
 - Re-run a playbook or probe: completed work is skipped after live
   verification, same hybrid model as before (local state + live check).
 - Abandoned-CT cleanup is still manual this phase. The installer's state

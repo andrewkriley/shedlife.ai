@@ -30,12 +30,17 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    `theshed-*`): VMID, hostname, status, IP, ref, whether
    `GET /api/setup/status` answers. It prints that table and a warning,
    then requires a choice on the TTY unless `--yes` / `THESHED_YES=1`.
-   Fresh (none present) → create default `9100` / `theshed-deploy`.
+   Fresh and parallel creates confirm the VMID is free on the live
+   cluster (`pvesh get /cluster/nextid --vmid` plus `/etc/pve/.vmlist`
+   and guest conf on every node) so it cannot overlap a CT or VM.
+   Fresh (no Shed CT, `9100` free) → create `9100` / `theshed-deploy`;
+   if `9100` is taken, the next free id (`theshed-<vmid>`).
    Existing → (1) update that CT in place (keep `.env` and compose
    volumes, refresh the clone and image) or (2) parallel on the next free
-   VMID (`theshed-<vmid>`). `--yes` upgrades the recorded CT and never
+   cluster VMID (`theshed-<vmid>`). `--yes` upgrades the recorded CT and never
    invents a parallel instance. `THESHED_PARALLEL=1` forces parallel.
-   `--delete` → destroy the chosen CT, then fresh. New CTs get a
+   `--delete` → destroy the chosen CT, then fresh on a cluster-free VMID.
+   `THESHED_CTID` pins an id and is refused if that id is in use. New CTs get a
    generated `admin` password and CT `root` password
    (`pct create --password`). Prints the LAN URL as soon as the CT has
    an address, waits until `GET /api/setup/status` succeeds (from the
