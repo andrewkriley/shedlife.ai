@@ -3,6 +3,7 @@ name: attach-install-script
 # Fallback for releases that were not created by release-please.yml
 # (GitHub UI, or a re-run). The happy path attaches in the same
 # release-please job — GITHUB_TOKEN cannot start this workflow.
+# Cloud Agents and workers must not dispatch this — see RELEASING.md.
 
 on:
   release:
@@ -19,6 +20,7 @@ permissions:
 
 jobs:
   upload:
+    environment: release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
