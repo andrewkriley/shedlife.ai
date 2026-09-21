@@ -25,6 +25,10 @@ between being built and a tenant's Flux instance deploying it.
   action**, not something a product release pushes onto them unasked.
 - Versioning and changelog generation are automatic, driven by commit discipline —
   not a manual "what should the next version be" decision each time.
+- **Cutting a version is a human GitHub UI action.** Cloud Agents, workers, and
+  other bots may land work on `main`; they must not merge a Release PR, dispatch
+  `release-please`, or create tags. That is the SDLC split between development
+  and release.
 - `main` is protected the same way regardless of who's merging — commit signing and a
   passing CI gate apply unconditionally, including to the maintainer's own merges;
   only the *peer-approval* requirement can ever be bypassed, and only because a
@@ -97,6 +101,19 @@ edits stay granular (`0.4.1`, `0.4.2`); a breaking change bumps minor, not
 major). PR titles (which become the squash-merge commit message, see below)
 are format-checked in CI, since they're what the versioning/changelog
 tooling actually reads.
+
+### Human release authority
+
+A Release PR (`chore(main): release theshed …`) is merged only by a maintainer
+in the GitHub pull-request UI. The `release-please` workflow is started from
+the Actions tab (or, if push-to-`main` is later re-enabled, only to *update*
+the standing PR — merge remains human). The GitHub Environment `release` on
+that workflow requires a human reviewer and is limited to `main`.
+`.github/CODEOWNERS` covers the files `release-please` bumps so Code Owner
+review can be required on `main`.
+
+This is not the same as the Ruleset B admin bypass for ordinary feature PRs.
+An agent merging its own work to `main` does not get to ship a version.
 
 ### Branch protection on `main`
 

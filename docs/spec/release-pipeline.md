@@ -17,8 +17,15 @@ workflow this extends rather than replaces.
 - **`commitlint`** — enforces Conventional Commits format on PR titles.
 - **CodeQL** — GitHub's native SAST, scanning application code.
 - **Image scanner** (e.g. Trivy) — scans the built container image before publish.
-- **`release-please`** — watches `main`, maintains an accumulating Release PR with the
-  changelog, tags and cuts a GitHub Release when that PR is merged.
+- **`release-please`** — opened or refreshed by a maintainer (Actions → Run
+  workflow on `main`; optionally later on push to `main`). Maintains an
+  accumulating Release PR with the changelog; tags and cuts a GitHub Release
+  after that PR is merged in the GitHub UI.
+- **Maintainer (human)** — the only actor who may start `release-please.yml`,
+  approve the `release` environment, or merge a Release PR. Cloud Agents,
+  self-hosted workers, and other bots are not this actor.
+- **GitHub Environment `release`** — required-reviewer gate on the
+  `release-please` job; deployment branches limited to `main`.
 - **GitHub Container Registry (GHCR)** — holds versioned, published images, tied to
   the public `andrewkriley/shedlife.ai` repo.
 - **A tenant's Fleet repo** (`apps/` layer) — the thing that actually determines what
@@ -45,12 +52,16 @@ unconditionally, including to an admin's own merge.
    (Ruleset A).
 3. PR merges (squash, PR title becomes the commit message) once Ruleset A's checks
    pass and Ruleset B's approval requirement is satisfied or bypassed.
-4. `release-please` reads the new commit, updates its standing Release PR (version
-   bump + changelog entry, per Conventional Commits). Config:
+4. A maintainer starts `release-please` from the Actions tab on `main` (the
+   `release` environment must be approved in the GitHub UI). The job reads
+   commits since the last tag and opens or updates the standing Release PR
+   (version bump + changelog entry, per Conventional Commits). Config:
    `bump-patch-for-minor-pre-major` and `bump-minor-pre-major` so `0.x`
    stays patch-granular (`feat:`/`fix:` → patch; breaking → minor).
-5. When the maintainer merges *that* Release PR: `release-please` tags the release and
-   cuts a GitHub Release.
+5. The maintainer reviews and merges *that* Release PR in the GitHub UI —
+   not via the API, `gh pr merge`, or an agent. Then `release-please` runs
+   again (second **Run workflow** while dispatch-only; automatic on push
+   if that trigger is re-enabled), tags the release, and cuts a GitHub Release.
 6. The tag triggers: the full test gate re-runs as a prerequisite; on success, the
    container image builds, gets scanned (Trivy), and — only if the scan passes —
    publishes to GHCR under that version tag.
@@ -70,12 +81,17 @@ only durable artifacts are the published images in GHCR (versioned by tag), the
 
 - GitHub Actions workflow files (`.github/workflows/`) — `ci.yml` (test, lint,
   type-check, `commitlint`, CodeQL, on push/PR), `release-please.yml`
-  (versioning; attaches `bootstrap/install.sh` in the same job that cuts the
-  GitHub Release, because `GITHUB_TOKEN` cannot start a follow-on workflow),
+  (versioning; `environment: release`; attaches `bootstrap/install.sh` in the
+  same job that cuts the GitHub Release, because `GITHUB_TOKEN` cannot start
+  a follow-on workflow),
   `attach-install-script.yml` (fallback for UI-published releases),
   `release.yml` (build + scan + publish, on tag), alongside the existing
   `gitleaks.yml`.
 - Two Rulesets on `main` (GitHub repository settings, not a workflow file).
+- GitHub Environment `release` (repository settings): required reviewers;
+  deployment branches = `main` only.
+- `.github/CODEOWNERS` on `CHANGELOG.md` and `.release-please-manifest.json`,
+  with "require review from Code Owners" on `main`.
 - No new backend/frontend API surface — this subsystem doesn't run inside The Shed
   itself.
 
@@ -85,7 +101,10 @@ only durable artifacts are the published images in GHCR (versioned by tag), the
   *and* the image scan — no path to publish an untested or known-vulnerable image.
 - Signed commits and the full CI gate are unconditional (Ruleset A, no bypass for
   anyone) — the only bypassable requirement is peer approval (Ruleset B), and only for
-  the Repository Admin role.
+  the Repository Admin role. That bypass applies to ordinary feature PRs; it is
+  not permission for an agent to merge a Release PR or dispatch `release-please`.
+- A version is cut only after a human merges the Release PR in the GitHub UI
+  and the `release` environment has been approved by a required reviewer.
 - GHCR access for publishing uses GitHub Actions' own scoped `GITHUB_TOKEN` (same
   mechanism the `gitleaks` workflow already uses for its own permissions), not a
   separately-managed credential.

@@ -40,3 +40,20 @@ GitHub API and tell the operator to relaunch.
 
 Commit/PR mechanics (signing, Conventional Commits, review) are in `CONTRIBUTING.md`
 — CI enforces them, so read it rather than guessing.
+
+## Releases are a human GitHub UI action
+
+Do not cut a product release. That includes Cloud Agents, self-hosted workers, and
+The Shed's own `build` sub-agents. Versioning is a maintainer decision in the
+GitHub UI — see `RELEASING.md`.
+
+Never:
+
+- merge a Release PR (`chore(main): release theshed …`, or any PR from
+  `release-please--branches--*`)
+- dispatch `.github/workflows/release-please.yml` or `attach-install-script.yml`
+- create or push a version tag, or create/edit a GitHub Release
+- edit `.release-please-manifest.json` or `CHANGELOG.md` to force a version
+
+Land `feat:` / `fix:` / `chore:` work on `main` through ordinary PRs. Leave the
+Release PR and the Actions "Run workflow" button for a human.

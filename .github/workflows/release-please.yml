@@ -1,8 +1,11 @@
 name: release-please
 
 on:
-  # Automatic versioning is off while Bootstrap is still in development.
-  # Re-enable `push: branches: [main]` when we want release PRs again.
+  # Manual only. A human starts this from the Actions tab (Run workflow).
+  # Cloud Agents and workers must not dispatch it — see RELEASING.md.
+  # Re-enable `push: branches: [main]` only if we want the standing Release
+  # PR to update on every main merge; tagging still waits for a human to
+  # merge that PR in the GitHub UI.
   workflow_dispatch:
 
 permissions:
@@ -11,6 +14,10 @@ permissions:
 
 jobs:
   release-please:
+    # GitHub Environment `release` is the GUI approval gate. Configure it
+    # with required reviewers (the maintainer) and limit it to `main`.
+    # An unprotected environment does not enforce anything.
+    environment: release
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v5

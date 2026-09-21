@@ -1,0 +1,5 @@
+# Release artifacts. release-please bumps these when it opens a Release PR.
+# Turn on "require review from Code Owners" on `main` so that PR needs a
+# human review in the GitHub UI before merge. See RELEASING.md.
+CHANGELOG.md @andrewkriley
+.release-please-manifest.json @andrewkriley

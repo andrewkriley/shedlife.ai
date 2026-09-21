@@ -80,6 +80,11 @@ practical reason that a single-maintainer project has no peer available to provi
 one yet. That bypass never extends to signed commits or CI passing — those apply to
 every merge, no exceptions, regardless of who's merging.
 
+**Release PRs are different.** A PR titled `chore(main): release theshed …` (the
+standing `release-please` PR) is merged only by a maintainer in the GitHub UI.
+Cloud Agents and workers must not merge it, dispatch the release workflow, or
+create tags. See `RELEASING.md`.
+
 ## Questions
 
 Open an issue if something in this document — or in the design docs it points to —
