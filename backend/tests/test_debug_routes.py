@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -30,7 +32,9 @@ async def test_debug_starts_off_and_toggle_enables_logs(client: AsyncClient) -> 
     logs = await client.get("/debug/logs")
     body = logs.json()
     assert body["enabled"] is True
-    assert any(event["event"] == "click" for event in body["events"])
+    click = next(event for event in body["events"] if event["event"] == "click")
+    recorded = datetime.fromisoformat(click["at"])
+    assert recorded.tzinfo is not None
 
 
 @pytest.mark.asyncio

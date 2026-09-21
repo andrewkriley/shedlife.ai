@@ -37,20 +37,17 @@ describe('DebugDock', () => {
     expect(await screen.findByRole('button', { name: 'Debug on' })).toHaveClass('debug-dock__toggle--on')
     expect(await screen.findByLabelText('debug console')).toBeInTheDocument()
     expect(screen.getByText(/anthropic rejected the key/)).toBeInTheDocument()
-    expect(
-      screen.getByText(formatDebugTimestamp('2026-09-20T00:00:00Z'), { exact: false }),
-    ).toBeInTheDocument()
+    const stamp = screen.getByText(formatDebugTimestamp('2026-09-20T00:00:00Z'))
+    expect(stamp.tagName).toBe('TIME')
+    expect(stamp).toHaveAttribute('datetime', '2026-09-20T00:00:00Z')
+    expect(stamp.textContent).toMatch(/UTC/)
   })
 
-  it('formats timestamps as a local clock without a UTC designator', () => {
+  it('formats timestamps as a local clock with a timezone label', () => {
     const formatted = formatDebugTimestamp('2026-09-20T14:05:06.123Z')
-    const date = new Date('2026-09-20T14:05:06.123Z')
-    const pad = (value: number) => String(value).padStart(2, '0')
-    expect(formatted).toBe(
-      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`,
-    )
-    expect(formatted).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
-    expect(formatted).not.toMatch(/Z|T|\+/)
+    expect(formatted).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC([+-]\d{1,2}(:\d{2})?)?$/)
+    expect(formatted).not.toMatch(/T/)
+    expect(formatted.endsWith('Z')).toBe(false)
   })
 
   it('lists the newest debug event first', async () => {

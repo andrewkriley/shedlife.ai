@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -56,7 +56,22 @@ def test_record_stores_a_system_local_timestamp(monkeypatch) -> None:
     assert recorded.utcoffset() == datetime.now().astimezone().utcoffset()
 
 
-def test_console_line_shows_system_local_clock_time() -> None:
+def test_timezone_label_for_utc() -> None:
+    moment = datetime(2026, 9, 20, 0, 0, tzinfo=timezone.utc)
+    assert debug_log.format_timezone_label(moment) == "UTC"
+
+
+def test_timezone_label_for_positive_offset() -> None:
+    moment = datetime(2026, 9, 20, 10, 0, tzinfo=timezone(timedelta(hours=10)))
+    assert debug_log.format_timezone_label(moment) == "UTC+10"
+
+
+def test_timezone_label_for_negative_offset_with_minutes() -> None:
+    moment = datetime(2026, 9, 20, 10, 0, tzinfo=timezone(timedelta(hours=-5, minutes=-30)))
+    assert debug_log.format_timezone_label(moment) == "UTC-05:30"
+
+
+def test_console_line_shows_system_local_clock_time_with_timezone() -> None:
     entry = {
         "at": "2026-09-20T00:00:00+00:00",
         "level": "info",
@@ -65,11 +80,14 @@ def test_console_line_shows_system_local_clock_time() -> None:
         "message": "Save",
         "detail": None,
     }
-    local = datetime.fromisoformat(entry["at"]).astimezone().strftime("%Y-%m-%d %H:%M:%S")
+    stamp = debug_log.format_local_timestamp(entry["at"])
     line = debug_log.format_console_line(entry)
-    assert local in line
+    assert stamp in line
+    assert "UTC" in stamp
     assert "T00:00:00" not in line
-    assert "+00:00" not in line
+    local = datetime.fromisoformat(entry["at"]).astimezone()
+    assert local.strftime("%Y-%m-%d %H:%M:%S") in stamp
+    assert stamp.endswith(debug_log.format_timezone_label(local))
 
 
 def test_record_prints_redacted_line_to_stdout(monkeypatch, capsys) -> None:

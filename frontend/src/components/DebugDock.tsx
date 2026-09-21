@@ -101,10 +101,13 @@ export function DebugDock() {
             <ol>
               {[...events].reverse().map((item, index) => (
                 <li key={`${item.at}-${index}`} data-level={item.level}>
+                  <time className="debug-console__time" dateTime={item.at}>
+                    {formatDebugTimestamp(item.at)}
+                  </time>
                   <span className="debug-console__meta">
-                    {formatDebugTimestamp(item.at)} · {item.source} · {item.event}
+                    {item.source} · {item.event}
                   </span>
-                  {item.message}
+                  <span className="debug-console__message">{item.message}</span>
                 </li>
               ))}
             </ol>

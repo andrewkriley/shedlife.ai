@@ -611,10 +611,28 @@ fieldset > legend {
   gap: var(--space-xs);
 }
 
+.debug-console li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-sm);
+}
+
+.debug-console__time {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .debug-console__meta {
-  display: block;
+  display: inline;
   color: var(--text-muted);
   font-size: 11px;
+  white-space: nowrap;
+}
+
+.debug-console__message {
+  min-width: 12ch;
 }
 
 .debug-console li[data-level='error'] {

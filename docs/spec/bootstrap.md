@@ -255,11 +255,13 @@ console). `--debug` also tails compose logs onto `tty1`. Interfaces:
 
 The UI toggle is green when debug is on and muted when off. The log
 panel is shown only while debug is enabled, in the page flow under the
-chat — not as a fixed overlay. Each event shows its timestamp in the
-system local clock (`YYYY-MM-DD HH:MM:SS`), not UTC. The panel lists
-newest events first; `GET /debug/logs` and the CT console stay
-chronological (oldest first). The console line uses the same local
-clock. The stored `at` is timezone-aware ISO in the process timezone.
+chat — not as a fixed overlay. Each event shows its timestamp as a
+visible `<time>` value in the system local clock
+(`YYYY-MM-DD HH:MM:SS UTC` or `UTC±offset`), not a bare UTC ISO string.
+The panel lists newest events first; `GET /debug/logs` and the CT
+console stay chronological (oldest first). The console line uses the
+same local clock and timezone label. The stored `at` is timezone-aware
+ISO in the process timezone.
 
 ## Security model
 
