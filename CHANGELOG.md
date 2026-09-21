@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.16](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.15...theshed-v0.4.16) (2026-09-21)
+
+
+### Features
+
+* first-run onboarding wizard and parallel CT installs ([0eb7002](https://github.com/andrewkriley/shedlife.ai/commit/0eb70021d39dd313de9b255f5c92012dcb66aef0))
+* report the installed git ref from /health ([#49](https://github.com/andrewkriley/shedlife.ai/issues/49)) ([8242795](https://github.com/andrewkriley/shedlife.ai/commit/824279596419b3949b05d5a6c1f77f521773d2af))
+
 ## [0.4.15](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.14...theshed-v0.4.15) (2026-09-20)
 
 
