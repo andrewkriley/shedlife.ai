@@ -109,10 +109,10 @@ phase-dependent:
 Agent/tool tracing via a dedicated LLM observability platform (Galileo),
 structured around the same span hierarchy the architecture describes (a top-level span
 per turn, containing classification and each matched sub-agent's own span, grouped into
-sessions per conversation). Optional in Bootstrap: missing Galileo credentials
-keep a no-op tracer; a turn must never fail because tracing is down. This is
-observability, not a testing mechanism — see the testing-discipline section of
-`architecture.md`.
+sessions per conversation). Bootstrap does not collect Galileo credentials;
+the tracer stays a no-op in this phase. A turn must never fail because tracing
+is down. This is observability, not a testing mechanism — see the
+testing-discipline section of `architecture.md`.
 
 Infra metrics (Grafana, Prometheus, later Splunk) are a different concern and
 are not in this stack until their phase grill.

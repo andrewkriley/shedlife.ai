@@ -1,15 +1,16 @@
 import { type ReactNode, useEffect, useState } from 'react'
 import { AssistantStatus } from './components/AssistantStatus'
 import { DebugDock } from './components/DebugDock'
-import { getSetupStatus } from './lib/api'
+import { getOnboardingStatus, getSetupStatus } from './lib/api'
 import { Chat } from './pages/Chat'
 import { FoundationsPanel } from './pages/FoundationsPanel'
 import { IssuesPanel } from './pages/IssuesPanel'
 import { Login } from './pages/Login'
+import { OnboardingWizard } from './pages/OnboardingWizard'
 import { Settings } from './pages/Settings'
 import { Setup } from './pages/Setup'
 
-type View = 'chat' | 'settings'
+type View = 'chat' | 'settings' | 'onboarding'
 type ReviewTab = 'foundations' | 'issues'
 
 function AppFrame({ children }: { children: ReactNode }) {
@@ -36,6 +37,15 @@ function App() {
       })
       .catch(() => setSetupNeeded(false))
   }, [])
+
+  useEffect(() => {
+    if (!loggedIn) return
+    getOnboardingStatus()
+      .then((status) => {
+        if (status.needed) setView('onboarding')
+      })
+      .catch(() => undefined)
+  }, [loggedIn])
 
   if (setupNeeded === null) {
     return (
@@ -64,39 +74,38 @@ function App() {
       </AppFrame>
     )
   }
-  if (setupNeeded) {
-    return (
-      <AppFrame>
-        <Setup
-          hasOperator
-          onComplete={() => {
-            setSetupNeeded(false)
-          }}
-        />
-      </AppFrame>
-    )
-  }
 
   return (
     <div className="app-shell" data-layout="single-window">
       <header className="app-header">
         <h1>The Shed</h1>
         <AssistantStatus />
-        {view === 'settings' ? (
-          <button type="button" className="button-secondary" onClick={() => setView('chat')}>
-            Back to chat
-          </button>
-        ) : (
-          <button type="button" className="button-secondary" onClick={() => setView('settings')}>
-            Settings
-          </button>
-        )}
+        <div className="app-header__actions">
+          {view !== 'onboarding' ? (
+            <button type="button" className="button-secondary" onClick={() => setView('onboarding')}>
+              Onboarding
+            </button>
+          ) : null}
+          {view === 'settings' || view === 'onboarding' ? (
+            <button type="button" className="button-secondary" onClick={() => setView('chat')}>
+              Back to chat
+            </button>
+          ) : (
+            <button type="button" className="button-secondary" onClick={() => setView('settings')}>
+              Settings
+            </button>
+          )}
+        </div>
       </header>
       <div
         className={view === 'settings' ? 'workspace workspace--hidden' : 'workspace'}
         aria-hidden={view === 'settings'}
       >
-        <Chat />
+        {view === 'onboarding' ? (
+          <OnboardingWizard onFinished={() => setView('chat')} />
+        ) : (
+          <Chat />
+        )}
         <aside className="sidebar">
           <div className="sidebar-tabs" role="tablist" aria-label="review">
             <button

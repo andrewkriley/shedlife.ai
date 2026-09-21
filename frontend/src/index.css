@@ -244,10 +244,61 @@ code {
   background: var(--bg-panel);
 }
 
+.app-header__actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-left: auto;
+}
+
 .app-header h1 {
   margin: 0;
   font-size: 20px;
   line-height: 28px;
+}
+
+.wizard {
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-xl);
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+}
+
+.wizard__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding: 0;
+  margin: 0 0 var(--space-lg);
+  list-style: none;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.wizard__steps .is-current {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.wizard__steps .is-done {
+  color: var(--accent-success);
+}
+
+.wizard__checks {
+  padding-left: 1.2em;
+}
+
+.wizard__checks li[data-status='pass'] {
+  color: var(--accent-success);
+}
+
+.wizard__checks li[data-status='warn'] {
+  color: var(--accent-warning);
+}
+
+.wizard__checks li[data-status='fail'],
+.wizard__checks li[data-status='error'] {
+  color: var(--accent-danger);
 }
 
 .assistant-status {

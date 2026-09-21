@@ -36,6 +36,8 @@ def test_install_script_does_not_collect_operator_secrets() -> None:
 def test_install_script_confirms_fresh_update_or_delete() -> None:
     text = SCRIPT.read_text()
     assert "inspect_existing" in text
+    assert "print_existing_installs" in text
+    assert "choose_install_action" in text
     assert "print_plan" in text
     assert "confirm_install" in text
     assert "update_existing_ct" in text
@@ -46,8 +48,13 @@ def test_install_script_confirms_fresh_update_or_delete() -> None:
     assert "fresh install" in text
     assert "UPDATE" in text
     assert "DESTROY" in text
+    assert "parallel" in text
+    assert "next_free_vmid" in text
+    assert "list_shed_cts" in text
     main = text.split("main() {", 1)[1]
-    assert main.index("inspect_existing") < main.index("print_plan")
+    assert main.index("inspect_existing") < main.index("print_existing_installs")
+    assert main.index("print_existing_installs") < main.index("choose_install_action")
+    assert main.index("choose_install_action") < main.index("print_plan")
     assert main.index("print_plan") < main.index("confirm_install")
     assert main.index("confirm_install") < main.index("create_ct")
 
@@ -189,7 +196,17 @@ def test_install_script_defaults_web_user_to_admin() -> None:
     assert "operator@theshed.local" not in text
 
 
-def test_install_script_accepts_debug_flag() -> None:
+def test_install_script_offers_upgrade_or_parallel() -> None:
+    text = SCRIPT.read_text()
+    assert "--parallel" in text
+    assert "THESHED_PARALLEL" in text
+    assert "list_shed_cts" in text
+    assert "theshed-${CTID}" in text
+    assert "Upgrade an existing installation" in text
+    assert "parallel instance" in text
+    assert "bash -s -- --parallel" in text
+    readme = README.read_text()
+    assert "parallel" in readme.lower()
     text = SCRIPT.read_text()
     assert "--debug" in text
     assert "THESHED_DEBUG" in text

@@ -21,15 +21,12 @@ An operator runs a script from the public product repo on the Proxmox host
 (pinned release tag by default). The script creates one LXC, starts The Shed
 in the **bootstrap profile**, and prints a LAN URL.
 
-The operator opens that URL. A setup gate takes the LLM provider + API key
-and the first operator account. After that, the UI is the chat: a bootstrap
-assistant, backed by a foundations schema, that:
-
-- asks for the facts Deploy will need in order to *start*
-- validates them
-- runs predetermined pre-deploy probes
-- stores the result locally on the LXC
-- records unexpected errors as local issues
+The operator opens that URL. A setup gate creates the first operator
+account when the installer did not seed one. After login, an onboarding
+wizard collects Proxmox, the LLM key, tenant identity, and build-vs-adopt,
+validates each step, and runs predetermined pre-deploy probes. Chat stays
+available beside that. The result is stored locally on the LXC.
+Unexpected errors become local issues.
 
 Success: the operator can leave the machine, come back, see the same
 foundations state, re-run probes, and export a YAML bundle. No GitLab, k3s,

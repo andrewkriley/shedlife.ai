@@ -168,8 +168,8 @@ attachments are given to a sub-agent, per step 6c of the Sequence.
   call to each cloud provider's own models-list API, plus whatever's currently
   registered in LiteLLM for local models (the same registrations GPU/Compute
   Management creates — this endpoint reads them, it doesn't maintain a second list).
-  `GET`/`POST /settings/galileo` read and update project, host, log stream,
-  and API key; the key is never returned.
+  `GET`/`POST /settings/galileo` exist on the living harness for later
+  phases; Bootstrap does not collect or show Galileo.
 
 ## Security model
 

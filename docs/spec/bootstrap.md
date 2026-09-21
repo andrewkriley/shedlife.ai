@@ -12,8 +12,9 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
   the URL. Not an orchestrator.
 - **Bootstrap LXC** — durable for this phase. Runs The Shed (bootstrap
   profile) plus its local database and session store.
-- **Setup gate** — first-run screen; creates secret-zero (LLM key) and the
-  first local-password identity.
+- **Setup gate** — first-run identity screen when no operator exists yet.
+- **Onboarding wizard** — step-through collect / validate / discover /
+  summary after login; re-runnable from the header.
 - **`bootstrap.intake`** — the only registered sub-agent. Assist job.
   Playbooks below are its only tools besides ordinary conversation.
 - **Foundations store** — schema rows + probe results + exportable YAML.
@@ -25,12 +26,16 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
 1. Operator, as root on the Proxmox host, runs the install command pinned to
    a release tag (overrideable). Example shape:
    `curl -fsSL https://github.com/andrewkriley/shedlife.ai/releases/latest/download/install.sh | bash`
-2. The script inspects the recorded CT (if any): present / running /
-   stopped, and whether `GET /api/setup/status` answers. It prints that
-   status and a warning, then requires `yes` on the TTY unless
-   `--yes` / `THESHED_YES=1`. Fresh → create. Existing → update in
-   place (keep `.env` and compose volumes, refresh the clone and
-   image). `--delete` → destroy the CT, then fresh. New CTs get a
+2. The script lists Shed CTs it finds (state file and hostname `theshed` /
+   `theshed-*`): VMID, hostname, status, IP, ref, whether
+   `GET /api/setup/status` answers. It prints that table and a warning,
+   then requires a choice on the TTY unless `--yes` / `THESHED_YES=1`.
+   Fresh (none present) → create default `9100` / `theshed-deploy`.
+   Existing → (1) update that CT in place (keep `.env` and compose
+   volumes, refresh the clone and image) or (2) parallel on the next free
+   VMID (`theshed-<vmid>`). `--yes` upgrades the recorded CT and never
+   invents a parallel instance. `THESHED_PARALLEL=1` forces parallel.
+   `--delete` → destroy the chosen CT, then fresh. New CTs get a
    generated `admin` password and CT `root` password
    (`pct create --password`). Prints the LAN URL as soon as the CT has
    an address, waits until `GET /api/setup/status` succeeds (from the
@@ -42,13 +47,20 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    Proxmox notes field (`pct set --description`) so they stay visible
    on the guest in the Proxmox UI after the installer exits.
 3. Operator opens the URL. Seeded identity exists → login with username
-   `admin` and the printed password, then setup if no LLM key yet. No
-   identity → setup gate.
-4. Setup gate: provider + API key (live validate). Username + password
-   (typed twice) only when no operator identity exists yet.
-   Writes `local://providers/llm/api_key` (and optional Galileo refs).
-   Creates `users` / `identities` rows. Sets the session cookie
-   (`Secure` off).
+   `admin` and the printed password. No identity → setup gate (username
+   + password typed twice). The gate does not collect an LLM key or
+   Galileo.
+4. After login, `GET /onboarding/status`. If foundations are incomplete
+   or the LLM key is missing, the onboarding wizard opens in the chat
+   column (header, debug, Foundations / Issues stay). Steps: Proxmox
+   host → Token ID → Token Secret → provider + API key → tenant name
+   and slug → all-build or adopt (URLs when adopting). Each step
+   validates before the next. Host discovery fills empty node / bridge /
+   pool. The last screen is a probe summary. Completing writes
+   foundations + secrets. Header **Onboarding** re-runs the wizard
+   (pre-filled; secrets stay placeholders). Writes
+   `local://providers/llm/api_key` and `local://proxmox/api_token`.
+   Settings still changes the provider key later.
 5. Chat UI loads in a single-window shell (header + chat + tabbed review
    at about 30% of the browser width).
    The header polls `GET /health` and `GET /settings/sub-agents` and shows
@@ -77,10 +89,13 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    flush a leftover event when the stream ends without a trailing
    blank line, or an `error` / `done` is dropped and the UI looks
    dead.
-6. `collect-foundations`: the agent asks for schema fields, writes them
+6. `collect-foundations`: the wizard is the primary collect path. The
+   agent may still ask for remaining schema fields and write them
    through a `foundations.write` tool (no side effects beyond the store).
-   It may first enumerate the host and adopted URLs with the discovery
-   tools below; those calls do not write the schema. The review panel
+   It may enumerate the host and adopted URLs with the discovery
+   tools below; those calls do not write the schema unless the operator
+   confirms. The wizard may write discovered node / bridge / pool when
+   those keys are still empty. The review panel
    reflects the schema after each write.
 7. `validate-foundations`: runs without the model inventing rules; failures
    attach to fields.
@@ -108,7 +123,8 @@ image_ref: <tag or digest>
 health: { last_ok: <timestamp> }
 ```
 
-Used only to decide "create vs. reprint URL." Not the foundations store.
+Used to remember which CT the last install run touched. Listing
+existing Shed CTs also scans `pct list` hostnames. Not the foundations store.
 
 ### Foundations schema (illustrative)
 
@@ -203,6 +219,18 @@ New:
 - `GET` / `PUT /foundations` — read/replace the schema (PUT is what the
   review panel and `foundations.write` use; the agent does not write the
   table itself).
+- `GET /onboarding/status` — whether the wizard should open, plus
+  non-secret current values (host, tenant, token-set, vendor, intent).
+- `POST /onboarding/proxmox` — save host and/or Token ID + Secret,
+  probe `proxmox_api`, discover nodes / bridges / pools, fill empty
+  defaults.
+- `POST /onboarding/provider` — validate and save the LLM vendor + key
+  (blank key on a re-run keeps the saved one).
+- `POST /onboarding/tenant` — name + slug.
+- `POST /onboarding/intent` — `build` or `adopt` plus optional service
+  URLs.
+- `POST /onboarding/complete` — run the wizard probe set and return the
+  summary. Does not run `ssh_key_installed`.
 - `POST /foundations/validate` — playbook 2, deterministic.
 - `POST /probes/{id}` — run one probe; `ssh_key_installed` goes through the
   existing approval event if invoked from a turn.
@@ -215,13 +243,9 @@ New:
   refused once an identity exists.
 
 Settings (`GET /settings/models`, `GET /settings/connection`,
-`POST /settings/provider`, model overrides, `GET`/`POST /settings/galileo`)
-stay; they are how the operator changes provider and Galileo after the
-gate. `GET /settings/galileo` returns the current project, host (console
-URL), log stream, and whether an API key is saved — never the key.
-`POST /settings/galileo` writes `local://observability/galileo_*`,
-applies `GALILEO_*` env for the SDK, and enables the tracer when a key
-is present (otherwise the no-op tracer stays). `GET /settings/connection`
+`POST /settings/provider`, model overrides)
+stay; they are how the operator changes provider after the
+wizard. Bootstrap does not collect Galileo. `GET /settings/connection`
 is the live vendor and the resolved model chat / verify will actually
 call for `bootstrap.intake` (or the first override). Apply / save-key
 refreshes the header immediately. The page always lists Anthropic /

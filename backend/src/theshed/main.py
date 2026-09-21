@@ -23,6 +23,7 @@ from theshed.debug.routes import router as debug_router
 from theshed.foundations.routes import router as foundations_router
 from theshed.issues.routes import router as issues_router
 from theshed.observability.galileo import TurnTracer
+from theshed.onboarding.routes import router as onboarding_router
 from theshed.probes.host import DefaultProbeHost
 from theshed.profile import is_bootstrap_profile
 from theshed.secrets.client import EnvVarSecretsClient, LocalSecretsClient, SecretNotFoundError
@@ -205,6 +206,7 @@ app.include_router(debug_router)
 app.include_router(turns_router)
 app.include_router(settings_router)
 app.include_router(foundations_router)
+app.include_router(onboarding_router)
 app.include_router(issues_router)
 
 

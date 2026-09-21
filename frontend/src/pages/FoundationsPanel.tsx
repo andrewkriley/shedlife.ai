@@ -1,6 +1,7 @@
 import { useEffect, useState, type InputHTMLAttributes, type SelectHTMLAttributes } from 'react'
 import {
   exportFoundations,
+  FOUNDATIONS_CHANGED_EVENT,
   getFoundations,
   putFoundations,
   runProbe,
@@ -87,6 +88,11 @@ export function FoundationsPanel() {
 
   useEffect(() => {
     refresh().catch(() => setStatus('Failed to load foundations.'))
+    function onChanged() {
+      refresh().catch(() => undefined)
+    }
+    window.addEventListener(FOUNDATIONS_CHANGED_EVENT, onChanged)
+    return () => window.removeEventListener(FOUNDATIONS_CHANGED_EVENT, onChanged)
   }, [])
 
   async function handleSave(e: React.FormEvent) {

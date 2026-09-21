@@ -178,47 +178,15 @@ export async function getConnection(): Promise<ConnectionStatus> {
   return response.json()
 }
 
-export interface GalileoSettings {
-  project: string
-  host: string
-  log_stream: string
-  api_key_set: boolean
-  configured: boolean
-}
-
-export async function getGalileoSettings(): Promise<GalileoSettings> {
-  const response = await fetch('/api/settings/galileo', { credentials: 'include' })
-  if (!response.ok) {
-    throw new Error('Failed to load Galileo settings')
-  }
-  return response.json()
-}
-
-export async function setGalileoSettings(body: {
-  project: string
-  host: string
-  log_stream: string
-  api_key?: string
-}): Promise<GalileoSettings> {
-  const response = await fetch('/api/settings/galileo', {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-csrf-token': readCsrfCookie(),
-    },
-    body: JSON.stringify(body),
-  })
-  if (!response.ok) {
-    throw new Error(await readErrorDetail(response, 'Failed to save Galileo settings'))
-  }
-  return response.json()
-}
-
 export const CONNECTION_CHANGED_EVENT = 'shed:connection-changed'
+export const FOUNDATIONS_CHANGED_EVENT = 'shed:foundations-changed'
 
 export function notifyConnectionChanged(): void {
   window.dispatchEvent(new Event(CONNECTION_CHANGED_EVENT))
+}
+
+export function notifyFoundationsChanged(): void {
+  window.dispatchEvent(new Event(FOUNDATIONS_CHANGED_EVENT))
 }
 
 export async function getHealth(): Promise<{ status: string; ref?: string }> {
@@ -293,10 +261,6 @@ export async function postDebugEvent(body: {
 export async function completeSetup(body: {
   username?: string
   password?: string
-  provider: string
-  api_key: string
-  galileo_api_key?: string
-  galileo_console_url?: string
 }): Promise<void> {
   const response = await fetch('/api/setup', {
     method: 'POST',
@@ -392,6 +356,100 @@ export async function runProbe(probeId: string): Promise<{ status: string; detai
     throw new Error('Failed to run probe')
   }
   return response.json()
+}
+
+export interface OnboardingStatus {
+  needed: boolean
+  tenant: { name: string; slug: string }
+  proxmox: { host: string; node: string; api_token_set: boolean }
+  network: { bridge: string }
+  storage: { pool: string }
+  provider: { vendor: string | null; api_key_set: boolean }
+  intent: {
+    mode: 'build' | 'adopt'
+    services: Record<string, { mode?: string; url?: string }>
+  }
+  probes: Record<string, { status: string; at?: string; detail?: string }>
+  discovery?: {
+    version: string
+    nodes: string[]
+    bridges: string[]
+    pools: string[]
+  } | null
+  probe?: { status: string; detail: string } | null
+}
+
+export interface OnboardingCheck {
+  id: string
+  label: string
+  status: string
+  detail: string
+}
+
+async function onboardingPost<T>(path: string, body?: unknown): Promise<T> {
+  const response = await fetch(`/api/onboarding/${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-csrf-token': readCsrfCookie(),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (!response.ok) {
+    throw new Error(await readErrorDetail(response, 'Onboarding step failed'))
+  }
+  return response.json() as Promise<T>
+}
+
+export async function getOnboardingStatus(): Promise<OnboardingStatus> {
+  const response = await fetch('/api/onboarding/status', { credentials: 'include' })
+  if (!response.ok) {
+    throw new Error('Failed to load onboarding status')
+  }
+  return response.json()
+}
+
+export async function postOnboardingProxmox(body: {
+  host?: string
+  api_token_id?: string
+  api_token_secret?: string
+  discover?: boolean
+}): Promise<OnboardingStatus> {
+  return onboardingPost('proxmox', body)
+}
+
+export async function postOnboardingProvider(body: {
+  provider: string
+  api_key: string
+}): Promise<{ provider: { vendor: string | null; api_key_set: boolean } }> {
+  return onboardingPost('provider', body)
+}
+
+export async function postOnboardingTenant(body: {
+  name: string
+  slug: string
+}): Promise<OnboardingStatus> {
+  return onboardingPost('tenant', body)
+}
+
+export async function postOnboardingIntent(body: {
+  mode: 'build' | 'adopt'
+  gitlab_url?: string
+  infisical_url?: string
+  dns_url?: string
+  k3s_url?: string
+}): Promise<OnboardingStatus> {
+  return onboardingPost('intent', body)
+}
+
+export async function postOnboardingComplete(): Promise<{
+  ok: boolean
+  needed: boolean
+  checks: OnboardingCheck[]
+  status: OnboardingStatus
+}> {
+  return onboardingPost('complete')
 }
 
 export interface LocalIssue {

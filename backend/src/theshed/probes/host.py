@@ -8,6 +8,7 @@ from typing import Any
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
+from theshed.bootstrap.proxmox import proxmox_base_url, proxmox_http_get
 from theshed.probes.runner import (
     MIN_DISK_GB,
     MIN_RAM_GB,
@@ -35,6 +36,11 @@ class DefaultProbeHost:
         self._resolve = resolve or _resolve
         self._clock_offset = clock_offset
         self._proxmox_facts = proxmox_facts
+
+    def _proxmox_http(self) -> Callable[..., tuple[int, str]]:
+        if self._http_get is _http_get:
+            return proxmox_http_get
+        return self._http_get
 
     def bind(self, foundations: Callable[[], dict[str, Any]]) -> DefaultProbeHost:
         """Per-request host with the current foundations document."""
@@ -80,11 +86,11 @@ class DefaultProbeHost:
             token = self._secrets.get(ref)
         except SecretNotFoundError:
             return ProbeResult("fail", detail="proxmox API token is not set")
-        base = host if host.startswith("http") else f"https://{host}:8006"
-        url = f"{base.rstrip('/')}/api2/json/version"
+        base = proxmox_base_url(host)
+        url = f"{base}/api2/json/version"
         headers = {"Authorization": f"PVEAPIToken={token}"}
         try:
-            status, _ = _call_http(self._http_get, url, 5.0, headers)
+            status, _ = _call_http(self._proxmox_http(), url, 5.0, headers)
         except Exception as exc:  # noqa: BLE001 — injected HTTP can raise anything
             return ProbeResult("fail", detail=str(exc))
         if status in {401, 403}:
