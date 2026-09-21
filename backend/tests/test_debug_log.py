@@ -54,6 +54,12 @@ def test_record_stores_a_system_local_timestamp(monkeypatch) -> None:
     recorded = datetime.fromisoformat(entry["at"])
     assert recorded.tzinfo is not None
     assert recorded.utcoffset() == datetime.now().astimezone().utcoffset()
+    assert entry["stamp"] == debug_log.format_local_timestamp(entry["at"])
+    assert "UTC" in entry["stamp"]
+    assert "T" not in entry["stamp"][:19]
+    assert "." in entry["at"]
+    fraction = entry["at"].split(".", 1)[1]
+    assert len(fraction.split("+")[0].split("-")[0]) == 3
 
 
 def test_timezone_label_for_utc() -> None:

@@ -238,7 +238,8 @@ export async function getSetupStatus(): Promise<{ needed: boolean; has_operator?
 }
 
 export interface DebugEvent {
-  at: string
+  at?: string
+  stamp?: string
   level: string
   source: string
   event: string

@@ -35,6 +35,8 @@ async def test_debug_starts_off_and_toggle_enables_logs(client: AsyncClient) -> 
     click = next(event for event in body["events"] if event["event"] == "click")
     recorded = datetime.fromisoformat(click["at"])
     assert recorded.tzinfo is not None
+    assert "UTC" in click["stamp"]
+    assert click["stamp"] == debug_log.format_local_timestamp(click["at"])
 
 
 @pytest.mark.asyncio

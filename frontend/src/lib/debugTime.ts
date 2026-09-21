@@ -19,3 +19,15 @@ export function formatDebugTimestamp(at: string): string {
   const clock = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
   return `${clock} ${formatUtcOffsetLabel(date)}`
 }
+
+/** One dock/console line: clock first, then source · event, then the message. */
+export function formatDebugLine(item: {
+  stamp?: string
+  at?: string
+  source: string
+  event: string
+  message: string
+}): string {
+  const stamp = item.stamp?.trim() || formatDebugTimestamp(item.at ?? '')
+  return `${stamp}  ${item.source} · ${item.event}  ${item.message}`
+}

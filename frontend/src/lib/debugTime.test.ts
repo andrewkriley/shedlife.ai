@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDebugTimestamp, formatUtcOffsetLabel } from './debugTime'
+import { formatDebugLine, formatDebugTimestamp, formatUtcOffsetLabel } from './debugTime'
 
 describe('formatDebugTimestamp', () => {
   it('formats a local clock with a UTC or UTC-offset timezone label', () => {
@@ -40,5 +40,28 @@ describe('formatDebugTimestamp', () => {
   it('keeps an unparseable value so the dock still shows a stamp', () => {
     expect(formatDebugTimestamp('not-a-time')).toBe('not-a-time')
     expect(formatDebugTimestamp('')).toBe('unknown time')
+  })
+
+  it('prefers the server stamp so the dock does not depend on Date parsing', () => {
+    expect(
+      formatDebugLine({
+        stamp: '2026-09-21 16:51:03 UTC+10',
+        source: 'http',
+        event: 'request',
+        message: 'GET /settings/connection → 200 (1ms)',
+      }),
+    ).toBe('2026-09-21 16:51:03 UTC+10  http · request  GET /settings/connection → 200 (1ms)')
+  })
+
+  it('falls back to a formatted at when stamp is missing', () => {
+    const at = '2026-09-20T00:00:00Z'
+    expect(
+      formatDebugLine({
+        at,
+        source: 'http',
+        event: 'start',
+        message: 'GET /settings/connection started',
+      }),
+    ).toBe(`${formatDebugTimestamp(at)}  http · start  GET /settings/connection started`)
   })
 })

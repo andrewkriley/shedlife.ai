@@ -6,7 +6,7 @@ import {
   setDebugEnabled,
   type DebugEvent,
 } from '../lib/api'
-import { formatDebugTimestamp } from '../lib/debugTime'
+import { formatDebugLine } from '../lib/debugTime'
 
 export function DebugDock() {
   const [enabled, setEnabled] = useState(false)
@@ -100,14 +100,8 @@ export function DebugDock() {
           ) : (
             <ol>
               {[...events].reverse().map((item, index) => (
-                <li key={`${item.at}-${index}`} data-level={item.level}>
-                  <time className="debug-console__time" dateTime={item.at}>
-                    {formatDebugTimestamp(item.at)}
-                  </time>
-                  <span className="debug-console__meta">
-                    {item.source} · {item.event}
-                  </span>
-                  <span className="debug-console__message">{item.message}</span>
+                <li key={`${item.stamp ?? item.at ?? 'event'}-${index}`} data-level={item.level}>
+                  {formatDebugLine(item)}
                 </li>
               ))}
             </ol>

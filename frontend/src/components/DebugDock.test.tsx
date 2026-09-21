@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { DebugDock } from './DebugDock'
-import { formatDebugTimestamp } from '../lib/debugTime'
+import { formatDebugLine } from '../lib/debugTime'
 import * as api from '../lib/api'
 
 const sampleLogs = {
@@ -10,6 +10,7 @@ const sampleLogs = {
   events: [
     {
       at: '2026-09-20T00:00:00Z',
+      stamp: '2026-09-20 10:00:00 UTC+10',
       level: 'error',
       source: 'provider',
       event: 'error',
@@ -37,17 +38,31 @@ describe('DebugDock', () => {
     expect(await screen.findByRole('button', { name: 'Debug on' })).toHaveClass('debug-dock__toggle--on')
     expect(await screen.findByLabelText('debug console')).toBeInTheDocument()
     expect(screen.getByText(/anthropic rejected the key/)).toBeInTheDocument()
-    const stamp = screen.getByText(formatDebugTimestamp('2026-09-20T00:00:00Z'))
-    expect(stamp.tagName).toBe('TIME')
-    expect(stamp).toHaveAttribute('datetime', '2026-09-20T00:00:00Z')
-    expect(stamp.textContent).toMatch(/UTC/)
+    const line = screen.getByRole('listitem')
+    expect(line.textContent).toBe(formatDebugLine(sampleLogs.events[0]))
+    expect(line.textContent?.startsWith('2026-09-20 10:00:00 UTC+10')).toBe(true)
   })
 
-  it('formats timestamps as a local clock with a timezone label', () => {
-    const formatted = formatDebugTimestamp('2026-09-20T14:05:06.123Z')
-    expect(formatted).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC([+-]\d{1,2}(:\d{2})?)?$/)
-    expect(formatted).not.toMatch(/^\d{4}-\d{2}-\d{2}T/)
-    expect(formatted.endsWith('Z')).toBe(false)
+  it('still prints a server stamp when at is omitted', async () => {
+    vi.spyOn(api, 'getDebugStatus').mockResolvedValue({ enabled: true })
+    vi.spyOn(api, 'getDebugLogs').mockResolvedValue({
+      enabled: true,
+      events: [
+        {
+          stamp: '2026-09-21 16:51:03 UTC+10',
+          level: 'info',
+          source: 'http',
+          event: 'request',
+          message: 'GET /settings/connection → 200 (1ms)',
+        },
+      ],
+    })
+
+    render(<DebugDock />)
+    const line = await screen.findByRole('listitem')
+    expect(line.textContent).toBe(
+      '2026-09-21 16:51:03 UTC+10  http · request  GET /settings/connection → 200 (1ms)',
+    )
   })
 
   it('lists the newest debug event first', async () => {

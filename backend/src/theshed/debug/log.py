@@ -86,8 +86,10 @@ def record(
 ) -> dict[str, Any] | None:
     if not is_enabled():
         return None
+    at = datetime.now().astimezone().isoformat(timespec="milliseconds")
     entry = {
-        "at": datetime.now().astimezone().isoformat(),
+        "at": at,
+        "stamp": format_local_timestamp(at),
         "level": level,
         "source": source,
         "event": event,
@@ -131,8 +133,9 @@ def format_local_timestamp(value: str) -> str:
 
 
 def format_console_line(entry: dict[str, Any]) -> str:
+    stamp = str(entry.get("stamp") or format_local_timestamp(str(entry.get("at", ""))))
     line = (
-        f"[debug] {format_local_timestamp(str(entry['at']))} {entry['level']} "
+        f"[debug] {stamp} {entry['level']} "
         f"{entry['source']}.{entry['event']}: {entry['message']}"
     )
     if entry.get("detail") is not None:
