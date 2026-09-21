@@ -29,6 +29,10 @@ const STEPS = [
   'Summary',
 ] as const
 
+function stepError(err: unknown): string {
+  return err instanceof Error ? err.message : 'Onboarding step failed'
+}
+
 function mergeStatus(
   prev: OnboardingStatus | null,
   next: OnboardingStatus,
