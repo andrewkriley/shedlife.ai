@@ -193,7 +193,7 @@ vmid_in_use() {
 }
 
 next_free_vmid() {
-  local id
+  local id quiet="${1:-}"
   if [[ "${CTID_EXPLICIT}" == "1" ]]; then
     if vmid_in_use "${CTID}"; then
       echo "THESHED_CTID=${CTID} is already in use on this Proxmox cluster." >&2
@@ -204,7 +204,9 @@ next_free_vmid() {
   fi
   id="${PREFERRED_CTID}"
   while vmid_in_use "${id}"; do
-    echo "VMID ${id} is already in use on this cluster; trying the next id." >&2
+    if [[ "${quiet}" != "quiet" ]]; then
+      echo "VMID ${id} is already in use on this cluster; trying the next id." >&2
+    fi
     id=$((id + 1))
     if [[ "${id}" -gt 999999999 ]]; then
       echo "Could not find a free VMID on this Proxmox cluster." >&2
@@ -234,6 +236,10 @@ list_shed_cts() {
       printf '%s %s %s\n' "${vmid}" "${status}" "${name}"
     fi
   done < <(pct list 2>/dev/null | awk 'NR>1 {print $1, $2, $NF}')
+}
+
+first_listed_shed_vmid() {
+  list_shed_cts | awk '{print $1; exit}'
 }
 
 print_existing_installs() {
@@ -303,10 +309,13 @@ read_tty_line() {
 }
 
 inspect_existing() {
-  local recorded name ip
+  local recorded name ip listed
   recorded="$(read_state_ctid || true)"
+  listed="$(first_listed_shed_vmid || true)"
   if [[ -n "${recorded}" ]]; then
     CTID="${recorded}"
+  elif [[ -n "${listed}" ]]; then
+    CTID="${listed}"
   fi
   CT_EXISTS=0
   CT_STATUS="missing"
@@ -342,6 +351,35 @@ inspect_existing() {
         APP_READY=1
       fi
     fi
+    return
+  fi
+  # State file VMID is gone (a previous parallel attempt, or the CT was
+  # destroyed). Upgrade the Shed CT that is actually on this host.
+  if [[ -n "${listed}" ]]; then
+    select_ct "${listed}"
+  fi
+}
+
+select_upgrade_ct() {
+  local count vmid
+  count="$(list_shed_cts | wc -l | tr -d ' ')"
+  if [[ "${count}" == "0" ]]; then
+    echo "No Shed CT to upgrade." >&2
+    exit 1
+  fi
+  if [[ "${count}" -gt 1 ]]; then
+    echo "Enter the VMID to upgrade [${CTID}]:" >&2
+    vmid="$(read_tty_line)"
+    if [[ -n "${vmid}" ]]; then
+      select_ct "${vmid}"
+    fi
+  else
+    vmid="$(first_listed_shed_vmid)"
+    select_ct "${vmid}"
+  fi
+  if [[ "${CT_EXISTS}" != "1" ]]; then
+    echo "CT ${CTID} is not present; cannot upgrade." >&2
+    exit 1
   fi
 }
 
@@ -356,7 +394,7 @@ plan_action() {
 }
 
 choose_install_action() {
-  local count choice vmid nextid
+  local count choice nextid listed
   count="$(list_shed_cts | wc -l | tr -d ' ')"
   if wants_delete; then
     INSTALL_ACTION=delete
@@ -373,12 +411,22 @@ choose_install_action() {
     return
   fi
   if wants_yes; then
+    if [[ "${CT_EXISTS}" != "1" ]]; then
+      listed="$(first_listed_shed_vmid || true)"
+      if [[ -n "${listed}" ]]; then
+        select_ct "${listed}"
+      fi
+    fi
+    if [[ "${CT_EXISTS}" != "1" ]]; then
+      echo "No Shed CT to upgrade. Re-run without --yes, or use --parallel." >&2
+      exit 1
+    fi
     INSTALL_ACTION=update
     return
   fi
   nextid="$(
     CTID_EXPLICIT=0
-    next_free_vmid
+    next_free_vmid quiet
   )"
   echo "An existing Shed CT was found." >&2
   echo "  1) Upgrade an existing installation in place" >&2
@@ -387,13 +435,7 @@ choose_install_action() {
   choice="$(read_tty_line)"
   case "${choice}" in
     1)
-      if [[ "${count}" -gt 1 ]]; then
-        echo "Enter the VMID to upgrade [${CTID}]:" >&2
-        vmid="$(read_tty_line)"
-        if [[ -n "${vmid}" ]]; then
-          select_ct "${vmid}"
-        fi
-      fi
+      select_upgrade_ct
       INSTALL_ACTION=update
       ;;
     2)

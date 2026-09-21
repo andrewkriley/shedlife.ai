@@ -306,7 +306,8 @@ Probes are rerunnable. Results hang off the schema, not the chat transcript.
 ### Idempotency / failure recovery
 
 - Re-run the install script: after confirmation, upgrade a listed CT in
-  place, or create a parallel CT on the next cluster-free VMID.
+  place (the guest shown in the table, not a missing VMID left in the
+  state file), or create a parallel CT on the next cluster-free VMID.
   `--delete` destroys the chosen CT first, after confirmation.
 - Re-run a playbook or probe: completed work is skipped after live
   verification, same hybrid model as before (local state + live check).

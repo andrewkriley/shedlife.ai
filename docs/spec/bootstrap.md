@@ -35,9 +35,11 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    and guest conf on every node) so it cannot overlap a CT or VM.
    Fresh (no Shed CT, `9100` free) → create `9100` / `theshed`;
    if `9100` is taken, the next free id. New CTs use hostname `theshed`.
-   Existing → (1) update that CT in place (keep `.env` and compose
-   volumes, refresh the clone and image) or (2) parallel on the next free
-   cluster VMID (hostname `theshed`). `--yes` upgrades the recorded CT and never
+   Existing → (1) update the listed Shed CT in place (keep `.env` and compose
+   volumes, refresh the clone and image) — not a VMID from a stale state
+   file if that guest is gone — or (2) parallel on the next free
+   cluster VMID (hostname `theshed`). `--yes` upgrades the recorded CT when
+   it is still present, otherwise the listed one, and never
    invents a parallel instance. `THESHED_PARALLEL=1` forces parallel.
    `--delete` → destroy the chosen CT, then fresh on a cluster-free VMID.
    `THESHED_CTID` pins an id and is refused if that id is in use. New CTs get a

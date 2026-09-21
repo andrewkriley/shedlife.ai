@@ -31,6 +31,9 @@ def _run_vmid_helpers(
     nextid_taken: tuple[str, ...] = (),
     vmlist_ids: tuple[str, ...] = (),
     conf_ids: tuple[tuple[str, str], ...] = (),
+    shed_cts: tuple[tuple[str, str, str], ...] = (),
+    state_ctid: str | None = None,
+    state_ip: str | None = None,
     extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     work = tmp_path / "vmid"
@@ -39,9 +42,17 @@ def _run_vmid_helpers(
     bindir.mkdir(parents=True)
     pve.mkdir(parents=True)
 
-    pct_ids = " ".join(taken_pct)
+    taken = list(taken_pct)
+    for vmid, _status, _name in shed_cts:
+        if vmid not in taken:
+            taken.append(vmid)
+    pct_ids = " ".join(taken)
     qm_ids = " ".join(taken_qm)
     nextid_ids = " ".join(nextid_taken)
+    list_rows = "\n".join(f"{vmid} {status} - {name}" for vmid, status, name in shed_cts)
+    config_cases = "\n".join(
+        f'    {vmid}) echo "hostname: {name}" ;;' for vmid, _status, name in shed_cts
+    )
     _write_exec(
         bindir / "pct",
         f"""#!/usr/bin/env bash
@@ -51,13 +62,31 @@ taken="{pct_ids}"
 case "${{cmd}}" in
   status)
     for t in $taken; do
-      [[ "${{id}}" == "${{t}}" ]] && exit 0
+      [[ "${{id}}" == "${{t}}" ]] && echo "status: running" && exit 0
     done
     exit 1
     ;;
-  list) exit 0 ;;
+  list)
+    echo "VMID Status Lock Name"
+    printf '%s\\n' "{list_rows}"
+    ;;
+  config)
+    case "${{id}}" in
+{config_cases}
+      *) exit 1 ;;
+    esac
+    ;;
+  exec)
+    echo "10.54.10.172"
+    ;;
   *) exit 0 ;;
 esac
+""",
+    )
+    _write_exec(
+        bindir / "curl",
+        """#!/usr/bin/env bash
+exit 1
 """,
     )
     _write_exec(
@@ -131,6 +160,15 @@ source "{lib}"
     env = {key: value for key, value in os.environ.items() if not key.startswith("THESHED_")}
     if extra_env:
         env.update(extra_env)
+    if state_ctid is not None:
+        state_path = work / "install-state.yaml"
+        state_path.write_text(
+            "version: 1\n"
+            f"ctid: {state_ctid}\n"
+            f"ct_ip: {state_ip or '10.54.10.189'}\n"
+            "image_ref: theshed-v0.4.15\n"
+        )
+        env["THESHED_STATE_FILE"] = str(state_path)
     env.setdefault("PATH", os.environ.get("PATH", "/usr/bin:/bin"))
     return subprocess.run(
         ["bash", str(script)],
@@ -198,6 +236,9 @@ def test_install_script_confirms_fresh_update_or_delete() -> None:
     assert 'action="$(choose_install_action)"' not in text
     assert "INSTALL_ACTION" in main
     assert "prepare_new_ct" in text
+    assert "select_upgrade_ct" in text
+    assert "first_listed_shed_vmid" in text
+    assert "next_free_vmid quiet" in text
     fresh = text.split("choose_install_action() {", 1)[1].split("\n}\n", 1)[0]
     assert fresh.index("count") < fresh.index("prepare_new_ct")
     assert "pvesh get /cluster/nextid" in text
@@ -453,6 +494,38 @@ def test_create_ct_rechecks_vmid_against_the_cluster(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "TAKEN"
+
+
+def test_inspect_existing_ignores_a_stale_state_vmid(tmp_path: Path) -> None:
+    result = _run_vmid_helpers(
+        tmp_path,
+        'inspect_existing\nprintf "CTID=%s EXISTS=%s HOST=%s IP=%s\\n" "${CTID}" "${CT_EXISTS}" "${CT_HOSTNAME}" "${EXISTING_IP}"\n',
+        shed_cts=(("9100", "running", "theshed-deploy"),),
+        state_ctid="9101",
+        state_ip="10.54.10.189",
+    )
+    assert result.returncode == 0, result.stderr
+    assert "CTID=9100 EXISTS=1 HOST=theshed-deploy IP=10.54.10.172" in result.stdout
+
+
+def test_upgrade_option_targets_the_listed_ct_not_nextid(tmp_path: Path) -> None:
+    result = _run_vmid_helpers(
+        tmp_path,
+        "inspect_existing\nselect_upgrade_ct\n"
+        'printf "CTID=%s EXISTS=%s HOST=%s\\n" "${CTID}" "${CT_EXISTS}" "${CT_HOSTNAME}"\n',
+        shed_cts=(("9100", "running", "theshed-deploy"),),
+        state_ctid="9101",
+        state_ip="10.54.10.189",
+    )
+    assert result.returncode == 0, result.stderr
+    assert "CTID=9100 EXISTS=1 HOST=theshed-deploy" in result.stdout
+
+
+def test_next_free_vmid_quiet_hides_skip_messages(tmp_path: Path) -> None:
+    result = _run_vmid_helpers(tmp_path, "next_free_vmid quiet", taken_pct=("9100",))
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "9101"
+    assert "trying the next id" not in result.stderr
 
 
 def test_install_script_prints_banner_first() -> None:
