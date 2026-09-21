@@ -196,6 +196,39 @@ async def test_http_middleware_records_start_before_the_response(
     assert any(item["event"] == "request" for item in debug_log.snapshot())
 
 
+@pytest.mark.asyncio
+async def test_http_middleware_skips_favicon(monkeypatch) -> None:
+    monkeypatch.setenv("THESHED_DEBUG", "1")
+
+    async def app(scope, receive, send):
+        response = PlainTextResponse("ok")
+        await response(scope, receive, send)
+
+    middleware = DebugHttpMiddleware(app)
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/favicon.ico",
+        "raw_path": b"/favicon.ico",
+        "query_string": b"",
+        "headers": [],
+        "client": ("test", 123),
+        "server": ("test", 80),
+    }
+
+    async def receive() -> dict:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: dict) -> None:
+        return None
+
+    await middleware(scope, receive, send)
+    assert debug_log.snapshot() == []
+
+
 def test_log_llm_error_records_the_failure(monkeypatch) -> None:
     monkeypatch.setenv("THESHED_DEBUG", "1")
     started = debug_log.log_llm_start("openai", "gpt-5.4")

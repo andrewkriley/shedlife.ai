@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from openai import OpenAI
 from redis.asyncio import Redis
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -211,6 +211,12 @@ app.include_router(issues_router)
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok", "ref": os.environ.get("THESHED_REF") or "unknown"}
+
+
+@app.get("/favicon.ico")
+@app.get("/favicon.svg")
+async def no_favicon() -> Response:
+    return Response(status_code=204)
 
 
 _frontend_dist = os.environ.get("THESHED_FRONTEND_DIST")

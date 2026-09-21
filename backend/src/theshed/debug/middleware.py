@@ -6,7 +6,16 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from theshed.debug import log as debug_log
 
-_SKIP = {"/health", "/debug/logs", "/debug/status", "/api/health", "/api/debug/logs", "/api/debug/status"}
+_SKIP = {
+    "/health",
+    "/debug/logs",
+    "/debug/status",
+    "/api/health",
+    "/api/debug/logs",
+    "/api/debug/status",
+    "/favicon.ico",
+    "/favicon.svg",
+}
 
 
 class DebugHttpMiddleware:
