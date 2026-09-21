@@ -71,10 +71,10 @@ def test_install_plan_warning_update_shows_status() -> None:
 
 
 def test_install_plan_warning_delete_destroys_ct() -> None:
-    text = install_plan_warning("delete", ctid=9100, hostname="theshed-deploy", ct_status="running")
+    text = install_plan_warning("delete", ctid=9100, hostname="theshed", ct_status="running")
     assert "DESTROY" in text
     assert "9100" in text
-    assert "theshed-deploy" in text
+    assert "theshed" in text
 
 
 def test_stale_state_without_live_health_creates_again() -> None:
@@ -100,12 +100,12 @@ def test_completion_summary_includes_ready_and_url() -> None:
     text = completion_summary(
         ct_ip="192.0.2.50",
         ctid=9100,
-        hostname="theshed-deploy",
+        hostname="theshed",
         image_ref="theshed-v0.4.4",
     )
     assert "The Shed is ready." in text
     assert "URL:  http://192.0.2.50:8080" in text
-    assert "CT:   9100 (theshed-deploy)" in text
+    assert "CT:   9100 (theshed)" in text
     assert "Ref:  theshed-v0.4.4" in text
 
 
@@ -113,7 +113,7 @@ def test_completion_summary_includes_login_and_debug() -> None:
     text = completion_summary(
         ct_ip="192.0.2.50",
         ctid=9100,
-        hostname="theshed-deploy",
+        hostname="theshed",
         image_ref="theshed-v0.4.6",
         username="admin",
         password="once-only",
@@ -132,7 +132,7 @@ def test_proxmox_notes_are_the_completion_details() -> None:
     text = proxmox_notes(
         ct_ip="192.0.2.50",
         ctid=9100,
-        hostname="theshed-deploy",
+        hostname="theshed",
         image_ref="theshed-v0.4.9",
         username="admin",
         password="once-only",
@@ -146,12 +146,12 @@ def test_proxmox_notes_are_the_completion_details() -> None:
     assert "Password: once-only" in text
     assert "CT user: root" in text
     assert "CT pass: ct-root-once" in text
-    assert "9100 (theshed-deploy)" in text
+    assert "9100 (theshed)" in text
     assert "theshed-v0.4.9" in text
     assert text == completion_summary(
         ct_ip="192.0.2.50",
         ctid=9100,
-        hostname="theshed-deploy",
+        hostname="theshed",
         image_ref="theshed-v0.4.9",
         username="admin",
         password="once-only",
@@ -173,8 +173,8 @@ def test_pinned_ubuntu_version_is_the_current_latest_lts() -> None:
     assert PINNED_UBUNTU_VERSION == "26.04"
 
 
-def test_default_ct_hostname_distinguishes_the_bootstrap_ct() -> None:
-    assert DEFAULT_CT_HOSTNAME == "theshed-deploy"
+def test_default_ct_hostname_is_theshed() -> None:
+    assert DEFAULT_CT_HOSTNAME == "theshed"
 
 
 def test_select_os_template_locks_to_pinned_ubuntu_version() -> None:

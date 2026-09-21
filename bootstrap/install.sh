@@ -11,7 +11,7 @@
 #   THESHED_REF          git ref to fetch (default: latest GitHub release, else main)
 #   THESHED_CTID         CT id (default: first free VMID at or above 9100,
 #                        confirmed free on this Proxmox cluster)
-#   THESHED_HOSTNAME     CT name in Proxmox (default: theshed-deploy)
+#   THESHED_HOSTNAME     CT name in Proxmox (default: theshed)
 #   THESHED_BRIDGE       LAN bridge (default: vmbr0)
 #   THESHED_CT_IP        static CT address (CIDR). DHCP when unset.
 #   THESHED_GATEWAY      used only with THESHED_CT_IP
@@ -48,7 +48,7 @@ if [[ -n "${THESHED_HOSTNAME:-}" ]]; then
 fi
 PREFERRED_CTID=9100
 CTID="${THESHED_CTID:-${PREFERRED_CTID}}"
-CT_HOSTNAME="${THESHED_HOSTNAME:-theshed-deploy}"
+CT_HOSTNAME="${THESHED_HOSTNAME:-theshed}"
 PVE_ETC="${THESHED_PVE_ETC:-/etc/pve}"
 BRIDGE="${THESHED_BRIDGE:-vmbr0}"
 MEMORY="${THESHED_MEMORY:-4096}"
@@ -219,11 +219,7 @@ hostname_for_new_ct() {
     echo "${CT_HOSTNAME}"
     return
   fi
-  if [[ "${CTID}" == "${PREFERRED_CTID}" ]]; then
-    echo "theshed-deploy"
-    return
-  fi
-  echo "theshed-${CTID}"
+  echo "theshed"
 }
 
 list_shed_cts() {
@@ -715,6 +711,10 @@ upsert_ct_env() {
 
 update_existing_ct() {
   local ref="$1"
+  if [[ "${HOSTNAME_EXPLICIT}" != "1" ]]; then
+    CT_HOSTNAME="theshed"
+  fi
+  pct set "${CTID}" --hostname "${CT_HOSTNAME}"
   if [[ "${CT_STATUS}" == "stopped" ]]; then
     echo "Starting CT ${CTID}"
     pct start "${CTID}"

@@ -92,11 +92,12 @@ has to exist before Git, Kubernetes, or a secrets backend do.
   hostname, status, IP, ref, app ready. Fresh and parallel creates ask the
   live Proxmox cluster (`pvesh get /cluster/nextid` plus the cluster guest
   list) so the VMID cannot overlap a CT or VM on any node. If none exist
-  and `9100` is free: create `9100` / `theshed-deploy`; if `9100` is taken,
-  take the next free id (`theshed-<vmid>`). If any Shed CTs exist, the TTY
+  and `9100` is free: create `9100` / `theshed`; if `9100` is taken,
+  take the next free id. New CTs use hostname `theshed` (the name shown
+  in Proxmox). If any Shed CTs exist, the TTY
   asks (1) upgrade an existing CT in place (keep login and volumes) or (2)
   install a parallel instance on the next free cluster VMID
-  (`theshed-<vmid>`). `--yes` / `THESHED_YES=1` skips prompts and upgrades
+  (also hostname `theshed`). `--yes` / `THESHED_YES=1` skips prompts and upgrades
   the recorded CT. `THESHED_PARALLEL=1` forces a parallel CT. `--delete`:
   destroy the chosen CT, then a fresh install on a cluster-free VMID.
   `THESHED_CTID` still pins a specific id and is refused if that id is in

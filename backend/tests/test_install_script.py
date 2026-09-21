@@ -147,6 +147,8 @@ def test_install_script_writes_theshed_ref_into_ct_env() -> None:
     assert "upsert_ct_env" in text
     update = text.split("update_existing_ct() {", 1)[1].split("\n}\n", 1)[0]
     assert "upsert_ct_env THESHED_REF" in update
+    assert 'pct set "${CTID}" --hostname "${CT_HOSTNAME}"' in update
+    assert 'CT_HOSTNAME="theshed"' in update
     compose = (ROOT / "bootstrap" / "docker-compose.yml").read_text()
     assert "THESHED_REF: ${THESHED_REF:-}" in compose
 
@@ -246,11 +248,15 @@ def test_install_script_detects_rootfs_storage() -> None:
     assert "--rootfs" in text
 
 
-def test_install_script_names_the_ct_theshed_deploy() -> None:
+def test_install_script_names_the_ct_theshed() -> None:
     text = SCRIPT.read_text()
     assert "--hostname theshed \\" not in text
-    assert "theshed-deploy" in text
+    assert 'CT_HOSTNAME="${THESHED_HOSTNAME:-theshed}"' in text
     assert '--hostname "${CT_HOSTNAME}"' in text
+    host_fn = text.split("hostname_for_new_ct() {", 1)[1].split("\n}\n", 1)[0]
+    assert 'echo "theshed"' in host_fn
+    assert "theshed-${CTID}" not in host_fn
+    assert "theshed-deploy" not in text
 
 
 def test_install_script_accepts_delete_flag() -> None:
@@ -346,7 +352,7 @@ def test_install_script_offers_upgrade_or_parallel() -> None:
     assert "--parallel" in text
     assert "THESHED_PARALLEL" in text
     assert "list_shed_cts" in text
-    assert "theshed-${CTID}" in text
+    assert 'echo "theshed"' in text
     assert "Upgrade an existing installation" in text
     assert "parallel instance" in text
     assert "bash -s -- --parallel" in text
@@ -416,16 +422,16 @@ def test_fresh_prepare_uses_cluster_free_vmid(tmp_path: Path) -> None:
         vmlist_ids=("9100",),
     )
     assert result.returncode == 0, result.stderr
-    assert "CTID=9101 HOST=theshed-9101" in result.stdout
+    assert "CTID=9101 HOST=theshed" in result.stdout
 
 
-def test_fresh_prepare_keeps_theshed_deploy_when_9100_is_free(tmp_path: Path) -> None:
+def test_fresh_prepare_names_the_ct_theshed_when_9100_is_free(tmp_path: Path) -> None:
     result = _run_vmid_helpers(
         tmp_path,
         'prepare_new_ct\nprintf "CTID=%s HOST=%s\\n" "${CTID}" "${CT_HOSTNAME}"\n',
     )
     assert result.returncode == 0, result.stderr
-    assert "CTID=9100 HOST=theshed-deploy" in result.stdout
+    assert "CTID=9100 HOST=theshed" in result.stdout
 
 
 def test_explicit_ctid_refuses_cluster_overlap(tmp_path: Path) -> None:
