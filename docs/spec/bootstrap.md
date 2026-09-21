@@ -32,10 +32,11 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    place (keep `.env` and compose volumes, refresh the clone and
    image). `--delete` → destroy the CT, then fresh. New CTs get a
    generated `admin` password and CT `root` password
-   (`pct create --password`). Prints the URL plus Username / Password /
-   CT user / CT pass immediately, then waits until
-   `GET /api/setup/status` succeeds (from the host, or `pct exec` to
-   localhost). Do not wait on `GET /health`. `--debug` writes
+   (`pct create --password`). Prints the LAN URL as soon as the CT has
+   an address, waits until `GET /api/setup/status` succeeds (from the
+   host, or `pct exec` to localhost), then prints Username / Password /
+   CT user / CT pass once in the completion summary. Do not wait on
+   `GET /health`. `--debug` writes
    `THESHED_DEBUG=1`. The same completion details (URL, Username /
    Password, CT user / CT pass, CT id, ref) are written to the CT
    Proxmox notes field (`pct set --description`) so they stay visible

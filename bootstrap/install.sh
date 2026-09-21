@@ -341,13 +341,8 @@ EOF
 
 print_url() {
   echo
-  echo "The Shed is at: http://${1}:${PORT}"
-  echo "Open that URL from a browser on this LAN. Setup happens there."
-  echo
-  echo "  Username: ${OPERATOR_USERNAME}"
-  echo "  Password: ${OPERATOR_PASSWORD}"
-  echo "  CT user:  root"
-  echo "  CT pass:  ${CT_ROOT_PASSWORD}"
+  echo "The Shed is starting at: http://${1}:${PORT}"
+  echo "Waiting for GET ${READY_PATH} ..."
 }
 
 write_ct_notes() {
@@ -672,7 +667,6 @@ main() {
       exit 1
     fi
     print_url "${ip}"
-    echo "Waiting for GET ${READY_PATH} ..."
     wait_ready "${ip}"
     write_state "${ip}" "${THESHED_REF}"
     print_summary "${ip}"
@@ -692,7 +686,6 @@ main() {
     exit 1
   fi
   print_url "${ip}"
-  echo "Waiting for GET ${READY_PATH} ..."
   wait_ready "${ip}"
   write_state "${ip}" "${THESHED_REF}"
   print_summary "${ip}"

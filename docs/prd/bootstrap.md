@@ -77,8 +77,9 @@ has to exist before Git, Kubernetes, or a secrets backend do.
 - Does not collect the LLM API key, the Proxmox *host* root password, or
   tenant facts. Those belong to the web app. It *does* generate the first
   operator username (`admin`) + password and a CT `root` password, print
-  them next to   the URL (including the early "The Shed is at" line, before
-  `/api/setup/status` returns), write the same completion details (URL,
+  the LAN URL as soon as the CT has an address, then print the login
+  details once in the completion summary after `/api/setup/status`
+  returns. Write the same completion details (URL,
   Username / Password, CT user / CT pass) to the CT Proxmox notes field,
   set the CT password so the Proxmox console can log in, and seed the
   operator identity so the web UI accepts `admin`.
@@ -118,7 +119,7 @@ has to exist before Git, Kubernetes, or a secrets backend do.
   screen.
 - Operator username + password: username is `admin`. The installer
   generates the password and prints Username / Password plus CT user
-  `root` / CT pass with the URL. If the CT has no identity yet (dev / no
+  `root` / CT pass in the completion summary. If the CT has no identity yet (dev / no
   installer seed), the gate still collects username + password typed
   twice. This *is* the first user — not a later Fleet apply.
 - Optional Galileo key / console URL; omitted means the existing no-op

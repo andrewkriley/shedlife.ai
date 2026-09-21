@@ -62,10 +62,10 @@ The script checks for an existing CT, prints its status, and asks you to
 type `yes` before a fresh install, an in-place update, or a `--delete`.
 `THESHED_YES=1` (or `--yes`) skips that prompt. `THESHED_REF` overrides
 the ref the script clones (a branch or another release). The script does
-not ask for an API key. It prints a LAN URL plus
-the generated `admin` password and the CT `root` password for the
-Proxmox console, next to the URL (before `/api/setup/status` answers),
-and writes those same details to the CT notes field in the Proxmox UI.
+not ask for an API key. It prints the LAN URL as soon as the CT has an
+address, then prints the generated `admin` password and the CT `root`
+password once the app is ready, and writes those same details to the CT
+notes field in the Proxmox UI.
 Log in with username `admin`, then add an API key if the setup gate asks.
 Toggle debug from the header once the UI is up.
 

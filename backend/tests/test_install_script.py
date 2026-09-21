@@ -112,16 +112,18 @@ def test_install_script_accepts_delete_flag() -> None:
 
 def test_install_script_prints_connect_url_before_health_wait() -> None:
     text = SCRIPT.read_text()
-    assert 'The Shed is at: http://${1}:${PORT}' in text
+    assert 'The Shed is starting at: http://${1}:${PORT}' in text
     main = text.split("main() {", 1)[1]
     assert main.index("print_url") < main.index("wait_ready")
-    print_url = text.split("print_url() {", 1)[1].split("print_summary() {", 1)[0]
-    assert "Username:" in print_url
-    assert "Password:" in print_url
-    assert "CT user:" in print_url
-    assert "CT pass:" in print_url
-    assert "CT_ROOT_PASSWORD" in print_url
-    assert "OPERATOR_USERNAME" in print_url
+    print_url = text.split("print_url() {", 1)[1].split("write_ct_notes() {", 1)[0]
+    assert "Waiting for GET ${READY_PATH}" in print_url
+    assert "Username:" not in print_url
+    assert "Password:" not in print_url
+    assert "CT user:" not in print_url
+    assert "CT pass:" not in print_url
+    assert main.count("print_url") == 2
+    assert main.count("print_summary") == 2
+    assert main.count('echo "Waiting for GET') == 0
 
 
 def test_install_script_prints_completion_summary() -> None:
