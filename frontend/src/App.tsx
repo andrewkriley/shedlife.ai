@@ -9,6 +9,8 @@ import { Login } from './pages/Login'
 import { OnboardingWizard } from './pages/OnboardingWizard'
 import { Settings } from './pages/Settings'
 import { Setup } from './pages/Setup'
+import { ExampleFlow } from './preview/ExampleFlow'
+import { isPreviewLocation } from './preview/previewMode'
 
 type View = 'chat' | 'settings' | 'onboarding'
 type ReviewTab = 'foundations' | 'issues'
@@ -22,7 +24,18 @@ function AppFrame({ children }: { children: ReactNode }) {
   )
 }
 
+function usePreviewMode() {
+  const [preview, setPreview] = useState(() => isPreviewLocation())
+  useEffect(() => {
+    const sync = () => setPreview(isPreviewLocation())
+    window.addEventListener('hashchange', sync)
+    return () => window.removeEventListener('hashchange', sync)
+  }, [])
+  return preview
+}
+
 function App() {
+  const preview = usePreviewMode()
   const [setupNeeded, setSetupNeeded] = useState<boolean | null>(null)
   const [hasOperator, setHasOperator] = useState(false)
   const [loggedIn, setLoggedIn] = useState(false)
@@ -30,13 +43,14 @@ function App() {
   const [reviewTab, setReviewTab] = useState<ReviewTab>('foundations')
 
   useEffect(() => {
+    if (preview) return
     getSetupStatus()
       .then((status) => {
         setSetupNeeded(status.needed)
         setHasOperator(Boolean(status.has_operator))
       })
       .catch(() => setSetupNeeded(false))
-  }, [])
+  }, [preview])
 
   useEffect(() => {
     if (!loggedIn) return
@@ -46,6 +60,10 @@ function App() {
       })
       .catch(() => undefined)
   }, [loggedIn])
+
+  if (preview) {
+    return <ExampleFlow />
+  }
 
   if (setupNeeded === null) {
     return (
