@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.17](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.16...theshed-v0.4.17) (2026-09-25)
+
+
+### Features
+
+* walk live onboarding one fact at a time ([#54](https://github.com/andrewkriley/shedlife.ai/issues/54)) ([1969d4f](https://github.com/andrewkriley/shedlife.ai/commit/1969d4f41bfdf550c2b837f65353aa39509f628f))
+
 ## [0.4.16](https://github.com/andrewkriley/shedlife.ai/compare/theshed-v0.4.15...theshed-v0.4.16) (2026-09-21)
 
 
