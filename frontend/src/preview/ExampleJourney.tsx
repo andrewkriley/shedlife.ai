@@ -238,7 +238,7 @@ function PrereqSummary({
       </div>
       <section className="journey-next" aria-label="Next phase">
         <p className="journey-next__title">Deploy is next</p>
-        <p className="journey__lede">{`${progress.done} of ${progress.total} facts are in. ${joinTitles('deploy')}. Not MVP yet.`}</p>
+        <p className="journey__lede">{`${progress.done} of ${progress.total} facts are in. ${joinTitles('deploy')} — not MVP yet.`}</p>
         <div className="journey-actions">
           <button type="button" onClick={onContinue}>
             Continue to Deploy
