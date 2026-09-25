@@ -837,11 +837,28 @@ ul {
   margin-top: 8px;
 }
 
-.journey-actions button[type='submit'] {
+.journey-actions > button:not(.button-secondary) {
   width: 100%;
   padding: 14px 16px;
   border-radius: 12px;
   font-size: 17px;
+}
+
+.journey-next {
+  margin-top: 36px;
+}
+
+.journey-next__title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.journey-next .journey__lede {
+  margin-bottom: 20px;
 }
 
 .journey-actions .button-secondary {

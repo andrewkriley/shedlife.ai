@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   emptyJourney,
   itemsForPhase,
+  joinTitles,
   journeyYaml,
   phaseProgress,
   prereqReady,
+  prereqSummary,
   rowDetail,
 } from './exampleData'
 
@@ -26,6 +28,19 @@ describe('exampleData', () => {
     expect(yaml).toContain('openrouter_ref: local://providers/openrouter/api_key')
     expect(yaml).not.toContain('super-secret')
     expect(yaml).not.toContain('sk-or-preview')
+  })
+
+  it('summarizes Pre-req without secret values', () => {
+    const state = emptyJourney()
+    state['proxmox-ip'].values.host = '192.0.2.10'
+    state['domain'].values.domain = 'lab.example'
+    state['openrouter'].values.apiKey = 'sk-or-preview'
+    expect(prereqSummary(state)).toBe(
+      'Proxmox is 192.0.2.10. Services will aim at lab.example. Tokens, keys, and the SSH trust are saved locally.',
+    )
+    expect(prereqSummary(state)).not.toContain('sk-or-preview')
+    expect(joinTitles('deploy')).toContain('GitLab')
+    expect(joinTitles('deploy')).toContain('StepCA')
   })
 
   it('hides secret row values', () => {

@@ -35,7 +35,7 @@ async function walkPrereq(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('ExampleFlow', () => {
-  it('walks only Pre-req, one fact at a time, without API calls', async () => {
+  it('walks Pre-req, summarizes, then continues to Deploy, without API calls', async () => {
     const setup = vi.spyOn(api, 'getSetupStatus')
     const login = vi.spyOn(api, 'login')
     const user = userEvent.setup()
@@ -54,7 +54,11 @@ describe('ExampleFlow', () => {
 
     await walkPrereq(user)
     expect(screen.getByRole('heading', { name: 'Ready' })).toBeInTheDocument()
-    expect(screen.getByText(/Bootstrap is next/)).toBeInTheDocument()
+    expect(screen.getByText(/Proxmox is 192.0.2.10/)).toBeInTheDocument()
+    expect(screen.getByText(/Services will aim at lab.example/)).toBeInTheDocument()
+    expect(screen.getByText(/Deploy is next/)).toBeInTheDocument()
+    expect(screen.getByText(/GitLab/)).toBeInTheDocument()
+    expect(screen.queryByText(/Bootstrap is next/)).not.toBeInTheDocument()
     expect(screen.getByLabelText('Pre-req review')).toHaveTextContent('192.0.2.10')
     expect(screen.getByLabelText('Pre-req review')).toHaveTextContent('OpenRouter API')
     expect(screen.getByLabelText('Pre-req review')).toHaveTextContent('Saved')
@@ -62,6 +66,16 @@ describe('ExampleFlow', () => {
     await user.click(screen.getByRole('button', { name: /Proxmox IP/ }))
     expect(screen.getByRole('heading', { name: 'Proxmox IP' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(screen.getByRole('heading', { name: 'Ready' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Continue to Deploy' }))
+    expect(screen.getByRole('main', { name: 'Deploy' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'GitLab' })).toBeInTheDocument()
+    expect(screen.getByText('1 of 7')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Provision GitLab' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByRole('main', { name: 'Pre-req' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Ready' })).toBeInTheDocument()
 
     expect(setup).not.toHaveBeenCalled()

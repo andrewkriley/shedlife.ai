@@ -239,6 +239,18 @@ export function prereqReady(state: JourneyState): boolean {
   return itemsForPhase('prereq').every((item) => state[item.id]?.done)
 }
 
+export function joinTitles(phase: PhaseId): string {
+  const titles = itemsForPhase(phase).map((item) => item.title)
+  if (titles.length <= 1) return titles[0] ?? ''
+  return `${titles.slice(0, -1).join(', ')}, and ${titles[titles.length - 1]}`
+}
+
+export function prereqSummary(state: JourneyState): string {
+  const host = state['proxmox-ip']?.values.host?.trim() || 'the first host'
+  const domain = state['domain']?.values.domain?.trim() || 'the domain'
+  return `Proxmox is ${host}. Services will aim at ${domain}. Tokens, keys, and the SSH trust are saved locally.`
+}
+
 export function rowDetail(item: JourneyItemDef, state: ItemState | undefined): string {
   if (item.fields.some((field) => field.input === 'password' || field.input === 'textarea')) {
     return fieldsFilled(item, state) ? 'Saved' : 'Not set'
