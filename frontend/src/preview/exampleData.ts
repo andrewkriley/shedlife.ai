@@ -121,7 +121,7 @@ export const JOURNEY_ITEMS: JourneyItemDef[] = [
   {
     id: 'infisical',
     phase: 'deploy',
-    title: 'Infisical',
+    title: 'Infisical · PKI, secrets',
     detail: 'PKI and secrets. Replaces local secret-zero.',
     fields: [],
     actionLabel: 'Provision Infisical',
