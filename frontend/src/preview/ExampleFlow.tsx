@@ -1,33 +1,25 @@
 import { useState } from 'react'
 import { ExampleLogin, ExampleSetup } from './ExampleGates'
-import { ExampleOnboarding } from './ExampleOnboarding'
-import { ExampleWorkspace } from './ExampleWorkspace'
-import { SEEDED_ISSUE, emptyFoundations, type PreviewFoundations, type PreviewIssue } from './exampleData'
+import { ExampleJourney } from './ExampleJourney'
+import { emptyJourney, type JourneyState } from './exampleData'
 
-type Stage = 'setup' | 'login' | 'workspace'
-type WorkspaceView = 'chat' | 'settings' | 'onboarding'
+type Stage = 'setup' | 'login' | 'journey'
 
 export function ExampleFlow() {
   const [stage, setStage] = useState<Stage>('setup')
-  const [view, setView] = useState<WorkspaceView>('onboarding')
   const [username, setUsername] = useState('admin')
-  const [foundations, setFoundations] = useState<PreviewFoundations>(emptyFoundations)
-  const [issues, setIssues] = useState<PreviewIssue[]>([SEEDED_ISSUE])
+  const [journey, setJourney] = useState<JourneyState>(emptyJourney)
 
   function restart() {
     setStage('setup')
-    setView('onboarding')
     setUsername('admin')
-    setFoundations(emptyFoundations())
-    setIssues([SEEDED_ISSUE])
+    setJourney(emptyJourney())
   }
 
   return (
     <div className="preview-root">
       <aside className="preview-banner" role="note">
-        <span>
-          UI-only preview — no API calls. Functional wiring comes later.
-        </span>
+        <span>UI-only preview — no API calls. Functional wiring comes later.</span>
         <button type="button" className="button-secondary" onClick={restart}>
           Restart preview
         </button>
@@ -48,27 +40,11 @@ export function ExampleFlow() {
         {stage === 'login' ? (
           <div className="app-frame">
             <div className="app-frame__main">
-              <ExampleLogin expectedUsername={username} onLoggedIn={() => setStage('workspace')} />
+              <ExampleLogin expectedUsername={username} onLoggedIn={() => setStage('journey')} />
             </div>
           </div>
         ) : null}
-        {stage === 'workspace' ? (
-          <ExampleWorkspace
-            view={view}
-            setView={setView}
-            foundations={foundations}
-            onFoundationsChange={setFoundations}
-            issues={issues}
-            onIssuesChange={setIssues}
-            onboarding={
-              <ExampleOnboarding
-                foundations={foundations}
-                onChange={setFoundations}
-                onFinished={() => setView('chat')}
-              />
-            }
-          />
-        ) : null}
+        {stage === 'journey' ? <ExampleJourney state={journey} onChange={setJourney} /> : null}
       </div>
     </div>
   )

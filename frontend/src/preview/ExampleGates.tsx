@@ -26,12 +26,8 @@ export function ExampleSetup({ onComplete }: { onComplete: (username: string) =>
 
   return (
     <form onSubmit={handleSubmit} className="gate">
-      <p className="preview-kicker">First run</p>
       <h1>The Shed</h1>
-      <p className="lede">
-        Create the first operator account. The onboarding wizard collects Proxmox and the AI
-        key next.
-      </p>
+      <p className="lede">Create the first operator. Prerequisites come next.</p>
       <label htmlFor="preview-setup-username">Username</label>
       <input
         id="preview-setup-username"
@@ -92,9 +88,8 @@ export function ExampleLogin({
 
   return (
     <form onSubmit={handleSubmit} className="gate">
-      <p className="preview-kicker">Sign in</p>
       <h1>The Shed</h1>
-      <p className="lede">Use the operator account you just created. Any password works here.</p>
+      <p className="lede">Welcome back. Any password works in this preview.</p>
       <label htmlFor="preview-login-username">Username</label>
       <input
         id="preview-login-username"
