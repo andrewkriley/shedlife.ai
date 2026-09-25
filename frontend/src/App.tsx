@@ -3,14 +3,17 @@ import { AssistantStatus } from './components/AssistantStatus'
 import { DebugDock } from './components/DebugDock'
 import { getOnboardingStatus, getSetupStatus } from './lib/api'
 import { Chat } from './pages/Chat'
+import { DeployPhase } from './pages/DeployPhase'
 import { FoundationsPanel } from './pages/FoundationsPanel'
 import { IssuesPanel } from './pages/IssuesPanel'
 import { Login } from './pages/Login'
 import { OnboardingWizard } from './pages/OnboardingWizard'
 import { Settings } from './pages/Settings'
 import { Setup } from './pages/Setup'
+import { ExampleFlow } from './preview/ExampleFlow'
+import { isPreviewLocation } from './preview/previewMode'
 
-type View = 'chat' | 'settings' | 'onboarding'
+type View = 'chat' | 'settings' | 'onboarding' | 'deploy'
 type ReviewTab = 'foundations' | 'issues'
 
 function AppFrame({ children }: { children: ReactNode }) {
@@ -22,21 +25,40 @@ function AppFrame({ children }: { children: ReactNode }) {
   )
 }
 
+function usePreviewMode() {
+  const [preview, setPreview] = useState(() => isPreviewLocation())
+  useEffect(() => {
+    const sync = () => setPreview(isPreviewLocation())
+    window.addEventListener('hashchange', sync)
+    return () => window.removeEventListener('hashchange', sync)
+  }, [])
+  return preview
+}
+
 function App() {
+  const preview = usePreviewMode()
   const [setupNeeded, setSetupNeeded] = useState<boolean | null>(null)
   const [hasOperator, setHasOperator] = useState(false)
   const [loggedIn, setLoggedIn] = useState(false)
   const [view, setView] = useState<View>('chat')
+  const [returnView, setReturnView] = useState<View>('chat')
   const [reviewTab, setReviewTab] = useState<ReviewTab>('foundations')
+  const journey = view === 'onboarding' || view === 'deploy'
+
+  function openSettings() {
+    setReturnView(view === 'settings' ? 'chat' : view)
+    setView('settings')
+  }
 
   useEffect(() => {
+    if (preview) return
     getSetupStatus()
       .then((status) => {
         setSetupNeeded(status.needed)
         setHasOperator(Boolean(status.has_operator))
       })
       .catch(() => setSetupNeeded(false))
-  }, [])
+  }, [preview])
 
   useEffect(() => {
     if (!loggedIn) return
@@ -46,6 +68,10 @@ function App() {
       })
       .catch(() => undefined)
   }, [loggedIn])
+
+  if (preview) {
+    return <ExampleFlow />
+  }
 
   if (setupNeeded === null) {
     return (
@@ -76,24 +102,39 @@ function App() {
   }
 
   return (
-    <div className="app-shell" data-layout="single-window">
+    <div
+      className="app-shell"
+      data-layout="single-window"
+      data-focus={journey ? 'journey' : undefined}
+    >
       <header className="app-header">
         <h1>The Shed</h1>
         <AssistantStatus />
         <div className="app-header__actions">
-          {view !== 'onboarding' ? (
+          {view !== 'onboarding' && view !== 'settings' ? (
             <button type="button" className="button-secondary" onClick={() => setView('onboarding')}>
               Onboarding
             </button>
           ) : null}
-          {view === 'settings' || view === 'onboarding' ? (
-            <button type="button" className="button-secondary" onClick={() => setView('chat')}>
-              Back to chat
+          {view === 'settings' ? (
+            <button type="button" className="button-secondary" onClick={() => setView(returnView)}>
+              {returnView === 'onboarding'
+                ? 'Back to onboarding'
+                : returnView === 'deploy'
+                  ? 'Back to Deploy'
+                  : 'Back to chat'}
             </button>
           ) : (
-            <button type="button" className="button-secondary" onClick={() => setView('settings')}>
-              Settings
-            </button>
+            <>
+              <button type="button" className="button-secondary" onClick={openSettings}>
+                Settings
+              </button>
+              {journey ? (
+                <button type="button" className="button-secondary" onClick={() => setView('chat')}>
+                  Back to chat
+                </button>
+              ) : null}
+            </>
           )}
         </div>
       </header>
@@ -102,37 +143,44 @@ function App() {
         aria-hidden={view === 'settings'}
       >
         {view === 'onboarding' ? (
-          <OnboardingWizard onFinished={() => setView('chat')} />
+          <OnboardingWizard
+            onFinished={() => setView('chat')}
+            onContinueToDeploy={() => setView('deploy')}
+          />
+        ) : view === 'deploy' ? (
+          <DeployPhase onBack={() => setView('onboarding')} onFinished={() => setView('chat')} />
         ) : (
           <Chat />
         )}
-        <aside className="sidebar">
-          <div className="sidebar-tabs" role="tablist" aria-label="review">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={reviewTab === 'foundations'}
-              className={reviewTab === 'foundations' ? 'is-active' : undefined}
-              onClick={() => setReviewTab('foundations')}
-            >
-              Foundations
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={reviewTab === 'issues'}
-              className={reviewTab === 'issues' ? 'is-active' : undefined}
-              onClick={() => setReviewTab('issues')}
-            >
-              Issues
-            </button>
-          </div>
-          <div className="sidebar-panel" role="tabpanel">
-            {reviewTab === 'foundations' ? <FoundationsPanel /> : <IssuesPanel />}
-          </div>
-        </aside>
+        {journey ? null : (
+          <aside className="sidebar">
+            <div className="sidebar-tabs" role="tablist" aria-label="review">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={reviewTab === 'foundations'}
+                className={reviewTab === 'foundations' ? 'is-active' : undefined}
+                onClick={() => setReviewTab('foundations')}
+              >
+                Foundations
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={reviewTab === 'issues'}
+                className={reviewTab === 'issues' ? 'is-active' : undefined}
+                onClick={() => setReviewTab('issues')}
+              >
+                Issues
+              </button>
+            </div>
+            <div className="sidebar-panel" role="tabpanel">
+              {reviewTab === 'foundations' ? <FoundationsPanel /> : <IssuesPanel />}
+            </div>
+          </aside>
+        )}
       </div>
-      {view === 'settings' ? <Settings onClose={() => setView('chat')} /> : null}
+      {view === 'settings' ? <Settings onClose={() => setView(returnView)} /> : null}
       <DebugDock />
     </div>
   )

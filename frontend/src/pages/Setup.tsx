@@ -29,7 +29,7 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
   return (
     <form onSubmit={handleSubmit} className="gate">
       <h1>The Shed</h1>
-      <p className="lede">Create the first operator account. The onboarding wizard collects Proxmox and the AI key next.</p>
+      <p className="lede">Create the first operator. Prerequisites come next.</p>
 
       <label htmlFor="setup-username">Username</label>
       <input
@@ -65,6 +65,11 @@ export function Setup({ onComplete }: { onComplete: () => void }) {
         {submitting ? 'Working…' : 'Create operator'}
       </button>
       {error && <p role="alert">{error}</p>}
+      {import.meta.env.DEV ? (
+        <p className="hint">
+          <a href="#/preview">Preview the UI-only example flow</a>
+        </p>
+      ) : null}
     </form>
   )
 }

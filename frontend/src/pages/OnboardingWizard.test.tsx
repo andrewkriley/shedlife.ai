@@ -89,8 +89,9 @@ describe('OnboardingWizard', () => {
       },
     })
     const onFinished = vi.fn()
+    const onContinueToDeploy = vi.fn()
     const user = userEvent.setup()
-    render(<OnboardingWizard onFinished={onFinished} />)
+    render(<OnboardingWizard onFinished={onFinished} onContinueToDeploy={onContinueToDeploy} />)
 
     await user.type(await screen.findByLabelText('Proxmox IP or API URL'), '192.0.2.10')
     await user.click(screen.getByRole('button', { name: 'Continue' }))
@@ -136,9 +137,14 @@ describe('OnboardingWizard', () => {
     await user.click(screen.getByRole('button', { name: 'Validate' }))
 
     expect(await screen.findByRole('heading', { name: 'Ready' })).toBeInTheDocument()
+    expect(screen.getByText(/Proxmox is 192.0.2.10/)).toBeInTheDocument()
+    expect(screen.getByText(/Deploy is next/)).toBeInTheDocument()
     const summary = screen.getByRole('list', { name: 'onboarding summary' })
     expect(summary.textContent).toContain('Tenant')
     expect(summary.textContent).toContain('pass')
+    await user.click(screen.getByRole('button', { name: 'Continue to Deploy' }))
+    expect(onContinueToDeploy).toHaveBeenCalled()
+    expect(onFinished).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'Back to chat' }))
     expect(onFinished).toHaveBeenCalled()
   })

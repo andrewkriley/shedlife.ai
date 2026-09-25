@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import * as api from './lib/api'
 import type { FoundationsDocument } from './lib/api'
@@ -38,6 +38,19 @@ const onboardingDone: api.OnboardingStatus = {
 }
 
 describe('App', () => {
+  beforeEach(() => {
+    window.location.hash = ''
+  })
+
+  it('opens the UI-only example flow from #/preview without calling setup', async () => {
+    const setup = vi.spyOn(api, 'getSetupStatus')
+    window.location.hash = '#/preview'
+    render(<App />)
+    expect(await screen.findByText(/UI-only preview/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Create operator' })).toBeInTheDocument()
+    expect(setup).not.toHaveBeenCalled()
+  })
+
   it('shows the setup gate when no operator exists yet', async () => {
     vi.spyOn(api, 'getSetupStatus').mockResolvedValue({ needed: true })
     render(<App />)
@@ -118,8 +131,16 @@ describe('App', () => {
 
     expect(await screen.findByRole('region', { name: 'Onboarding' })).toBeInTheDocument()
     expect(screen.getByLabelText('Proxmox IP or API URL')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Foundations' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Foundations' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument()
     expect(document.querySelector('.app-shell')?.contains(document.querySelector('.debug-dock'))).toBe(true)
+    expect(document.querySelector('.app-shell')).toHaveAttribute('data-focus', 'journey')
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }))
+    expect(await screen.findByRole('region', { name: 'Configured data' })).toBeInTheDocument()
+    expect(await screen.findByRole('group', { name: 'Tenant' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Back to onboarding' }))
+    expect(screen.getByLabelText('Proxmox IP or API URL')).toBeInTheDocument()
   })
 
   it('keeps the chat transcript after opening and leaving Settings', async () => {

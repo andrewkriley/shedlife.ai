@@ -22,6 +22,22 @@ function mockSettingsApis(overrides?: {
   connection?: api.ConnectionStatus
 }) {
   vi.spyOn(api, 'getHealth').mockResolvedValue({ status: 'ok' })
+  vi.spyOn(api, 'getFoundations').mockResolvedValue({
+    version: 1,
+    tenant: { name: 'Riley Lab', slug: 'riley-lab' },
+    operator: { email: 'op@example.com' },
+    proxmox: { host: '192.0.2.10', node: 'pve', ssh_key_fingerprint: null },
+    network: { bridge: 'vmbr0', address: '', gateway: '', ntp: 'inherit' },
+    storage: { pool: 'local-lvm' },
+    domains: { intended: [] },
+    intent: {
+      gitlab: { mode: 'build' },
+      infisical: { mode: 'build' },
+      dns: { mode: 'greenfield' },
+      k3s: { mode: 'build' },
+    },
+    probes: {},
+  })
   vi.spyOn(api, 'getSubAgentSettings').mockResolvedValue(baseSubAgents)
   vi.spyOn(api, 'getLiveModels').mockResolvedValue(
     overrides?.models ?? { anthropic: ['claude-sonnet-5'] },
@@ -46,6 +62,8 @@ describe('Settings', () => {
     expect(screen.getByText(/Using the default model/)).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Your assistants' })).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Change the model' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Configured data' })).toBeInTheDocument()
+    expect(await screen.findByRole('group', { name: 'Tenant' })).toBeInTheDocument()
     expect(await screen.findByText(/AI Assistant is Connected/)).toBeInTheDocument()
     expect(screen.getAllByLabelText('Provider').length).toBe(1)
     expect(screen.getByRole('option', { name: 'OpenAI' })).toBeInTheDocument()

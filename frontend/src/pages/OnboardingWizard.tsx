@@ -21,14 +21,14 @@ const PROVIDERS = [
 ]
 
 const STEPS = [
-  'Proxmox host',
-  'Token ID',
-  'Token Secret',
-  'Network & storage',
-  'AI provider',
-  'Tenant',
-  'Install mode',
-  'Summary',
+  { title: 'Proxmox IP', lede: 'The first host. An address or API URL is enough.' },
+  { title: 'Proxmox Token ID', lede: 'USER@REALM!tokenid. The secret is the next step.' },
+  { title: 'Proxmox Token Secret', lede: 'Stored locally. It is not shown again after you continue.' },
+  { title: 'Network & storage', lede: 'Discovered from the Proxmox host. Change a default if it is wrong.' },
+  { title: 'AI provider', lede: 'The key chat will use. A Claude subscription will not work.' },
+  { title: 'Tenant', lede: 'A name and slug for this Shed.' },
+  { title: 'Install mode', lede: 'Build fresh, or adopt services that already exist.' },
+  { title: 'Ready', lede: '' },
 ] as const
 
 function optionList(discovered: string[] | undefined, current: string): string[] {
@@ -71,7 +71,21 @@ function mergeStatus(
   }
 }
 
-export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
+function summaryLede(host: string, tenantName: string): string {
+  const prox = host.trim() || 'the first host'
+  if (tenantName.trim()) {
+    return `Proxmox is ${prox}. Tenant is ${tenantName.trim()}. Tokens and the provider key are saved locally.`
+  }
+  return `Proxmox is ${prox}. Tokens and the provider key are saved locally.`
+}
+
+export function OnboardingWizard({
+  onFinished,
+  onContinueToDeploy,
+}: {
+  onFinished: () => void
+  onContinueToDeploy?: () => void
+}) {
   const [step, setStep] = useState(0)
   const [status, setStatus] = useState<OnboardingStatus | null>(null)
   const [host, setHost] = useState('')
@@ -180,7 +194,7 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
         setStatus(summary.status)
         notifyFoundationsChanged()
       }
-      setStep((current) => Math.min(current + 1, STEPS.length - 1))
+      setStep((current) => (checks !== null && current < 6 ? 7 : Math.min(current + 1, STEPS.length - 1)))
     } catch (err) {
       setError(stepError(err))
     } finally {
@@ -189,6 +203,7 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
   }
 
   const last = step === STEPS.length - 1
+  const current = STEPS[step]
   const nextLabel = busy
     ? 'Working…'
     : step === 6
@@ -197,50 +212,87 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
         ? 'Finish'
         : 'Continue'
 
+  const reviewRows = [
+    { step: 0, title: 'Proxmox IP', value: host || status?.proxmox.host || 'Not set' },
+    { step: 1, title: 'Proxmox Token ID', value: tokenId || status?.proxmox.api_token_id || 'Not set' },
+    { step: 2, title: 'Proxmox Token Secret', value: status?.proxmox.api_token_set ? 'Saved' : 'Not set' },
+    {
+      step: 3,
+      title: 'Network & storage',
+      value: [bridge || status?.network.bridge, address || status?.network.address, pool || status?.storage.pool]
+        .filter(Boolean)
+        .join(' · ') || 'Not set',
+    },
+    {
+      step: 4,
+      title: 'AI provider',
+      value: status?.provider.api_key_set ? status.provider.vendor || provider : 'Not set',
+    },
+    {
+      step: 5,
+      title: 'Tenant',
+      value: tenantName && tenantSlug ? `${tenantName} (${tenantSlug})` : 'Not set',
+    },
+    { step: 6, title: 'Install mode', value: intentMode === 'adopt' ? 'Adopt' : 'Build' },
+  ]
+
   return (
-    <section className="wizard chat-pane" aria-label="Onboarding">
-      <h2>Onboarding</h2>
-      <p className="lede">
-        Minimum facts for a fresh Shed. You can re-run this any time to validate or
-        change settings.
-      </p>
-      <ol className="wizard__steps" aria-label="wizard steps">
-        {STEPS.map((label, index) => (
-          <li key={label} className={index === step ? 'is-current' : index < step ? 'is-done' : undefined}>
-            {index + 1}. {label}
-          </li>
-        ))}
-      </ol>
+    <section className="journey chat-pane" aria-label="Onboarding">
+      <p className="journey-kicker">Onboarding</p>
+      {last ? null : (
+        <>
+          <ol className="step-dots" aria-label="wizard steps">
+            {STEPS.map((entry, index) => (
+              <li
+                key={entry.title}
+                className={index === step ? 'is-current' : index < step ? 'is-done' : undefined}
+              >
+                <span className="visually-hidden">
+                  {entry.title}
+                  {index === step ? ' (current)' : index < step ? ' (done)' : ''}
+                </span>
+              </li>
+            ))}
+          </ol>
+          <p className="journey-count">{`${step + 1} of ${STEPS.length}`}</p>
+          <h1 className="journey__title">{current.title}</h1>
+          <p className="journey__lede">{current.lede}</p>
+        </>
+      )}
 
       {step === 0 && (
-        <div>
-          <label htmlFor="onboard-host" title={FOUNDATION_HINTS['proxmox.host']}>
-            Proxmox IP or API URL
-          </label>
-          <input
-            id="onboard-host"
-            value={host}
-            onChange={(e) => setHost(e.target.value)}
-            title={FOUNDATION_HINTS['proxmox.host']}
-            placeholder="192.0.2.10"
-            autoComplete="off"
-          />
+        <div className="journey-form">
+          <div className="journey-field">
+            <label htmlFor="onboard-host" title={FOUNDATION_HINTS['proxmox.host']}>
+              Proxmox IP or API URL
+            </label>
+            <input
+              id="onboard-host"
+              value={host}
+              onChange={(e) => setHost(e.target.value)}
+              title={FOUNDATION_HINTS['proxmox.host']}
+              placeholder="192.0.2.10"
+              autoComplete="off"
+            />
+          </div>
         </div>
       )}
 
       {step === 1 && (
-        <div>
-          <label htmlFor="onboard-token-id" title={FOUNDATION_HINTS['proxmox.api_token_id']}>
-            Proxmox Token ID
-          </label>
-          <input
-            id="onboard-token-id"
-            value={tokenId}
-            onChange={(e) => setTokenId(e.target.value)}
-            title={FOUNDATION_HINTS['proxmox.api_token_id']}
-            placeholder="USER@REALM!tokenid"
-            autoComplete="off"
-          />
+        <div className="journey-form">
+          <div className="journey-field">
+            <label htmlFor="onboard-token-id" title={FOUNDATION_HINTS['proxmox.api_token_id']}>
+              Proxmox Token ID
+            </label>
+            <input
+              id="onboard-token-id"
+              value={tokenId}
+              onChange={(e) => setTokenId(e.target.value)}
+              title={FOUNDATION_HINTS['proxmox.api_token_id']}
+              placeholder="USER@REALM!tokenid"
+              autoComplete="off"
+            />
+          </div>
           {status?.proxmox.api_token_set && tokenId ? (
             <p className="hint">Saved Token ID. Continue to confirm the secret, or paste a new ID.</p>
           ) : null}
@@ -248,22 +300,22 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
       )}
 
       {step === 2 && (
-        <div>
-          <p className="hint">
-            Token ID: {tokenId || status?.proxmox.api_token_id || 'not set'}
-          </p>
-          <label htmlFor="onboard-token-secret" title={FOUNDATION_HINTS['proxmox.api_token_secret']}>
-            Proxmox Token Secret
-          </label>
-          <input
-            id="onboard-token-secret"
-            type="password"
-            value={tokenSecret}
-            onChange={(e) => setTokenSecret(e.target.value)}
-            title={FOUNDATION_HINTS['proxmox.api_token_secret']}
-            placeholder="Token secret"
-            autoComplete="off"
-          />
+        <div className="journey-form">
+          <p className="hint">Token ID: {tokenId || status?.proxmox.api_token_id || 'not set'}</p>
+          <div className="journey-field">
+            <label htmlFor="onboard-token-secret" title={FOUNDATION_HINTS['proxmox.api_token_secret']}>
+              Proxmox Token Secret
+            </label>
+            <input
+              id="onboard-token-secret"
+              type="password"
+              value={tokenSecret}
+              onChange={(e) => setTokenSecret(e.target.value)}
+              title={FOUNDATION_HINTS['proxmox.api_token_secret']}
+              placeholder="Token secret"
+              autoComplete="off"
+            />
+          </div>
           {status?.proxmox.api_token_set ? (
             <p className="hint">
               Token secret is saved. Leave this blank to keep it, or paste a new secret to
@@ -274,149 +326,161 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
       )}
 
       {step === 3 && (
-        <div>
-          <p className="hint">
-            Discovered from the Proxmox host. Change the bridge or storage if
-            the default is wrong.
-          </p>
-          <label htmlFor="onboard-bridge" title={FOUNDATION_HINTS['network.bridge']}>
-            Bridge
-          </label>
-          {optionList(discovery?.bridges, bridge).length ? (
-            <select
-              id="onboard-bridge"
-              value={bridge}
-              title={FOUNDATION_HINTS['network.bridge']}
-              onChange={(e) => {
-                const nextBridge = e.target.value
-                setBridge(nextBridge)
-                const net = discovery?.networks?.[nextBridge]
-                if (net?.address) setAddress(net.address)
-                if (net?.gateway) setGateway(net.gateway)
-              }}
-            >
-              {optionList(discovery?.bridges, bridge).map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          ) : (
+        <div className="journey-form">
+          <div className="journey-field">
+            <label htmlFor="onboard-bridge" title={FOUNDATION_HINTS['network.bridge']}>
+              Bridge
+            </label>
+            {optionList(discovery?.bridges, bridge).length ? (
+              <select
+                id="onboard-bridge"
+                value={bridge}
+                title={FOUNDATION_HINTS['network.bridge']}
+                onChange={(e) => {
+                  const nextBridge = e.target.value
+                  setBridge(nextBridge)
+                  const net = discovery?.networks?.[nextBridge]
+                  if (net?.address) setAddress(net.address)
+                  if (net?.gateway) setGateway(net.gateway)
+                }}
+              >
+                {optionList(discovery?.bridges, bridge).map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                id="onboard-bridge"
+                value={bridge}
+                onChange={(e) => setBridge(e.target.value)}
+                title={FOUNDATION_HINTS['network.bridge']}
+                placeholder="vmbr0"
+                autoComplete="off"
+              />
+            )}
+          </div>
+          <div className="journey-field">
+            <label htmlFor="onboard-address" title={FOUNDATION_HINTS['network.address']}>
+              CIDR
+            </label>
             <input
-              id="onboard-bridge"
-              value={bridge}
-              onChange={(e) => setBridge(e.target.value)}
-              title={FOUNDATION_HINTS['network.bridge']}
-              placeholder="vmbr0"
+              id="onboard-address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              title={FOUNDATION_HINTS['network.address']}
+              placeholder="192.0.2.10/24"
               autoComplete="off"
             />
-          )}
-          <label htmlFor="onboard-address" title={FOUNDATION_HINTS['network.address']}>
-            CIDR
-          </label>
-          <input
-            id="onboard-address"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            title={FOUNDATION_HINTS['network.address']}
-            placeholder="192.0.2.10/24"
-            autoComplete="off"
-          />
-          <label htmlFor="onboard-gateway" title={FOUNDATION_HINTS['network.gateway']}>
-            Gateway
-          </label>
-          <input
-            id="onboard-gateway"
-            value={gateway}
-            onChange={(e) => setGateway(e.target.value)}
-            title={FOUNDATION_HINTS['network.gateway']}
-            placeholder="192.0.2.1"
-            autoComplete="off"
-          />
-          <label htmlFor="onboard-pool" title={FOUNDATION_HINTS['storage.pool']}>
-            Storage
-          </label>
-          {optionList(discovery?.pools, pool).length ? (
-            <select
-              id="onboard-pool"
-              value={pool}
-              title={FOUNDATION_HINTS['storage.pool']}
-              onChange={(e) => setPool(e.target.value)}
-            >
-              {optionList(discovery?.pools, pool).map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          ) : (
+          </div>
+          <div className="journey-field">
+            <label htmlFor="onboard-gateway" title={FOUNDATION_HINTS['network.gateway']}>
+              Gateway
+            </label>
             <input
-              id="onboard-pool"
-              value={pool}
-              onChange={(e) => setPool(e.target.value)}
-              title={FOUNDATION_HINTS['storage.pool']}
-              placeholder="local-lvm"
+              id="onboard-gateway"
+              value={gateway}
+              onChange={(e) => setGateway(e.target.value)}
+              title={FOUNDATION_HINTS['network.gateway']}
+              placeholder="192.0.2.1"
               autoComplete="off"
             />
-          )}
+          </div>
+          <div className="journey-field">
+            <label htmlFor="onboard-pool" title={FOUNDATION_HINTS['storage.pool']}>
+              Storage
+            </label>
+            {optionList(discovery?.pools, pool).length ? (
+              <select
+                id="onboard-pool"
+                value={pool}
+                title={FOUNDATION_HINTS['storage.pool']}
+                onChange={(e) => setPool(e.target.value)}
+              >
+                {optionList(discovery?.pools, pool).map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                id="onboard-pool"
+                value={pool}
+                onChange={(e) => setPool(e.target.value)}
+                title={FOUNDATION_HINTS['storage.pool']}
+                placeholder="local-lvm"
+                autoComplete="off"
+              />
+            )}
+          </div>
         </div>
       )}
 
       {step === 4 && (
-        <div>
-          <label htmlFor="onboard-provider">Provider</label>
-          <select
-            id="onboard-provider"
-            value={provider}
-            onChange={(e) => setProvider(e.target.value)}
-          >
-            {PROVIDERS.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-          <label htmlFor="onboard-api-key">API key</label>
-          <input
-            id="onboard-api-key"
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder={
-              status?.provider.api_key_set
-                ? 'Key is saved. Paste a new one to replace it, or continue.'
-                : 'A Claude subscription will not work'
-            }
-            autoComplete="off"
-          />
+        <div className="journey-form">
+          <div className="journey-field">
+            <label htmlFor="onboard-provider">Provider</label>
+            <select
+              id="onboard-provider"
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+            >
+              {PROVIDERS.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="journey-field">
+            <label htmlFor="onboard-api-key">API key</label>
+            <input
+              id="onboard-api-key"
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder={
+                status?.provider.api_key_set
+                  ? 'Key is saved. Paste a new one to replace it, or continue.'
+                  : 'A Claude subscription will not work'
+              }
+              autoComplete="off"
+            />
+          </div>
         </div>
       )}
 
       {step === 5 && (
-        <div>
-          <label htmlFor="onboard-name" title={FOUNDATION_HINTS['tenant.name']}>
-            Tenant name
-          </label>
-          <input
-            id="onboard-name"
-            value={tenantName}
-            onChange={(e) => setTenantName(e.target.value)}
-            title={FOUNDATION_HINTS['tenant.name']}
-          />
-          <label htmlFor="onboard-slug" title={FOUNDATION_HINTS['tenant.slug']}>
-            Tenant slug
-          </label>
-          <input
-            id="onboard-slug"
-            value={tenantSlug}
-            onChange={(e) => setTenantSlug(e.target.value)}
-            title={FOUNDATION_HINTS['tenant.slug']}
-          />
+        <div className="journey-form">
+          <div className="journey-field">
+            <label htmlFor="onboard-name" title={FOUNDATION_HINTS['tenant.name']}>
+              Tenant name
+            </label>
+            <input
+              id="onboard-name"
+              value={tenantName}
+              onChange={(e) => setTenantName(e.target.value)}
+              title={FOUNDATION_HINTS['tenant.name']}
+            />
+          </div>
+          <div className="journey-field">
+            <label htmlFor="onboard-slug" title={FOUNDATION_HINTS['tenant.slug']}>
+              Tenant slug
+            </label>
+            <input
+              id="onboard-slug"
+              value={tenantSlug}
+              onChange={(e) => setTenantSlug(e.target.value)}
+              title={FOUNDATION_HINTS['tenant.slug']}
+            />
+          </div>
         </div>
       )}
 
       {step === 6 && (
-        <fieldset className="group">
+        <fieldset className="group journey-form">
           <legend>Install mode</legend>
           <label>
             <input
@@ -457,8 +521,25 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
       )}
 
       {step === 7 && (
-        <div>
-          <h3>{summaryOk ? 'Ready' : 'Check these results'}</h3>
+        <>
+          <h1 className="journey__title">{summaryOk ? 'Ready' : 'Check these results'}</h1>
+          <p className="journey__lede">{summaryLede(host || status?.proxmox.host || '', tenantName)}</p>
+          <div className="journey-list" aria-label="Onboarding review">
+            {reviewRows.map((row) => (
+              <button
+                key={row.title}
+                type="button"
+                className="review-row"
+                onClick={() => {
+                  setError(null)
+                  setStep(row.step)
+                }}
+              >
+                <span className="review-row__title">{row.title}</span>
+                <span className="review-row__value">{row.value}</span>
+              </button>
+            ))}
+          </div>
           {discovery && (
             <p className="hint">
               Discovered {discovery.nodes.join(', ') || 'no nodes'}; bridges{' '}
@@ -475,33 +556,47 @@ export function OnboardingWizard({ onFinished }: { onFinished: () => void }) {
               </li>
             ))}
           </ul>
-        </div>
+          <section className="journey-next" aria-label="Next phase">
+            <p className="journey-next__title">Deploy is next</p>
+            <p className="journey__lede">
+              GitLab, Infisical, DNS, K3S, the AWS landing zone, Proxmox templates, and StepCA —
+              not MVP yet.
+            </p>
+          </section>
+        </>
       )}
 
       {error && <p role="alert">{error}</p>}
 
-      <div className="panel-actions">
-        {step > 0 && step < 7 && (
-          <button
-            type="button"
-            className="button-secondary"
-            onClick={() => {
-              setError(null)
-              setStep((current) => current - 1)
-            }}
-            disabled={busy}
-          >
-            Back
-          </button>
-        )}
+      <div className="journey-actions">
         {last ? (
-          <button type="button" onClick={onFinished}>
-            Back to chat
-          </button>
+          <>
+            <button type="button" onClick={() => (onContinueToDeploy ?? onFinished)()}>
+              Continue to Deploy
+            </button>
+            <button type="button" className="button-secondary" onClick={onFinished}>
+              Back to chat
+            </button>
+          </>
         ) : (
-          <button type="button" onClick={() => void handleNext()} disabled={busy}>
-            {nextLabel}
-          </button>
+          <>
+            <button type="button" onClick={() => void handleNext()} disabled={busy}>
+              {nextLabel}
+            </button>
+            {step > 0 ? (
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => {
+                  setError(null)
+                  setStep((currentStep) => currentStep - 1)
+                }}
+                disabled={busy}
+              >
+                Back
+              </button>
+            ) : null}
+          </>
         )}
       </div>
     </section>

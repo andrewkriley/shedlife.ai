@@ -20,6 +20,7 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   return (
     <form onSubmit={handleSubmit} className="gate">
       <h1>The Shed</h1>
+      <p className="lede">Welcome back.</p>
       <label htmlFor="username">Username</label>
       <input
         id="username"
@@ -45,6 +46,11 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
       />
       <button type="submit">Log in</button>
       {error && <p role="alert">{error}</p>}
+      {import.meta.env.DEV ? (
+        <p className="hint">
+          <a href="#/preview">Preview the UI-only example flow</a>
+        </p>
+      ) : null}
     </form>
   )
 }
