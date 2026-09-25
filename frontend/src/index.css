@@ -205,7 +205,7 @@ code {
   overflow: auto;
 }
 
-.preview-root .gate button[type='submit'] {
+.gate button[type='submit'] {
   width: 100%;
   margin-top: var(--space-md);
 }
@@ -271,6 +271,23 @@ code {
   padding: var(--space-xl);
   background: var(--bg-panel);
   border-right: 1px solid var(--border);
+}
+
+.chat-pane.journey {
+  max-width: none;
+  margin: 0;
+  padding: 32px 28px 64px;
+  background: var(--bg-canvas);
+  border-right: 1px solid var(--border);
+}
+
+.journey-field select {
+  border: 0;
+  border-radius: 12px;
+  background: var(--bg-panel);
+  padding: 14px 16px;
+  font-size: 17px;
+  line-height: 24px;
 }
 
 .wizard__steps {

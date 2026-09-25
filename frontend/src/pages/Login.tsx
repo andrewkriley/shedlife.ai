@@ -20,6 +20,7 @@ export function Login({ onLoggedIn }: { onLoggedIn: () => void }) {
   return (
     <form onSubmit={handleSubmit} className="gate">
       <h1>The Shed</h1>
+      <p className="lede">Welcome back.</p>
       <label htmlFor="username">Username</label>
       <input
         id="username"

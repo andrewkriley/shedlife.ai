@@ -3,6 +3,7 @@ import { AssistantStatus } from './components/AssistantStatus'
 import { DebugDock } from './components/DebugDock'
 import { getOnboardingStatus, getSetupStatus } from './lib/api'
 import { Chat } from './pages/Chat'
+import { DeployPhase } from './pages/DeployPhase'
 import { FoundationsPanel } from './pages/FoundationsPanel'
 import { IssuesPanel } from './pages/IssuesPanel'
 import { Login } from './pages/Login'
@@ -12,7 +13,7 @@ import { Setup } from './pages/Setup'
 import { ExampleFlow } from './preview/ExampleFlow'
 import { isPreviewLocation } from './preview/previewMode'
 
-type View = 'chat' | 'settings' | 'onboarding'
+type View = 'chat' | 'settings' | 'onboarding' | 'deploy'
 type ReviewTab = 'foundations' | 'issues'
 
 function AppFrame({ children }: { children: ReactNode }) {
@@ -104,7 +105,7 @@ function App() {
               Onboarding
             </button>
           ) : null}
-          {view === 'settings' || view === 'onboarding' ? (
+          {view === 'settings' || view === 'onboarding' || view === 'deploy' ? (
             <button type="button" className="button-secondary" onClick={() => setView('chat')}>
               Back to chat
             </button>
@@ -120,7 +121,12 @@ function App() {
         aria-hidden={view === 'settings'}
       >
         {view === 'onboarding' ? (
-          <OnboardingWizard onFinished={() => setView('chat')} />
+          <OnboardingWizard
+            onFinished={() => setView('chat')}
+            onContinueToDeploy={() => setView('deploy')}
+          />
+        ) : view === 'deploy' ? (
+          <DeployPhase onBack={() => setView('onboarding')} onFinished={() => setView('chat')} />
         ) : (
           <Chat />
         )}
