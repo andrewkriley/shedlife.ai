@@ -60,8 +60,9 @@ and the existing Core Agentic Loop / Auth interfaces this profile reuses.
    + password typed twice). The gate does not collect an LLM key or
    Galileo.
 4. After login, `GET /onboarding/status`. If foundations are incomplete
-   or the LLM key is missing, the onboarding wizard opens in the chat
-   column (header, debug, Foundations / Issues stay). Steps: Proxmox
+   or the LLM key is missing, the onboarding wizard opens full-width
+   (header and debug stay). Configured foundations live on Settings.
+   Steps: Proxmox
    host → Token ID → Token Secret → provider + API key → tenant name
    and slug → all-build or adopt (URLs when adopting). Each step
    validates before the next. Host discovery fills empty node / bridge /

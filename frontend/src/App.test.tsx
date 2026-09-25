@@ -131,8 +131,16 @@ describe('App', () => {
 
     expect(await screen.findByRole('region', { name: 'Onboarding' })).toBeInTheDocument()
     expect(screen.getByLabelText('Proxmox IP or API URL')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Foundations' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Foundations' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument()
     expect(document.querySelector('.app-shell')?.contains(document.querySelector('.debug-dock'))).toBe(true)
+    expect(document.querySelector('.app-shell')).toHaveAttribute('data-focus', 'journey')
+
+    await user.click(screen.getByRole('button', { name: 'Settings' }))
+    expect(await screen.findByRole('region', { name: 'Configured data' })).toBeInTheDocument()
+    expect(await screen.findByRole('group', { name: 'Tenant' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Back to onboarding' }))
+    expect(screen.getByLabelText('Proxmox IP or API URL')).toBeInTheDocument()
   })
 
   it('keeps the chat transcript after opening and leaving Settings', async () => {

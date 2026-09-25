@@ -233,6 +233,14 @@ code {
   overflow: hidden;
 }
 
+.app-shell[data-focus='journey'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell[data-focus='journey'] .chat-pane.journey {
+  border-right: 0;
+}
+
 .workspace {
   display: contents;
 }
@@ -636,6 +644,18 @@ fieldset > legend {
   width: 100%;
   margin: 0 auto;
   padding: var(--space-xl);
+}
+
+.settings-foundations {
+  margin: 0 0 var(--space-2xl);
+}
+
+.settings-foundations h2 {
+  margin: 0 0 var(--space-sm);
+}
+
+.settings-foundations .panel {
+  height: auto;
 }
 
 .debug-dock {

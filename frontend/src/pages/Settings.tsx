@@ -9,6 +9,7 @@ import {
   setProviderKey,
 } from '../lib/api'
 import type { SubAgentSetting } from '../lib/api'
+import { FoundationsPanel } from './FoundationsPanel'
 
 const PROVIDERS = [
   { id: 'anthropic', label: 'Anthropic' },
@@ -148,6 +149,12 @@ export function Settings({ onClose: _onClose }: { onClose: () => void }) {
 
   return (
     <div className="settings-page">
+      <section className="settings-foundations" aria-label="Configured data">
+        <h2>Foundations</h2>
+        <p className="lede">Facts collected during onboarding. Edit them here.</p>
+        <FoundationsPanel />
+      </section>
+
       <p className="lede">
         Choose which assistant you are talking to, then pick the model it should use.
         A lone assistant is already selected.
