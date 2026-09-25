@@ -199,7 +199,7 @@ function ExampleChat({
       },
     ])
     setInput('')
-    setStatus(reply.approval ? 'approval_required' : null)
+    setStatus(reply.approval ? 'Waiting for approval' : null)
     setSending(false)
   }
 
@@ -274,16 +274,18 @@ function ExampleChat({
                   <code>{m.pendingApproval.toolName}</code> with{' '}
                   <code>{JSON.stringify(m.pendingApproval.arguments)}</code>
                 </p>
-                <button type="button" onClick={() => handleApprove(m.id, true)}>
-                  Approve
-                </button>
-                <button
-                  type="button"
-                  className="button-secondary"
-                  onClick={() => handleApprove(m.id, false)}
-                >
-                  Decline
-                </button>
+                <div className="preview-approval__actions">
+                  <button type="button" onClick={() => handleApprove(m.id, true)}>
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    onClick={() => handleApprove(m.id, false)}
+                  >
+                    Decline
+                  </button>
+                </div>
               </div>
             )}
             {m.role === 'assistant' && m.turnId && !m.pendingApproval && (
@@ -401,34 +403,33 @@ function ExampleFoundations({
         <fieldset className="group">
           <legend>Probes</legend>
           <ul aria-label="probes" className="probe-list">
-            {[...READONLY_PROBES, 'ssh_key_installed'].map((id) => (
-              <li key={id}>
-                <span>
-                  {id}: {foundations.probes[id] ?? 'not run'}
-                </span>
-                <button
-                  type="button"
-                  className="button-secondary"
-                  onClick={() => {
-                    onChange({
-                      ...foundations,
-                      probes: { ...foundations.probes, [id]: id === 'ssh_key_installed' ? 'not run' : 'pass' },
-                    })
-                    setStatus(
-                      id === 'ssh_key_installed'
-                        ? 'ssh_key_installed still needs chat approval.'
-                        : `${id}: pass`,
-                    )
-                  }}
-                >
-                  Re-run {id}
-                </button>
-              </li>
-            ))}
+            {[...READONLY_PROBES, 'ssh_key_installed'].map((id) => {
+              const result = foundations.probes[id] ?? 'not run'
+              return (
+                <li key={id}>
+                  <span>{id}</span>
+                  <span className="preview-probe-status" data-status={result}>
+                    {result}
+                  </span>
+                </li>
+              )
+            })}
           </ul>
         </fieldset>
       </div>
       <div className="panel-actions">
+        <button
+          type="button"
+          className="button-secondary"
+          onClick={() => {
+            const probes = { ...foundations.probes }
+            for (const id of READONLY_PROBES) probes[id] = 'pass'
+            onChange({ ...foundations, probes })
+            setStatus('Read-only probes passed.')
+          }}
+        >
+          Re-run read-only probes
+        </button>
         <button type="button" className="button-secondary" onClick={handleExport}>
           Export YAML
         </button>

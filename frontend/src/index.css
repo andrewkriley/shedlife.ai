@@ -205,6 +205,11 @@ code {
   overflow: auto;
 }
 
+.preview-root .gate button[type='submit'] {
+  width: 100%;
+  margin-top: var(--space-md);
+}
+
 .app-frame {
   display: flex;
   flex-direction: column;
@@ -792,8 +797,20 @@ ul {
 }
 
 .preview-approval {
+  flex-direction: column;
+  align-items: flex-start;
   padding-top: var(--space-sm);
   border-top: 1px solid var(--border);
+}
+
+.preview-approval p {
+  margin: 0;
+}
+
+.preview-approval__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
 }
 
 .preview-facts {
@@ -812,6 +829,19 @@ ul {
 .preview-facts dd {
   margin: 0;
   color: var(--text-primary);
+}
+
+.preview-probe-status {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.preview-probe-status[data-status='pass'] {
+  color: var(--accent-success);
+}
+
+.preview-probe-status[data-status='fail'] {
+  color: var(--accent-danger);
 }
 
 @media (max-width: 900px) {
