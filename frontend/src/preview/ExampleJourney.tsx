@@ -1,21 +1,15 @@
-import { useState, type FormEvent } from 'react'
+import { useState } from 'react'
 import {
-  JOURNEY_ITEMS,
   PHASES,
   fieldsFilled,
-  itemById,
   itemsForPhase,
+  overallProgress,
   phaseProgress,
   prereqReady,
-  rowDetail,
   type ItemState,
   type JourneyItemDef,
   type JourneyState,
-  type LayoutId,
-  type PhaseId,
 } from './exampleData'
-
-type OverviewScreen = { name: 'home' } | { name: 'phase'; phase: PhaseId } | { name: 'item'; itemId: string }
 
 export function ExampleJourney({
   state,
@@ -24,267 +18,125 @@ export function ExampleJourney({
   state: JourneyState
   onChange: (next: JourneyState) => void
 }) {
-  const [layout, setLayout] = useState<LayoutId>('overview')
-  const [screen, setScreen] = useState<OverviewScreen>({ name: 'home' })
-  const [focusIndex, setFocusIndex] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  const progress = overallProgress(state)
 
-  function openLayout(next: LayoutId) {
-    setLayout(next)
-    if (next === 'overview') setScreen({ name: 'home' })
-    else setFocusIndex(0)
+  function updateItem(id: string, next: ItemState) {
+    onChange({ ...state, [id]: next })
   }
 
   return (
     <div className="journey-shell">
-      <header className="journey-toolbar">
-        <p className="journey-wordmark">The Shed</p>
-        <div className="segmented" role="tablist" aria-label="layout">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={layout === 'overview'}
-            onClick={() => openLayout('overview')}
-          >
-            Overview
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={layout === 'focus'}
-            onClick={() => openLayout('focus')}
-          >
-            One at a time
-          </button>
-        </div>
-      </header>
+      <main className="journey" aria-label="checklist">
+        <h1 className="journey__title">The Shed</h1>
+        <p className="journey__lede">
+          {`Facts first. Then the container. Platforms later. ${progress.done} of ${progress.total}.`}
+        </p>
+        {error && <p role="alert">{error}</p>}
 
-      {layout === 'overview' ? (
-        <Overview
-          screen={screen}
-          setScreen={setScreen}
-          state={state}
-          onChange={onChange}
-        />
-      ) : (
-        <FocusStep
-          index={focusIndex}
-          setIndex={setFocusIndex}
-          state={state}
-          onChange={onChange}
-          onDone={() => openLayout('overview')}
-        />
-      )}
-    </div>
-  )
-}
-
-function Overview({
-  screen,
-  setScreen,
-  state,
-  onChange,
-}: {
-  screen: OverviewScreen
-  setScreen: (screen: OverviewScreen) => void
-  state: JourneyState
-  onChange: (next: JourneyState) => void
-}) {
-  if (screen.name === 'item') {
-    const item = itemById(screen.itemId)
-    if (!item) return null
-    return (
-      <ItemPane
-        key={item.id}
-        item={item}
-        state={state}
-        onChange={onChange}
-        onBack={() => setScreen({ name: 'phase', phase: item.phase })}
-        backLabel={PHASES.find((phase) => phase.id === item.phase)?.title ?? 'Back'}
-      />
-    )
-  }
-
-  if (screen.name === 'phase') {
-    const phase = PHASES.find((entry) => entry.id === screen.phase)
-    if (!phase) return null
-    const progress = phaseProgress(phase.id, state)
-    return (
-      <main className="journey" aria-label={phase.title}>
-        <button type="button" className="journey-back" onClick={() => setScreen({ name: 'home' })}>
-          The Shed
-        </button>
-        <h1 className="journey__title">{phase.title}</h1>
-        <p className="journey__lede">{`${phase.lede} ${progress.done} of ${progress.total}.`}</p>
-        <PhaseList
-          phase={phase.id}
-          state={state}
-          onOpen={(itemId) => setScreen({ name: 'item', itemId })}
-        />
-      </main>
-    )
-  }
-
-  return (
-    <main className="journey" aria-label="journey home">
-      <h1 className="journey__title">The Shed</h1>
-      <p className="journey__lede">Facts first. Then the container. Platforms later.</p>
-      <div className="journey-list">
         {PHASES.map((phase) => {
-          const progress = phaseProgress(phase.id, state)
+          const count = phaseProgress(phase.id, state)
           return (
-            <button
-              key={phase.id}
-              type="button"
-              className="journey-row"
-              onClick={() => setScreen({ name: 'phase', phase: phase.id })}
-            >
-              <span className="journey-row__copy">
-                <span className="journey-row__title">{phase.title}</span>
-                <span className="journey-row__hint">{phase.lede}</span>
-              </span>
-              <span className="journey-row__meta">
-                {progress.done === progress.total ? 'Ready' : `${progress.done} of ${progress.total}`}
-              </span>
-              <span className="journey-row__chevron" aria-hidden="true">
-                ›
-              </span>
-            </button>
+            <section key={phase.id} className="checklist-section" aria-labelledby={`phase-${phase.id}`}>
+              <header className="checklist-section__head">
+                <h2 id={`phase-${phase.id}`} className="checklist-section__title">
+                  {phase.title}
+                </h2>
+                <p className="checklist-section__lede">
+                  {`${phase.lede} ${count.done} of ${count.total}.`}
+                </p>
+              </header>
+              <div className="journey-list">
+                {itemsForPhase(phase.id).map((item) => (
+                  <CheckRow
+                    key={item.id}
+                    item={item}
+                    current={state[item.id] ?? { values: {}, done: false }}
+                    state={state}
+                    onChange={(next) => updateItem(item.id, next)}
+                    onError={setError}
+                  />
+                ))}
+              </div>
+            </section>
           )
         })}
-      </div>
-    </main>
-  )
-}
-
-function PhaseList({
-  phase,
-  state,
-  onOpen,
-}: {
-  phase: PhaseId
-  state: JourneyState
-  onOpen: (itemId: string) => void
-}) {
-  return (
-    <div className="journey-list">
-      {itemsForPhase(phase).map((item) => {
-        const complete = fieldsFilled(item, state[item.id])
-        return (
-          <button
-            key={item.id}
-            type="button"
-            className="journey-row"
-            onClick={() => onOpen(item.id)}
-          >
-            <span className="journey-row__copy">
-              <span className="journey-row__title">{item.title}</span>
-              <span className="journey-row__hint">{rowDetail(item, state[item.id])}</span>
-            </span>
-            <span className={complete ? 'journey-row__check' : 'journey-row__meta'} aria-hidden="true">
-              {complete ? '✓' : ''}
-            </span>
-            <span className="journey-row__chevron" aria-hidden="true">
-              ›
-            </span>
-          </button>
-        )
-      })}
+      </main>
     </div>
   )
 }
 
-function FocusStep({
-  index,
-  setIndex,
-  state,
-  onChange,
-  onDone,
-}: {
-  index: number
-  setIndex: (index: number) => void
-  state: JourneyState
-  onChange: (next: JourneyState) => void
-  onDone: () => void
-}) {
-  const item = JOURNEY_ITEMS[index]
-  const phase = PHASES.find((entry) => entry.id === item.phase)
-  return (
-    <ItemPane
-      key={item.id}
-      item={item}
-      state={state}
-      onChange={onChange}
-      eyebrow={`${phase?.title ?? ''} · ${index + 1} of ${JOURNEY_ITEMS.length}`}
-      onBack={index === 0 ? onDone : () => setIndex(index - 1)}
-      backLabel={index === 0 ? 'Overview' : JOURNEY_ITEMS[index - 1].title}
-      onContinue={() => {
-        if (index === JOURNEY_ITEMS.length - 1) onDone()
-        else setIndex(index + 1)
-      }}
-    />
-  )
-}
-
-function ItemPane({
+function CheckRow({
   item,
+  current,
   state,
   onChange,
-  onBack,
-  backLabel,
-  onContinue,
-  eyebrow,
+  onError,
 }: {
   item: JourneyItemDef
+  current: ItemState
   state: JourneyState
-  onChange: (next: JourneyState) => void
-  onBack: () => void
-  backLabel: string
-  onContinue?: () => void
-  eyebrow?: string
+  onChange: (next: ItemState) => void
+  onError: (message: string | null) => void
 }) {
-  const current = state[item.id] ?? { values: {}, done: false }
-  const [draft, setDraft] = useState(current.values)
-  const [error, setError] = useState<string | null>(null)
-
-  function updateItem(next: ItemState) {
-    onChange({ ...state, [item.id]: next })
+  function setValue(fieldId: string, value: string) {
+    onChange({
+      ...current,
+      done: false,
+      values: { ...current.values, [fieldId]: value },
+    })
   }
 
-  function handleSave(e?: FormEvent) {
-    e?.preventDefault()
-    setError(null)
-    if (item.fields.length) {
-      const missing = item.fields.find((field) => !draft[field.id]?.trim() && !current.done)
-      if (missing) {
-        setError(`${missing.label} is required`)
-        return
-      }
-      updateItem({ values: valuesFromDraft(item, draft, current), done: true })
-    } else if (item.id === 'validation') {
-      if (!prereqReady(state)) {
-        setError('Finish Pre-req first.')
-        return
-      }
-      updateItem({ values: {}, done: true })
-    } else {
-      updateItem({ values: {}, done: true })
+  function toggle(checked: boolean) {
+    onError(null)
+    if (!checked) {
+      onChange({ ...current, done: false })
+      return
     }
-    if (onContinue) onContinue()
-    else onBack()
+    if (item.fields.length && !fieldsFilled(item, current)) {
+      onError(`${item.fields[0].label} is required`)
+      return
+    }
+    if (item.id === 'validation' && !prereqReady(state)) {
+      onError('Finish Pre-req first.')
+      return
+    }
+    const values = Object.fromEntries(
+      item.fields.map((field) => {
+        const raw = current.values[field.id]?.trim() ?? ''
+        if (field.input === 'password') return [field.id, raw || 'saved']
+        return [field.id, raw]
+      }),
+    )
+    onChange({ values, done: true })
   }
 
   return (
-    <main className="journey" aria-label={item.title}>
-      <button type="button" className="journey-back" onClick={onBack}>
-        {backLabel}
-      </button>
-      {eyebrow ? <p className="journey-kicker">{eyebrow}</p> : null}
-      <h1 className="journey__title">{item.title}</h1>
-      <p className="journey__lede">{item.detail}</p>
-
-      {item.id === 'validation' ? <ValidationList state={state} /> : null}
-
-      <form className="journey-form" onSubmit={handleSave}>
+    <div className="check-row" data-done={current.done ? 'true' : 'false'}>
+      <input
+        id={`check-${item.id}`}
+        type="checkbox"
+        checked={current.done}
+        onChange={(e) => toggle(e.target.checked)}
+      />
+      <div className="check-row__body">
+        <label htmlFor={`check-${item.id}`} className="check-row__title">
+          {item.title}
+        </label>
+        <p className="check-row__hint">{item.detail}</p>
+        {item.id === 'validation' && !current.done ? (
+          <ul className="journey-checks" aria-label="prerequisite checks">
+            {itemsForPhase('prereq').map((entry) => {
+              const ready = Boolean(state[entry.id]?.done)
+              return (
+                <li key={entry.id} data-status={ready ? 'pass' : 'missing'}>
+                  <span>{entry.title}</span>
+                  <span>{ready ? 'Ready' : 'Missing'}</span>
+                </li>
+              )
+            })}
+          </ul>
+        ) : null}
         {item.fields.map((field) => {
           const id = `journey-${item.id}-${field.id}`
           return (
@@ -293,62 +145,30 @@ function ItemPane({
               {field.input === 'textarea' ? (
                 <textarea
                   id={id}
-                  value={draft[field.id] ?? ''}
-                  placeholder={current.done && field.input === 'textarea' ? 'Saved. Paste a new key to replace it.' : field.placeholder}
-                  onChange={(e) => setDraft({ ...draft, [field.id]: e.target.value })}
+                  value={current.done && field.input === 'textarea' ? '' : (current.values[field.id] ?? '')}
+                  placeholder={current.done ? 'Saved. Paste a new key to replace it.' : field.placeholder}
+                  onChange={(e) => setValue(field.id, e.target.value)}
                 />
               ) : (
                 <input
                   id={id}
                   type={field.input}
-                  value={draft[field.id] ?? ''}
+                  value={
+                    current.done && field.input === 'password' ? '' : (current.values[field.id] ?? '')
+                  }
                   placeholder={
                     current.done && field.input === 'password'
                       ? 'Saved. Paste a new value to replace it.'
                       : field.placeholder
                   }
                   autoComplete="off"
-                  onChange={(e) => setDraft({ ...draft, [field.id]: e.target.value })}
+                  onChange={(e) => setValue(field.id, e.target.value)}
                 />
               )}
             </div>
           )
         })}
-        {error && <p role="alert">{error}</p>}
-        <div className="journey-actions">
-          <button type="submit">{item.actionLabel ?? (onContinue ? 'Continue' : 'Save')}</button>
-        </div>
-      </form>
-    </main>
-  )
-}
-
-function valuesFromDraft(
-  item: JourneyItemDef,
-  draft: Record<string, string>,
-  current: ItemState,
-): Record<string, string> {
-  return Object.fromEntries(
-    item.fields.map((field) => {
-      const raw = draft[field.id]?.trim() ?? ''
-      if (field.input === 'password') return [field.id, raw || current.values[field.id] || 'saved']
-      return [field.id, raw || current.values[field.id] || '']
-    }),
-  )
-}
-
-function ValidationList({ state }: { state: JourneyState }) {
-  return (
-    <ul className="journey-checks" aria-label="prerequisite checks">
-      {itemsForPhase('prereq').map((item) => {
-        const ready = fieldsFilled(item, state[item.id])
-        return (
-          <li key={item.id} data-status={ready ? 'pass' : 'missing'}>
-            <span>{item.title}</span>
-            <span>{ready ? 'Ready' : 'Missing'}</span>
-          </li>
-        )
-      })}
-    </ul>
+      </div>
+    </div>
   )
 }

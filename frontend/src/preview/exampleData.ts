@@ -1,5 +1,4 @@
 export type PhaseId = 'prereq' | 'bootstrap' | 'deploy' | 'build'
-export type LayoutId = 'overview' | 'focus'
 export type FieldInput = 'text' | 'password' | 'textarea'
 
 export type JourneyField = {
@@ -227,12 +226,17 @@ export function fieldsFilled(item: JourneyItemDef, state: ItemState | undefined)
 
 export function phaseProgress(phase: PhaseId, state: JourneyState): { done: number; total: number } {
   const items = itemsForPhase(phase)
-  const done = items.filter((item) => fieldsFilled(item, state[item.id])).length
+  const done = items.filter((item) => state[item.id]?.done).length
   return { done, total: items.length }
 }
 
+export function overallProgress(state: JourneyState): { done: number; total: number } {
+  const done = JOURNEY_ITEMS.filter((item) => state[item.id]?.done).length
+  return { done, total: JOURNEY_ITEMS.length }
+}
+
 export function prereqReady(state: JourneyState): boolean {
-  return itemsForPhase('prereq').every((item) => fieldsFilled(item, state[item.id]))
+  return itemsForPhase('prereq').every((item) => state[item.id]?.done)
 }
 
 export function rowDetail(item: JourneyItemDef, state: ItemState | undefined): string {
