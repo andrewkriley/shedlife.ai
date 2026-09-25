@@ -737,97 +737,57 @@ ul {
   background: var(--bg-canvas);
 }
 
-.checklist-section {
-  margin: 0 0 28px;
-}
-
-.checklist-section__head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 18px 0 10px;
-  background: var(--bg-canvas);
-}
-
-.checklist-section__title {
-  margin: 0 0 4px;
-  font-size: 20px;
-  line-height: 26px;
-  letter-spacing: -0.02em;
-}
-
-.checklist-section__lede {
-  margin: 0;
-  font-size: 13px;
-  line-height: 18px;
-}
-
-.check-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-md);
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-}
-
-.check-row:last-child {
-  border-bottom: 0;
-}
-
-.check-row input[type='checkbox'] {
-  width: auto;
-  flex: 0 0 auto;
-  margin-top: 3px;
-  accent-color: var(--accent);
-}
-
-.check-row__body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.check-row__title {
-  margin: 0;
-  font-size: 17px;
-  line-height: 22px;
-  color: var(--text-primary);
-  text-decoration: none;
-}
-
-.check-row[data-done='true'] .check-row__title {
-  color: var(--text-muted);
-}
-
-.check-row__hint {
-  margin: 0;
-  font-size: 13px;
-  line-height: 18px;
-}
-
-.check-row .journey-checks {
-  margin: 4px 0 0;
-}
-
-.check-row .journey-field input,
-.check-row .journey-field textarea {
-  background: var(--bg-canvas);
-}
-
 .journey {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  max-width: 560px;
+  max-width: 480px;
   width: 100%;
   margin: 0 auto;
-  padding: 28px 24px 80px;
+  padding: 48px 24px 80px;
+}
+
+.journey-kicker {
+  margin: 0 0 20px;
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.step-dots {
+  display: flex;
+  gap: 8px;
+  list-style: none;
+  margin: 0 0 28px;
+  padding: 0;
+}
+
+.step-dots li {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  background: var(--border);
+}
+
+.step-dots li.is-current {
+  background: var(--text-primary);
+}
+
+.step-dots li.is-done {
+  background: var(--accent);
+}
+
+.journey-count {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-muted);
 }
 
 .journey__title {
-  margin: 8px 0 12px;
+  margin: 0 0 12px;
   font-size: 34px;
   line-height: 40px;
   letter-spacing: -0.03em;
@@ -839,10 +799,16 @@ ul {
   line-height: 24px;
 }
 
-.journey-list {
-  background: var(--bg-panel);
-  border-radius: 16px;
-  overflow: hidden;
+.journey-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.journey-field label {
+  margin: 0 0 6px;
+  font-size: 13px;
+  line-height: 18px;
 }
 
 .journey-field input,
@@ -859,32 +825,70 @@ ul {
   min-height: 88px;
 }
 
-.journey-checks {
-  list-style: none;
-  margin: 0 0 28px;
-  padding: 4px 0;
+.journey-form [role='alert'] {
+  margin: 0;
+  color: var(--accent-danger);
 }
 
-.journey-checks li {
+.journey-actions {
   display: flex;
-  justify-content: space-between;
-  gap: var(--space-md);
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-primary);
-  font-size: 15px;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
 }
 
-.journey-checks li:last-child {
+.journey-actions button[type='submit'] {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  font-size: 17px;
+}
+
+.journey-actions .button-secondary {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+}
+
+.journey-list {
+  background: var(--bg-panel);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.review-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  width: 100%;
+  margin: 0;
+  padding: 16px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border);
+  color: inherit;
+  font-weight: 400;
+  text-align: left;
+}
+
+.review-row:last-child {
   border-bottom: 0;
 }
 
-.journey-checks li[data-status='pass'] span:last-child {
-  color: var(--accent-success);
+.review-row__title {
+  font-size: 17px;
+  line-height: 22px;
+  color: var(--text-primary);
 }
 
-.journey-checks li[data-status='missing'] span:last-child {
+.review-row__value {
+  font-size: 15px;
+  line-height: 20px;
   color: var(--text-muted);
+  text-align: right;
 }
 
 @media (max-width: 900px) {

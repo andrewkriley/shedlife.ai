@@ -1,15 +1,15 @@
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import {
-  PHASES,
   fieldsFilled,
   itemsForPhase,
-  overallProgress,
   phaseProgress,
-  prereqReady,
+  rowDetail,
   type ItemState,
   type JourneyItemDef,
   type JourneyState,
 } from './exampleData'
+
+const PREREQ = itemsForPhase('prereq')
 
 export function ExampleJourney({
   state,
@@ -18,125 +18,95 @@ export function ExampleJourney({
   state: JourneyState
   onChange: (next: JourneyState) => void
 }) {
-  const [error, setError] = useState<string | null>(null)
-  const progress = overallProgress(state)
+  const [step, setStep] = useState(0)
+  const progress = phaseProgress('prereq', state)
+  const reviewing = step >= PREREQ.length
+  const item = reviewing ? null : PREREQ[step]
 
-  function updateItem(id: string, next: ItemState) {
-    onChange({ ...state, [id]: next })
+  function saveItem(itemDef: JourneyItemDef, values: Record<string, string>): JourneyState {
+    const next = {
+      ...state,
+      [itemDef.id]: { values, done: true },
+    }
+    onChange(next)
+    return next
   }
 
   return (
     <div className="journey-shell">
-      <main className="journey" aria-label="checklist">
-        <h1 className="journey__title">The Shed</h1>
-        <p className="journey__lede">
-          {`Facts first. Then the container. Platforms later. ${progress.done} of ${progress.total}.`}
-        </p>
-        {error && <p role="alert">{error}</p>}
-
-        {PHASES.map((phase) => {
-          const count = phaseProgress(phase.id, state)
-          return (
-            <section key={phase.id} className="checklist-section" aria-labelledby={`phase-${phase.id}`}>
-              <header className="checklist-section__head">
-                <h2 id={`phase-${phase.id}`} className="checklist-section__title">
-                  {phase.title}
-                </h2>
-                <p className="checklist-section__lede">
-                  {`${phase.lede} ${count.done} of ${count.total}.`}
-                </p>
-              </header>
-              <div className="journey-list">
-                {itemsForPhase(phase.id).map((item) => (
-                  <CheckRow
-                    key={item.id}
-                    item={item}
-                    current={state[item.id] ?? { values: {}, done: false }}
-                    state={state}
-                    onChange={(next) => updateItem(item.id, next)}
-                    onError={setError}
-                  />
-                ))}
-              </div>
-            </section>
-          )
-        })}
+      <main className="journey" aria-label="Pre-req">
+        <p className="journey-kicker">Pre-req</p>
+        {reviewing ? (
+          <Review state={state} progress={progress} onEdit={(index) => setStep(index)} />
+        ) : item ? (
+          <PrereqStep
+            key={item.id}
+            item={item}
+            current={state[item.id] ?? { values: {}, done: false }}
+            index={step}
+            total={PREREQ.length}
+            onSave={(values) => {
+              const next = saveItem(item, values)
+              const restDone = PREREQ.slice(step + 1).every((entry) => next[entry.id]?.done)
+              setStep(restDone ? PREREQ.length : step + 1)
+            }}
+            onBack={step === 0 ? undefined : () => setStep(step - 1)}
+          />
+        ) : null}
       </main>
     </div>
   )
 }
 
-function CheckRow({
+function PrereqStep({
   item,
   current,
-  state,
-  onChange,
-  onError,
+  index,
+  total,
+  onSave,
+  onBack,
 }: {
   item: JourneyItemDef
   current: ItemState
-  state: JourneyState
-  onChange: (next: ItemState) => void
-  onError: (message: string | null) => void
+  index: number
+  total: number
+  onSave: (values: Record<string, string>) => void
+  onBack?: () => void
 }) {
-  function setValue(fieldId: string, value: string) {
-    onChange({
-      ...current,
-      done: false,
-      values: { ...current.values, [fieldId]: value },
-    })
-  }
+  const [draft, setDraft] = useState(current.values)
+  const [error, setError] = useState<string | null>(null)
 
-  function toggle(checked: boolean) {
-    onError(null)
-    if (!checked) {
-      onChange({ ...current, done: false })
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    setError(null)
+    const values = filledValues(item, draft, current)
+    if (!fieldsFilled(item, { values, done: false })) {
+      const missing = item.fields.find((field) => !values[field.id]?.trim())
+      setError(`${missing?.label ?? item.title} is required`)
       return
     }
-    if (item.fields.length && !fieldsFilled(item, current)) {
-      onError(`${item.fields[0].label} is required`)
-      return
-    }
-    if (item.id === 'validation' && !prereqReady(state)) {
-      onError('Finish Pre-req first.')
-      return
-    }
-    const values = Object.fromEntries(
-      item.fields.map((field) => {
-        const raw = current.values[field.id]?.trim() ?? ''
-        if (field.input === 'password') return [field.id, raw || 'saved']
-        return [field.id, raw]
-      }),
-    )
-    onChange({ values, done: true })
+    onSave(values)
   }
 
   return (
-    <div className="check-row" data-done={current.done ? 'true' : 'false'}>
-      <input
-        id={`check-${item.id}`}
-        type="checkbox"
-        checked={current.done}
-        onChange={(e) => toggle(e.target.checked)}
-      />
-      <div className="check-row__body">
-        <label htmlFor={`check-${item.id}`} className="check-row__title">
-          {item.title}
-        </label>
-        <p className="check-row__hint">{item.detail}</p>
-        {item.id === 'validation' && !current.done ? (
-          <ul className="journey-checks" aria-label="prerequisite checks">
-            {itemsForPhase('prereq').map((entry) => {
-              const ready = Boolean(state[entry.id]?.done)
-              return (
-                <li key={entry.id} data-status={ready ? 'pass' : 'missing'}>
-                  <span>{entry.title}</span>
-                  <span>{ready ? 'Ready' : 'Missing'}</span>
-                </li>
-              )
-            })}
-          </ul>
-        ) : null}
+    <>
+      <ol className="step-dots" aria-label="Pre-req progress">
+        {PREREQ.map((entry, dot) => (
+          <li
+            key={entry.id}
+            className={dot === index ? 'is-current' : dot < index ? 'is-done' : undefined}
+          >
+            <span className="visually-hidden">
+              {entry.title}
+              {dot === index ? ' (current)' : dot < index ? ' (done)' : ''}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="journey-count">{`${index + 1} of ${total}`}</p>
+      <h1 className="journey__title">{item.title}</h1>
+      <p className="journey__lede">{item.detail}</p>
+      <form className="journey-form" onSubmit={handleSubmit}>
         {item.fields.map((field) => {
           const id = `journey-${item.id}-${field.id}`
           return (
@@ -145,30 +115,85 @@ function CheckRow({
               {field.input === 'textarea' ? (
                 <textarea
                   id={id}
-                  value={current.done && field.input === 'textarea' ? '' : (current.values[field.id] ?? '')}
-                  placeholder={current.done ? 'Saved. Paste a new key to replace it.' : field.placeholder}
-                  onChange={(e) => setValue(field.id, e.target.value)}
+                  value={draft[field.id] ?? ''}
+                  placeholder={
+                    current.done ? 'Saved. Paste a new key to replace it.' : field.placeholder
+                  }
+                  onChange={(e) => setDraft({ ...draft, [field.id]: e.target.value })}
                 />
               ) : (
                 <input
                   id={id}
                   type={field.input}
-                  value={
-                    current.done && field.input === 'password' ? '' : (current.values[field.id] ?? '')
-                  }
+                  value={draft[field.id] ?? ''}
                   placeholder={
                     current.done && field.input === 'password'
                       ? 'Saved. Paste a new value to replace it.'
                       : field.placeholder
                   }
                   autoComplete="off"
-                  onChange={(e) => setValue(field.id, e.target.value)}
+                  onChange={(e) => setDraft({ ...draft, [field.id]: e.target.value })}
                 />
               )}
             </div>
           )
         })}
+        {error && <p role="alert">{error}</p>}
+        <div className="journey-actions">
+          <button type="submit">Continue</button>
+          {onBack ? (
+            <button type="button" className="button-secondary" onClick={onBack}>
+              Back
+            </button>
+          ) : null}
+        </div>
+      </form>
+    </>
+  )
+}
+
+function Review({
+  state,
+  progress,
+  onEdit,
+}: {
+  state: JourneyState
+  progress: { done: number; total: number }
+  onEdit: (index: number) => void
+}) {
+  return (
+    <>
+      <h1 className="journey__title">Ready</h1>
+      <p className="journey__lede">{`${progress.done} of ${progress.total} facts are in. Bootstrap is next.`}</p>
+      <div className="journey-list" aria-label="Pre-req review">
+        {PREREQ.map((item, index) => (
+          <button
+            key={item.id}
+            type="button"
+            className="review-row"
+            onClick={() => onEdit(index)}
+          >
+            <span className="review-row__title">{item.title}</span>
+            <span className="review-row__value">{rowDetail(item, state[item.id])}</span>
+          </button>
+        ))}
       </div>
-    </div>
+    </>
+  )
+}
+
+function filledValues(
+  item: JourneyItemDef,
+  draft: Record<string, string>,
+  current: ItemState,
+): Record<string, string> {
+  return Object.fromEntries(
+    item.fields.map((field) => {
+      const raw = draft[field.id]?.trim() ?? ''
+      if (raw) return [field.id, raw]
+      if (current.values[field.id]?.trim()) return [field.id, current.values[field.id]]
+      if (field.input === 'password' && current.done) return [field.id, 'saved']
+      return [field.id, '']
+    }),
   )
 }
